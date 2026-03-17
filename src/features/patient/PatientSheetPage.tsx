@@ -200,6 +200,18 @@ interface SessionNote {
   createdAt:     Timestamp | null;
 }
 
+// Treatment Program entries — same patientSessions collection
+// Manager / senior physio can add; patients cannot see this section
+interface TreatmentEntry {
+  id:            string;
+  patientId:     string;
+  physioId:      string;
+  date:          string;
+  treatmentType: string;
+  notes:         string;
+  createdAt:     Timestamp | null;
+}
+
 interface SessionFeedback {
   id:            string;
   appointmentId: string;
@@ -277,15 +289,19 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
   const [activeSection, setActiveSection] = useState<string>("diagnosis");
   const [previewDoc,    setPreviewDoc]    = useState<MedicalDoc | null>(null);
 
-  const sections = [
+  const allSections = [
     { id: "diagnosis",         label: "Diagnosis" },
-    { id: "notes",             label: "Clinical Notes" },
-    { id: "session-notes",     label: "Session Notes" },
+    { id: "notes",             label: "Treatment Program", physioOnly: true },
+    { id: "session-notes",     label: "Session Notes",     physioOnly: true },
     { id: "documents",         label: "Documents" },
     { id: "session-feedback",  label: "Session Feedback" },
     { id: "session-history",   label: "Session History" },
     { id: "exercises",         label: "Exercises" },
   ];
+  // Patients only see non-physioOnly sections
+  const sections = allSections.filter((sec) =>
+    !sec.physioOnly || role !== "patient"
+  );
 
   // ── Session notes state ────────────────────────────────────────────────────
   const [sessionNotes,    setSessionNotes]    = useState<SessionNote[]>([]);
@@ -295,6 +311,15 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
   const [snSaving,        setSnSaving]        = useState(false);
   const [snError,         setSnError]         = useState<string | null>(null);
   const [snSuccess,       setSnSuccess]       = useState(false);
+
+  // ── Treatment Program state (physio/manager only) ─────────────────────────
+  const [treatmentEntries, setTreatmentEntries] = useState<TreatmentEntry[]>([]);
+  const [tpDate,           setTpDate]           = useState(() => new Date().toISOString().slice(0,10));
+  const [tpType,           setTpType]           = useState(TREATMENT_TYPES[0]);
+  const [tpNotes,          setTpNotes]          = useState("");
+  const [tpSaving,         setTpSaving]         = useState(false);
+  const [tpError,          setTpError]          = useState<string | null>(null);
+  const [tpSuccess,        setTpSuccess]        = useState(false);
 
   // ── Session feedback (read-only view from sessionFeedback collection) ──────
   const [sessionFeedbackList, setSessionFeedbackList] = useState<SessionFeedback[]>([]);
@@ -364,6 +389,49 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
       })));
     });
   }, [patientId]);
+
+  // Subscribe to treatment entries (same collection as session notes)
+  useEffect(() => {
+    if (!patientId || role === "patient") return;
+    const q = query(
+      collection(db, "patientSessions"),
+      where("patientId", "==", patientId),
+      orderBy("createdAt", "desc")
+    );
+    return onSnapshot(q, (snap) => {
+      setTreatmentEntries(snap.docs.map((d) => ({
+        id:            d.id,
+        patientId:     (d.data().patientId     as string) ?? "",
+        physioId:      (d.data().physioId      as string) ?? "",
+        date:          (d.data().date          as string) ?? "",
+        treatmentType: (d.data().treatmentType as string) ?? "",
+        notes:         (d.data().notes         as string) ?? "",
+        createdAt:     (d.data().createdAt     as Timestamp | null) ?? null,
+      })));
+    });
+  }, [patientId, role]);
+
+  const handleSaveTreatmentEntry = async () => {
+    if (!tpNotes.trim() || !patientId) return;
+    setTpSaving(true);
+    setTpError(null);
+    try {
+      await addDoc(collection(db, "patientSessions"), {
+        patientId,
+        physioId:      user?.uid ?? "",
+        date:          tpDate,
+        treatmentType: tpType,
+        notes:         tpNotes.trim(),
+        createdAt:     serverTimestamp(),
+      });
+      setTpNotes("");
+      setTpSuccess(true);
+      setTimeout(() => setTpSuccess(false), 2500);
+    } catch {
+      setTpError("Failed to save. Please try again.");
+    }
+    setTpSaving(false);
+  };
 
   const handleSaveSessionNote = async () => {
     if (!snNotes.trim() || !patientId) return;
@@ -1046,17 +1114,63 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
       )}
 
       {/* ── CLINICAL NOTES (unchanged) ── */}
-      {activeSection === "notes" && (
+      {activeSection === "notes" && role !== "patient" && (
         <>
-          {PHYSIO_NOTES.map((n) => (
-            <div key={n.session} className="ps-note-card">
-              <div className="ps-note-header">
-                <span className="ps-note-session">{n.session}</span>
-                <span className="ps-note-date">{n.date}</span>
+          {/* Add entry form — manager + senior only */}
+          {canEdit && (
+            <div className="ps-sn-form">
+              <div className="ps-sn-form-title">Add Treatment Entry</div>
+              <div className="ps-sn-row">
+                <div className="ps-sn-field">
+                  <label className="ps-sn-label">Session Date</label>
+                  <input type="date" className="ps-sn-input"
+                    value={tpDate} onChange={(e) => setTpDate(e.target.value)} />
+                </div>
+                <div className="ps-sn-field">
+                  <label className="ps-sn-label">Treatment Type</label>
+                  <select className="ps-sn-select"
+                    value={tpType} onChange={(e) => setTpType(e.target.value)}>
+                    {TREATMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
               </div>
-              <div className="ps-note-text">{n.note}</div>
+              <textarea className="ps-sn-textarea"
+                placeholder="Describe the treatment, patient response, goals for next session…"
+                value={tpNotes} onChange={(e) => setTpNotes(e.target.value)} />
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <button className="ps-sn-save-btn"
+                  disabled={tpSaving || !tpNotes.trim()} onClick={handleSaveTreatmentEntry}>
+                  {tpSaving
+                    ? <><span className="ps-senior-spinner" /> Saving…</>
+                    : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Entry</>
+                  }
+                </button>
+                {tpSuccess && (
+                  <span className="ps-sn-success">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Saved
+                  </span>
+                )}
+              </div>
+              {tpError && <div className="ps-sn-error">{tpError}</div>}
             </div>
-          ))}
+          )}
+
+          {/* Treatment history */}
+          <div className="ps-sn-history-title">Treatment History</div>
+          {treatmentEntries.length === 0 ? (
+            <div className="ps-sn-empty">No treatment entries recorded yet.</div>
+          ) : (
+            treatmentEntries.map((entry) => (
+              <div key={entry.id} className="ps-sn-card">
+                <div className="ps-sn-card-header">
+                  <span className="ps-sn-card-type">{entry.treatmentType}</span>
+                  <span className="ps-sn-card-date">{entry.date}</span>
+                </div>
+                <div className="ps-sn-card-notes">{entry.notes}</div>
+              </div>
+            ))
+          )}
         </>
       )}
 

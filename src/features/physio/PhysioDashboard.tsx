@@ -215,17 +215,12 @@ export default function PhysioDashboard() {
 
         .phd-user-chip {
           display: flex; align-items: center; gap: 9px;
-          padding: 6px 14px 6px 6px; border-radius: 100px;
+          padding: 6px 14px; border-radius: 100px;
           background: #f5f3ef; border: 1px solid #e5e0d8;
           cursor: pointer; transition: background 0.15s;
         }
         .phd-user-chip:hover { background: #ede9e3; }
-        .phd-avatar {
-          width: 32px; height: 32px; border-radius: 50%;
-          background: linear-gradient(135deg, #2E8BC0, #5BC0BE);
-          display: flex; align-items: center; justify-content: center;
-          color: #fff; font-size: 12px; font-weight: 600;
-        }
+
         .phd-user-name { font-size: 14px; font-weight: 500; color: #2E8BC0; }
 
         .phd-logout-btn {
@@ -403,9 +398,6 @@ export default function PhysioDashboard() {
           {/* Right: user + sign out */}
           <div className="phd-topbar-right">
             <div className="phd-user-chip">
-              <div className="phd-avatar">
-                {physio.firstName[0]}{physio.lastName[0]}
-              </div>
               <div className="phd-user-name">
                 {isManager ? physio.firstName : `Dr. ${physio.lastName}`}
               </div>

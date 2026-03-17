@@ -163,8 +163,7 @@ export default function PatientDashboard() {
         .pd2-user-chip {
           display: flex;
           align-items: center;
-          gap: 10px;
-          padding: 8px 16px 8px 6px;
+          padding: 8px 16px;
           border-radius: 100px;
           background: #f5f3ef;
           border: 1px solid #e5e0d8;
@@ -172,15 +171,7 @@ export default function PatientDashboard() {
           transition: background 0.15s;
         }
         .pd2-user-chip:hover { background: #ede9e3; }
-        .pd2-user-avatar {
-          width: 34px; height: 34px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #2d6a4f, #52b788);
-          display: flex; align-items: center; justify-content: center;
-          color: #fff;
-          font-size: 13px;
-          font-weight: 600;
-        }
+
         .pd2-user-name { font-size: 15px; font-weight: 500; color: #2E8BC0; }
 
         .pd2-logout {
@@ -454,8 +445,7 @@ export default function PatientDashboard() {
           {/* Right: user chip + sign out */}
           <div className="pd2-topbar-right">
             <div className="pd2-user-chip" onClick={() => navigate("/patient/profile")}>
-              <div className="pd2-user-avatar">{patientInitials}</div>
-              <div className="pd2-user-name">{patientFullName}</div>
+<div className="pd2-user-name">{patientFullName}</div>
             </div>
             <button className="pd2-logout" onClick={handleLogout}>Sign out</button>
           </div>
