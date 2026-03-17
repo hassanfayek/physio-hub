@@ -28,18 +28,25 @@ export default function LoginPage() {
       const profile = await login(email, password);
 
       // Guard: ensure the logged-in role matches the selected tab
-      if (profile.role !== role) {
+      // clinic_manager is allowed through the Physiotherapist tab
+      const isPhysioRole = profile.role === "physiotherapist" || profile.role === "clinic_manager";
+      const tabMismatch  =
+        (role === "patient"         && profile.role !== "patient") ||
+        (role === "physiotherapist" && !isPhysioRole);
+
+      if (tabMismatch) {
         setError(
           role === "patient"
-            ? "This account is registered as a Physiotherapist. Please use the Physiotherapist tab."
-            : "This account is registered as a Patient. Please use the Patient tab."
+            ? "This account is registered as a Physiotherapist. Please switch to the Physiotherapist tab."
+            : "This account is registered as a Patient. Please switch to the Patient tab."
         );
         setLoading(false);
         return;
       }
 
-      navigate(role === "patient" ? "/patient" : "/physio");
+      navigate(profile.role === "patient" ? "/patient" : "/physio");
     } catch (err) {
+      console.error("Login error:", err);
       setError(parseFirebaseError(err).message);
     } finally {
       setLoading(false);
@@ -53,6 +60,7 @@ export default function LoginPage() {
       await sendPasswordReset(resetEmail);
       setResetSent(true);
     } catch (err) {
+      console.error("Login error:", err);
       setError(parseFirebaseError(err).message);
     } finally {
       setLoading(false);
@@ -556,7 +564,7 @@ export default function LoginPage() {
 
             {/* Error */}
             {error && (
-              <div className="lp-error">
+              <div className="lp-error" ref={(el) => el?.scrollIntoView({ behavior: "smooth", block: "nearest" })}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
                   <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>
