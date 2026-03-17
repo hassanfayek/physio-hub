@@ -68,13 +68,6 @@ const STATUS_META: Record<string, { color: string; bg: string; label: string }> 
   completed: { color: "#374151", bg: "#f3f4f6", label: "Completed" },
 };
 
-// Static past sessions — physio name is filled in from Firestore at runtime
-const PAST_TYPES = [
-  { id: 10, day: 10, month: "Mar", time: "09:00", type: "Follow-Up"      },
-  { id: 11, day: 3,  month: "Mar", time: "10:30", type: "Manual Therapy" },
-  { id: 12, day: 24, month: "Feb", time: "09:00", type: "ROM Assessment" },
-];
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AppointmentsPage() {
@@ -96,7 +89,6 @@ export default function AppointmentsPage() {
   const assignedPhysioName = assignedPhysio
     ? `Dr. ${assignedPhysio.firstName} ${assignedPhysio.lastName}`
     : "Your Physiotherapist";
-  const PAST = PAST_TYPES.map((p) => ({ ...p, physio: assignedPhysioName }));
   const [slotCounts,     setSlotCounts]     = useState<Record<number, number>>({});
   const [upcoming,       setUpcoming]       = useState<FSAppt[]>([]);
   const [apptLoading,    setApptLoading]    = useState(true);
