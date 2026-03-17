@@ -107,17 +107,22 @@ function ExerciseCard({
           )}
 
           {exercise.mediaUrl && (
-            <a
-              href={exercise.mediaUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
               className="ep-media-link"
+              onClick={(e) => {
+                e.stopPropagation();
+                // Ensure URL has a protocol prefix
+                const url = exercise.mediaUrl.startsWith("http")
+                  ? exercise.mediaUrl
+                  : `https://${exercise.mediaUrl}`;
+                window.open(url, "_blank", "noopener,noreferrer");
+              }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="5 3 19 12 5 21 5 3"/>
               </svg>
               Watch Video
-            </a>
+            </button>
           )}
 
           {/* Issue 3: checkbox writes to Firestore */}
@@ -293,6 +298,8 @@ export default function ExercisesPage() {
           display: inline-flex; align-items: center; gap: 6px;
           font-size: 13px; font-weight: 500; color: #5BC0BE;
           margin-bottom: 14px; text-decoration: none; transition: color 0.15s;
+          background: none; border: none; cursor: pointer; padding: 0;
+          font-family: 'Outfit', sans-serif;
         }
         .ep-media-link:hover { color: #2E8BC0; }
 

@@ -102,6 +102,7 @@ export default function AppointmentsPage() {
   const [confirmedAppt,     setConfirmedAppt]     = useState<{ date: string; hour: number; sessionType: string; physioName: string } | null>(null);
   const [cancelTarget,      setCancelTarget]      = useState<FSAppt | null>(null);
   const [cancelling,        setCancelling]        = useState(false);
+  const [cancelError,       setCancelError]       = useState<string | null>(null);
 
   // ── Load clinic settings once ─────────────────────────────────────────────
   useEffect(() => { getClinicSettings().then(setClinicSettings); }, []);
@@ -219,10 +220,21 @@ export default function AppointmentsPage() {
   const handleCancel = async () => {
     if (!cancelTarget) return;
     setCancelling(true);
-    await cancelPatientAppointment(cancelTarget.id);
-    setCancelling(false);
-    setCancelTarget(null);
-    // onSnapshot in subscribeToPatientAppointments auto-removes it from `upcoming`
+    setCancelError(null);
+    try {
+      const result = await cancelPatientAppointment(cancelTarget.id);
+      if (result.error) {
+        setCancelError(result.error);
+        setCancelling(false);
+        return;
+      }
+      setCancelling(false);
+      setCancelTarget(null);
+    } catch (err) {
+      console.error("Cancel error:", err);
+      setCancelError("Failed to cancel. Please try again.");
+      setCancelling(false);
+    }
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -562,7 +574,7 @@ export default function AppointmentsPage() {
                     {STATUS_META.confirmed.label}
                   </span>
                   <div className="ap-action-row">
-                    <button className="ap-action-btn danger" onClick={() => setCancelTarget(a)}>Cancel</button>
+                    <button className="ap-action-btn danger" onClick={() => { setCancelTarget(a); setCancelError(null); }}>Cancel</button>
                   </div>
                 </div>
               </div>
@@ -639,8 +651,13 @@ export default function AppointmentsPage() {
                 return `Cancel your ${cancelTarget.sessionType} on ${day} ${month} at ${fmtHour(cancelTarget.hour)} with ${cancelTarget.physioName}? This will remove it from the clinic schedule immediately.`;
               })()}
             </div>
+            {cancelError && (
+              <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#b91c1c", marginBottom: 14 }}>
+                {cancelError}
+              </div>
+            )}
             <div className="ap-modal-actions">
-              <button className="ap-modal-keep" disabled={cancelling} onClick={() => setCancelTarget(null)}>Keep Appointment</button>
+              <button className="ap-modal-keep" disabled={cancelling} onClick={() => { setCancelTarget(null); setCancelError(null); }}>Keep Appointment</button>
               <button className="ap-modal-confirm" disabled={cancelling} onClick={handleCancel}>
                 {cancelling ? "Cancelling…" : "Yes, Cancel"}
               </button>
