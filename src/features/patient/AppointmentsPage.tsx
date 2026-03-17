@@ -15,7 +15,6 @@ import {
   bookPatientAppointment,
   cancelPatientAppointment,
   getClinicSettings,
-  fmtHour,
   fmtHour12,
   toDateStr,
   type Appointment as FSAppt,

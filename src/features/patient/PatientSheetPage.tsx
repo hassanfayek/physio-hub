@@ -45,24 +45,6 @@ const DOCS: MedicalDoc[] = [
   { id: 6, type: "xray",     label: "X-Ray Follow-Up 6 Weeks",   date: "5 Mar 2025",  size: "12.1 MB", icon: "🩻" },
 ];
 
-const PHYSIO_NOTES = [
-  {
-    date: "10 Mar 2025",
-    session: "Session 12",
-    note: "Alex is progressing well through week 6 of rehabilitation. Quad activation is improving with good VMO engagement observed during SLR. ROM is at 95° — target 120° by end of month. Introduced mini-squats this session; tolerated well with no joint effusion post-exercise. Pain rating 2/10 during activity.",
-  },
-  {
-    date: "3 Mar 2025",
-    session: "Session 11",
-    note: "ROM at 88°. Good compliance with home program — patient completing heel slides daily. Swelling remains minimal. Started single-leg stance for proprioception. Gait pattern normalising — reduced antalgic limp. Continue current program, add step-ups next session.",
-  },
-  {
-    date: "24 Feb 2025",
-    session: "Session 10",
-    note: "ROM 80°. Wound fully healed. Patient reports minimal discomfort at rest, 3/10 with exercise. Quad strength estimated 60% compared to contralateral limb. Progressing to phase 2 next week. Patient is motivated and completing all home exercises.",
-  },
-];
-
 
 const DOC_COLORS: Record<DocType, { bg: string; text: string }> = {
   mri:      { bg: "#dbeafe", text: "#1e40af" },

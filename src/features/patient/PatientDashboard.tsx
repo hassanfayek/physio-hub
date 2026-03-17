@@ -104,9 +104,7 @@ export default function PatientDashboard() {
     : authPatient?.firstName
       ? `${authPatient.firstName} ${authPatient.lastName ?? ""}`.trim()
       : "Loading...";
-  const patientInitials = patientData
-    ? `${patientData.firstName[0] ?? ""}${patientData.lastName[0] ?? ""}`
-    : authPatient?.firstName?.[0] ?? "P";
+
   // const patientCondition = patientData?.condition ?? "";
 
   return (
