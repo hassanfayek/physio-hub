@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import {
   subscribeToPatientAppointments,
+  subscribeToPatientAllAppointments,
   bookPatientAppointment,
   cancelPatientAppointment,
   getClinicSettings,
@@ -99,13 +100,16 @@ export default function AppointmentsPage() {
   const [slotCounts,     setSlotCounts]     = useState<Record<number, number>>({});
   const [upcoming,       setUpcoming]       = useState<FSAppt[]>([]);
   const [apptLoading,    setApptLoading]    = useState(true);
+  const [history,        setHistory]        = useState<FSAppt[]>([]);
+  const [histLoading,    setHistLoading]    = useState(true);
 
   // ── UI state ──────────────────────────────────────────────────────────────
-  const [booking,      setBooking]      = useState(false);
-  const [bookError,    setBookError]    = useState<string | null>(null);
-  const [booked,       setBooked]       = useState(false);
-  const [cancelTarget, setCancelTarget] = useState<FSAppt | null>(null);
-  const [cancelling,   setCancelling]   = useState(false);
+  const [booking,           setBooking]           = useState(false);
+  const [bookError,         setBookError]         = useState<string | null>(null);
+  const [booked,            setBooked]            = useState(false);
+  const [confirmedAppt,     setConfirmedAppt]     = useState<{ date: string; hour: number; sessionType: string; physioName: string } | null>(null);
+  const [cancelTarget,      setCancelTarget]      = useState<FSAppt | null>(null);
+  const [cancelling,        setCancelling]        = useState(false);
 
   // ── Load clinic settings once ─────────────────────────────────────────────
   useEffect(() => { getClinicSettings().then(setClinicSettings); }, []);
@@ -114,7 +118,7 @@ export default function AppointmentsPage() {
   useEffect(() => {
     return subscribeToPhysiotherapists((data) => {
       setPhysios(data);
-      if (data.length > 0) setSelectedPhysio((prev) => prev ?? data[0]);
+      // Don't auto-select — user must choose explicitly
     });
   }, []);
 
@@ -147,6 +151,21 @@ export default function AppointmentsPage() {
       patient.uid,
       (data) => { setUpcoming(data); setApptLoading(false); },
       ()     => setApptLoading(false)
+    );
+  }, [patient?.uid]);
+
+  // ── Realtime session history (all past appointments) ──────────────────────
+  useEffect(() => {
+    if (!patient?.uid) return;
+    setHistLoading(true);
+    return subscribeToPatientAllAppointments(
+      patient.uid,
+      (data) => {
+        const today = toDateStr(new Date());
+        setHistory(data.filter((a) => a.date < today));
+        setHistLoading(false);
+      },
+      () => setHistLoading(false)
     );
   }, [patient?.uid]);
 
@@ -194,6 +213,14 @@ export default function AppointmentsPage() {
     setSelectedSlot(null);
     setBooked(true);
     setTimeout(() => setBooked(false), 3500);
+
+    // Show confirmation modal
+    setConfirmedAppt({
+      date:        selectedDayObj.dateStr,
+      hour:        selectedSlot,
+      sessionType,
+      physioName:  `Dr. ${physioName}`,
+    });
   };
 
   // ── Cancel appointment ────────────────────────────────────────────────────
@@ -322,6 +349,49 @@ export default function AppointmentsPage() {
         .ap-action-btn.danger        { color: #e07a5f; }
         .ap-action-btn.danger:hover  { border-color: #e07a5f; background: #fff5f3; }
 
+        /* Booking confirmation modal */
+        .ap-confirm-overlay {
+          position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 300; backdrop-filter: blur(3px);
+          animation: modalIn 0.2s ease;
+        }
+        .ap-confirm-modal {
+          background: #fff; border-radius: 22px; padding: 32px 28px;
+          width: min(400px, 92vw); box-shadow: 0 24px 80px rgba(0,0,0,0.18);
+          text-align: center; animation: modalIn 0.25s cubic-bezier(0.16,1,0.3,1);
+        }
+        .ap-confirm-icon {
+          width: 72px; height: 72px; border-radius: 50%;
+          background: linear-gradient(135deg, #D6EEF8, #EAF5FC);
+          border: 2px solid #B3DEF0;
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 20px; font-size: 28px;
+        }
+        .ap-confirm-title {
+          font-family: 'Playfair Display', serif;
+          font-size: 24px; font-weight: 500; color: #1a1a1a;
+          margin-bottom: 8px;
+        }
+        .ap-confirm-sub {
+          font-size: 14px; color: #5a5550; line-height: 1.6; margin-bottom: 20px;
+        }
+        .ap-confirm-detail-row {
+          display: flex; align-items: center; gap: 10px;
+          background: #f5f3ef; border-radius: 10px; padding: 10px 14px;
+          margin-bottom: 8px; text-align: left;
+        }
+        .ap-confirm-detail-label { font-size: 11.5px; color: #9a9590; flex-shrink: 0; width: 72px; }
+        .ap-confirm-detail-val   { font-size: 14px; font-weight: 500; color: #1a1a1a; }
+        .ap-confirm-close {
+          margin-top: 20px; width: 100%; padding: 12px;
+          border-radius: 12px; border: none;
+          background: #2E8BC0; color: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 500;
+          cursor: pointer; transition: background 0.15s;
+        }
+        .ap-confirm-close:hover { background: #0C3C60; }
+
         .ap-modal-overlay {
           position: fixed; inset: 0; background: rgba(0,0,0,0.3);
           display: flex; align-items: center; justify-content: center;
@@ -384,10 +454,26 @@ export default function AppointmentsPage() {
 
         {/* Physiotherapist selector */}
         <div className="ap-section-title" style={{ marginBottom: 8 }}>Select Physiotherapist</div>
-        <select className="ap-select" value={selectedPhysio?.uid ?? ""} onChange={(e) => setSelectedPhysio(physios.find((p) => p.uid === e.target.value) ?? null)}>
-          {physios.length === 0 && <option value="">Loading…</option>}
-          {physios.map((p) => <option key={p.uid} value={p.uid}>{p.firstName} {p.lastName}</option>)}
+        <select
+          className="ap-select"
+          value={selectedPhysio?.uid ?? ""}
+          onChange={(e) => {
+            const found = physios.find((p) => p.uid === e.target.value);
+            setSelectedPhysio(found ?? null);
+          }}
+          style={{ borderColor: !selectedPhysio && physios.length > 0 ? "#fca5a5" : undefined }}
+        >
+          {physios.length === 0
+            ? <option value="">Loading physiotherapists…</option>
+            : <option value="" disabled>— Select a physiotherapist —</option>
+          }
+          {physios.map((p) => <option key={p.uid} value={p.uid}>Dr. {p.firstName} {p.lastName}</option>)}
         </select>
+        {!selectedPhysio && physios.length > 0 && (
+          <div style={{ fontSize: 12.5, color: "#e07a5f", marginTop: -10, marginBottom: 14 }}>
+            Please select a physiotherapist to continue.
+          </div>
+        )}
 
         {/* Session type selector */}
         <div className="ap-section-title" style={{ marginBottom: 8 }}>Session Type</div>
@@ -423,7 +509,7 @@ export default function AppointmentsPage() {
 
         {bookError && <div className="ap-book-error">{bookError}</div>}
 
-        <button className="ap-book-btn" disabled={selectedSlot === null || booking || !selectedPhysio} onClick={handleBook}>
+        <button className="ap-book-btn" disabled={selectedSlot === null || booking || !selectedPhysio || physios.length === 0} onClick={handleBook}>
           {booking
             ? "Booking…"
             : selectedSlot !== null
@@ -493,21 +579,62 @@ export default function AppointmentsPage() {
         )}
       </div>
 
-      {/* ── Session History (static placeholder) ── */}
+      {/* ── Session History (live from Firestore) ── */}
       <div className="ap-section-title">Session History</div>
-      {PAST.map((p) => (
-        <div key={p.id} className="ap-history-card">
-          <div className="ap-hist-date">
-            <div className="ap-hist-day">{p.day}</div>
-            <div className="ap-hist-month">{p.month}</div>
+      {histLoading ? (
+        [1, 2, 3].map((n) => (
+          <div key={n} style={{ height: 64, borderRadius: 12, marginBottom: 8, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "apShimmer 1.4s ease infinite" }} />
+        ))
+      ) : history.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "28px 0", color: "#9a9590", fontSize: 14 }}>No past sessions yet.</div>
+      ) : (
+        history.map((a) => {
+          const [, m, d] = a.date.split("-");
+          const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+          const statusKey = (a.status ?? "completed") as keyof typeof STATUS_META;
+          const meta = STATUS_META[statusKey] ?? STATUS_META.completed;
+          return (
+            <div key={a.id} className="ap-history-card">
+              <div className="ap-hist-date">
+                <div className="ap-hist-day">{parseInt(d, 10)}</div>
+                <div className="ap-hist-month">{MONTHS[parseInt(m, 10) - 1] ?? ""}</div>
+              </div>
+              <div className="ap-hist-info">
+                <div className="ap-hist-type">{a.sessionType}</div>
+                <div className="ap-hist-sub">{fmtHour(a.hour)} · {a.physioName}</div>
+              </div>
+              <span className="ap-status-chip" style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
+            </div>
+          );
+        })
+      )}
+
+      {/* ── Booking confirmation modal ── */}
+      {confirmedAppt && (
+        <div className="ap-confirm-overlay" onClick={() => setConfirmedAppt(null)}>
+          <div className="ap-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ap-confirm-icon">✓</div>
+            <div className="ap-confirm-title">Appointment Booked!</div>
+            <div className="ap-confirm-sub">
+              Your session has been confirmed and added to the clinic schedule.
+            </div>
+            {[
+              { label: "Date",    val: (() => { const [,m,d] = confirmedAppt.date.split("-"); const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return `${parseInt(d,10)} ${MONTHS[parseInt(m,10)-1]??""}`; })() },
+              { label: "Time",    val: fmtHour(confirmedAppt.hour) },
+              { label: "Session", val: confirmedAppt.sessionType },
+              { label: "With",    val: confirmedAppt.physioName },
+            ].map((row) => (
+              <div key={row.label} className="ap-confirm-detail-row">
+                <span className="ap-confirm-detail-label">{row.label}</span>
+                <span className="ap-confirm-detail-val">{row.val}</span>
+              </div>
+            ))}
+            <button className="ap-confirm-close" onClick={() => setConfirmedAppt(null)}>
+              Done
+            </button>
           </div>
-          <div className="ap-hist-info">
-            <div className="ap-hist-type">{p.type}</div>
-            <div className="ap-hist-sub">{p.time} · {p.physio}</div>
-          </div>
-          <span className="ap-status-chip" style={{ background: STATUS_META.completed.bg, color: STATUS_META.completed.color }}>Completed</span>
         </div>
-      ))}
+      )}
 
       {/* ── Cancel modal ── */}
       {cancelTarget && (

@@ -279,6 +279,27 @@ export default function PatientDashboard() {
           margin-top: 8px;
           border: 1px solid rgba(255,255,255,0.07);
         }
+
+        /* Sign out in sidebar */
+        .pd2-sidebar-signout {
+          margin-top: auto;
+          padding-top: 12px;
+          border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .pd2-sidebar-signout-btn {
+          display: flex; align-items: center; gap: 10px;
+          width: 100%; padding: 11px 10px; border-radius: 10px;
+          border: 1px solid rgba(255,255,255,0.1);
+          background: transparent; cursor: pointer;
+          font-family: 'Outfit', sans-serif; font-size: 14px;
+          font-weight: 500; color: rgba(255,255,255,0.55);
+          transition: all 0.15s; text-align: left;
+        }
+        .pd2-sidebar-signout-btn:hover {
+          background: rgba(224,122,95,0.15);
+          border-color: rgba(224,122,95,0.3);
+          color: #fca5a5;
+        }
         .pd2-rehab-title {
           font-size: 12px;
           font-weight: 600;
@@ -492,6 +513,18 @@ export default function PatientDashboard() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Sign out */}
+            <div className="pd2-sidebar-signout">
+              <button className="pd2-sidebar-signout-btn" onClick={handleLogout}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                  <polyline points="16 17 21 12 16 7"/>
+                  <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                Sign out
+              </button>
             </div>
           </aside>
 
