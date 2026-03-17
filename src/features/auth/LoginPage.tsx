@@ -2,6 +2,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { login, sendPasswordReset, parseFirebaseError } from "../../services/authService";
+import logo from "../../assets/physio-logo.svg";
 
 type RoleTab = "patient" | "physiotherapist";
 
@@ -182,6 +183,34 @@ export default function LoginPage() {
         .lp-form-box {
           width: 100%;
           max-width: 420px;
+        }
+
+        .lp-form-logo-wrap {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          margin-bottom: 28px;
+        }
+        .lp-form-logo {
+          height: 56px;
+          width: auto;
+          margin-bottom: 12px;
+          filter: drop-shadow(0 4px 12px rgba(46,139,192,0.18));
+        }
+        .lp-form-clinic-name {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 22px;
+          font-weight: 600;
+          color: #1a1a1a;
+          letter-spacing: -0.01em;
+        }
+        .lp-form-clinic-name span { color: #2E8BC0; }
+        .lp-form-clinic-divider {
+          width: 40px;
+          height: 2px;
+          background: linear-gradient(90deg, #2E8BC0, #5BC0BE);
+          border-radius: 2px;
+          margin-top: 10px;
         }
 
         .lp-form-heading {
@@ -467,8 +496,15 @@ export default function LoginPage() {
         {/* ── RIGHT FORM PANEL ── */}
         <div className="lp-right">
           <div className="lp-form-box">
+            {/* Logo + clinic name */}
+            <div className="lp-form-logo-wrap">
+              <img src={logo} alt="Physio+" className="lp-form-logo" />
+              <div className="lp-form-clinic-name">Physio<span>+</span> Clinic</div>
+              <div className="lp-form-clinic-divider" />
+            </div>
+
             <div className="lp-form-heading">Welcome back</div>
-            <div className="lp-form-sub">Sign in to your Physio+ Hub account</div>
+            <div className="lp-form-sub">Sign in to your Physio+ Clinic account</div>
 
             {/* Role tabs */}
             <div className="lp-role-tabs">
