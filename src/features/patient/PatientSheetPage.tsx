@@ -209,6 +209,9 @@ interface TreatmentEntry {
   date:          string;
   treatmentType: string;
   notes:         string;
+  entryMode:     "session" | "plan";
+  numSessions?:  number;
+  goals?:        string;
   createdAt:     Timestamp | null;
 }
 
@@ -275,8 +278,9 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
 
   // canEdit:
   //   clinic_manager            → always true
-  //   physiotherapist           → true only if they are the assigned senior editor
-  //   patient / anyone else     → false (view-only)
+  //   senior physiotherapist    → true (assigned senior editor for this patient)
+  //   any other physio          → false (view-only)
+  //   patient                   → false (view-only)
   const canEdit: boolean =
     role === "clinic_manager" ||
     (role === "physiotherapist" &&
@@ -294,14 +298,18 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
     { id: "notes",             label: "Treatment Program", physioOnly: true },
     { id: "session-notes",     label: "Session Notes",     physioOnly: true },
     { id: "documents",         label: "Documents" },
-    { id: "session-feedback",  label: "Session Feedback" },
+    { id: "session-feedback",  label: "Session Feedback", managerOnly: true },
     { id: "session-history",   label: "Session History" },
     { id: "exercises",         label: "Exercises" },
   ];
-  // Patients only see non-physioOnly sections
-  const sections = allSections.filter((sec) =>
-    !sec.physioOnly || role !== "patient"
-  );
+  // Filter sections by role:
+  //   physioOnly  → hidden from patients
+  //   managerOnly → only clinic_manager + the patient themselves can see
+  const sections = allSections.filter((sec) => {
+    if (sec.physioOnly  && role === "patient")        return false;
+    if (sec.managerOnly && role === "physiotherapist") return false;
+    return true;
+  });
 
   // ── Session notes state ────────────────────────────────────────────────────
   const [sessionNotes,    setSessionNotes]    = useState<SessionNote[]>([]);
@@ -320,6 +328,10 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
   const [tpSaving,         setTpSaving]         = useState(false);
   const [tpError,          setTpError]          = useState<string | null>(null);
   const [tpSuccess,        setTpSuccess]        = useState(false);
+  // Mode: "session" = single session note | "plan" = multi-session treatment plan
+  const [tpMode,           setTpMode]           = useState<"session" | "plan">("session");
+  const [tpNumSessions,    setTpNumSessions]    = useState(6);
+  const [tpGoals,          setTpGoals]          = useState("");
 
   // ── Session feedback (read-only view from sessionFeedback collection) ──────
   const [sessionFeedbackList, setSessionFeedbackList] = useState<SessionFeedback[]>([]);
@@ -406,6 +418,9 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         date:          (d.data().date          as string) ?? "",
         treatmentType: (d.data().treatmentType as string) ?? "",
         notes:         (d.data().notes         as string) ?? "",
+        entryMode:     ((d.data().entryMode    as string) === "plan" ? "plan" : "session") as "session" | "plan",
+        numSessions:   (d.data().numSessions   as number | undefined),
+        goals:         (d.data().goals         as string | undefined),
         createdAt:     (d.data().createdAt     as Timestamp | null) ?? null,
       })));
     });
@@ -422,9 +437,15 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         date:          tpDate,
         treatmentType: tpType,
         notes:         tpNotes.trim(),
+        entryMode:     tpMode,
+        ...(tpMode === "plan" && {
+          numSessions: tpNumSessions,
+          goals:       tpGoals.trim(),
+        }),
         createdAt:     serverTimestamp(),
       });
       setTpNotes("");
+      setTpGoals("");
       setTpSuccess(true);
       setTimeout(() => setTpSuccess(false), 2500);
     } catch {
@@ -1008,6 +1029,35 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         .ps-sh-btn.cancel  { border-color: #fca5a5; color: #991b1b; background: #fff5f5; }
         .ps-sh-btn.cancel:hover  { background: #fee2e2; }
         .ps-sh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        /* ── Treatment mode toggle ── */
+        .ps-tp-mode-toggle {
+          display: flex; gap: 6px; margin-bottom: 16px;
+        }
+        .ps-tp-mode-btn {
+          flex: 1; padding: 9px 12px; border-radius: 10px;
+          border: 1.5px solid #e5e0d8; background: #fafaf8;
+          font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
+          color: #9a9590; cursor: pointer; transition: all 0.15s;
+          display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .ps-tp-mode-btn.active {
+          background: #2E8BC0; border-color: #2E8BC0; color: #fff;
+        }
+        .ps-tp-mode-btn:not(.active):hover {
+          border-color: #B3DEF0; color: #2E8BC0; background: #EAF5FC;
+        }
+        .ps-tp-plan-badge {
+          display: inline-block; background: #5BC0BE; color: #fff;
+          font-size: 10px; font-weight: 700; padding: 2px 7px;
+          border-radius: 100px; letter-spacing: 0.04em;
+        }
+        .ps-tp-entry-type {
+          display: inline-flex; align-items: center; gap: 5px;
+          font-size: 11px; font-weight: 600; padding: 2px 8px;
+          border-radius: 100px; margin-right: 6px;
+        }
+        .ps-tp-entry-session { background: #D6EEF8; color: #0C3C60; }
+        .ps-tp-entry-plan    { background: #d1fae5; color: #065f46; }
       `}</style>
 
       {/* ── Part 2: Patient profile header ── */}
@@ -1119,30 +1169,102 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
           {/* Add entry form — manager + senior only */}
           {canEdit && (
             <div className="ps-sn-form">
-              <div className="ps-sn-form-title">Add Treatment Entry</div>
-              <div className="ps-sn-row">
-                <div className="ps-sn-field">
-                  <label className="ps-sn-label">Session Date</label>
-                  <input type="date" className="ps-sn-input"
-                    value={tpDate} onChange={(e) => setTpDate(e.target.value)} />
-                </div>
-                <div className="ps-sn-field">
-                  <label className="ps-sn-label">Treatment Type</label>
-                  <select className="ps-sn-select"
-                    value={tpType} onChange={(e) => setTpType(e.target.value)}>
-                    {TREATMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
+              <div className="ps-sn-form-title">Add to Treatment Program</div>
+
+              {/* Mode toggle */}
+              <div className="ps-tp-mode-toggle">
+                <button
+                  className={`ps-tp-mode-btn ${tpMode === "session" ? "active" : ""}`}
+                  onClick={() => setTpMode("session")}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+                  </svg>
+                  Session Note
+                </button>
+                <button
+                  className={`ps-tp-mode-btn ${tpMode === "plan" ? "active" : ""}`}
+                  onClick={() => setTpMode("plan")}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                  </svg>
+                  Treatment Plan
+                  <span className="ps-tp-plan-badge">6 sessions</span>
+                </button>
               </div>
-              <textarea className="ps-sn-textarea"
-                placeholder="Describe the treatment, patient response, goals for next session…"
-                value={tpNotes} onChange={(e) => setTpNotes(e.target.value)} />
+
+              {/* Session Note fields */}
+              {tpMode === "session" && (
+                <>
+                  <div className="ps-sn-row">
+                    <div className="ps-sn-field">
+                      <label className="ps-sn-label">Session Date</label>
+                      <input type="date" className="ps-sn-input"
+                        value={tpDate} onChange={(e) => setTpDate(e.target.value)} />
+                    </div>
+                    <div className="ps-sn-field">
+                      <label className="ps-sn-label">Treatment Type</label>
+                      <select className="ps-sn-select"
+                        value={tpType} onChange={(e) => setTpType(e.target.value)}>
+                        {TREATMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <textarea className="ps-sn-textarea"
+                    placeholder="Describe what was done this session, patient response, progress observed…"
+                    value={tpNotes} onChange={(e) => setTpNotes(e.target.value)} />
+                </>
+              )}
+
+              {/* Treatment Plan fields */}
+              {tpMode === "plan" && (
+                <>
+                  <div className="ps-sn-row">
+                    <div className="ps-sn-field">
+                      <label className="ps-sn-label">Start Date</label>
+                      <input type="date" className="ps-sn-input"
+                        value={tpDate} onChange={(e) => setTpDate(e.target.value)} />
+                    </div>
+                    <div className="ps-sn-field">
+                      <label className="ps-sn-label">Number of Sessions</label>
+                      <select className="ps-sn-select"
+                        value={tpNumSessions}
+                        onChange={(e) => setTpNumSessions(Number(e.target.value))}>
+                        {[3, 4, 5, 6, 8, 10, 12].map((n) => (
+                          <option key={n} value={n}>{n} sessions</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="ps-sn-field" style={{ marginBottom: 14 }}>
+                    <label className="ps-sn-label">Treatment Focus / Type</label>
+                    <select className="ps-sn-select" style={{ marginBottom: 0 }}
+                      value={tpType} onChange={(e) => setTpType(e.target.value)}>
+                      {TREATMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div className="ps-sn-field" style={{ marginBottom: 8 }}>
+                    <label className="ps-sn-label">Treatment Goals</label>
+                    <textarea className="ps-sn-textarea" style={{ minHeight: 80, marginBottom: 0 }}
+                      placeholder="e.g. Restore full ROM, reduce pain to 0/10 at rest, return to sport by week 12…"
+                      value={tpGoals} onChange={(e) => setTpGoals(e.target.value)} />
+                  </div>
+                  <textarea className="ps-sn-textarea"
+                    placeholder="Detailed treatment plan — exercises, manual therapy, milestones per session…"
+                    value={tpNotes} onChange={(e) => setTpNotes(e.target.value)} />
+                </>
+              )}
+
               <div style={{ display: "flex", alignItems: "center" }}>
                 <button className="ps-sn-save-btn"
                   disabled={tpSaving || !tpNotes.trim()} onClick={handleSaveTreatmentEntry}>
                   {tpSaving
                     ? <><span className="ps-senior-spinner" /> Saving…</>
-                    : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Entry</>
+                    : tpMode === "session"
+                      ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Session Note</>
+                      : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Treatment Plan</>
                   }
                 </button>
                 {tpSuccess && (
@@ -1164,9 +1286,21 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
             treatmentEntries.map((entry) => (
               <div key={entry.id} className="ps-sn-card">
                 <div className="ps-sn-card-header">
-                  <span className="ps-sn-card-type">{entry.treatmentType}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" as const }}>
+                    <span className="ps-sn-card-type">{entry.treatmentType}</span>
+                    <span className={`ps-tp-entry-type ${entry.entryMode === "plan" ? "ps-tp-entry-plan" : "ps-tp-entry-session"}`}>
+                      {entry.entryMode === "plan"
+                        ? `Treatment Plan · ${entry.numSessions ?? 6} sessions`
+                        : "Session Note"}
+                    </span>
+                  </div>
                   <span className="ps-sn-card-date">{entry.date}</span>
                 </div>
+                {entry.goals && (
+                  <div style={{ fontSize: 13, color: "#065f46", background: "#d1fae5", borderRadius: 8, padding: "6px 10px", marginBottom: 8 }}>
+                    <strong>Goals:</strong> {entry.goals}
+                  </div>
+                )}
                 <div className="ps-sn-card-notes">{entry.notes}</div>
               </div>
             ))
@@ -1310,7 +1444,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
       )}
 
       {/* ── PROGRESS (unchanged) ── */}
-      {activeSection === "session-feedback" && (
+      {activeSection === "session-feedback" && (role === "clinic_manager" || role === "patient") && (
         <>
           {/* Read-only banner */}
           <div className="ps-readonly-banner" style={{ marginBottom: 20 }}>

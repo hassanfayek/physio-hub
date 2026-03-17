@@ -16,6 +16,7 @@ import {
   cancelPatientAppointment,
   getClinicSettings,
   fmtHour,
+  fmtHour12,
   toDateStr,
   type Appointment as FSAppt,
   type ClinicSettings,
@@ -169,7 +170,7 @@ export default function AppointmentsPage() {
   for (let h = clinicSettings.openingHour; h < clinicSettings.closingHour; h++) {
     slots.push({
       hour:      h,
-      label:     fmtHour(h),
+      label:     fmtHour12(h),
       available: (slotCounts[h] ?? 0) < clinicSettings.maxPatientsPerHour,
     });
   }
@@ -517,7 +518,7 @@ export default function AppointmentsPage() {
           {booking
             ? "Booking…"
             : selectedSlot !== null
-              ? `Book — ${selectedDayObj.label}, ${fmtHour(selectedSlot)}`
+              ? `Book — ${selectedDayObj.label}, ${fmtHour12(selectedSlot)}`
               : "Select a time slot to continue"
           }
         </button>
@@ -534,7 +535,7 @@ export default function AppointmentsPage() {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", opacity: 0.7, marginBottom: 3 }}>Next Appointment</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{fmtHour(nextAppt.hour)} — {nextAppt.sessionType}</div>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>{fmtHour12(nextAppt.hour)} — {nextAppt.sessionType}</div>
               <div style={{ fontSize: 12.5, opacity: 0.8, marginTop: 2 }}>{nextAppt.physioName}</div>
             </div>
           </div>
@@ -564,7 +565,7 @@ export default function AppointmentsPage() {
                   <div className="ap-appt-meta">
                     <span className="ap-appt-meta-item">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                      {fmtHour(a.hour)}
+                      {fmtHour12(a.hour)}
                     </span>
                     <span>{a.physioName}</span>
                   </div>
@@ -605,7 +606,7 @@ export default function AppointmentsPage() {
               </div>
               <div className="ap-hist-info">
                 <div className="ap-hist-type">{a.sessionType}</div>
-                <div className="ap-hist-sub">{fmtHour(a.hour)} · {a.physioName}</div>
+                <div className="ap-hist-sub">{fmtHour12(a.hour)} · {a.physioName}</div>
               </div>
               <span className="ap-status-chip" style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
             </div>
@@ -624,7 +625,7 @@ export default function AppointmentsPage() {
             </div>
             {[
               { label: "Date",    val: (() => { const [,m,d] = confirmedAppt.date.split("-"); const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return `${parseInt(d,10)} ${MONTHS[parseInt(m,10)-1]??""}`; })() },
-              { label: "Time",    val: fmtHour(confirmedAppt.hour) },
+              { label: "Time",    val: fmtHour12(confirmedAppt.hour) },
               { label: "Session", val: confirmedAppt.sessionType },
               { label: "With",    val: confirmedAppt.physioName },
             ].map((row) => (
@@ -648,7 +649,7 @@ export default function AppointmentsPage() {
             <div className="ap-modal-body">
               {(() => {
                 const { day, month } = parseDateBadge(cancelTarget.date);
-                return `Cancel your ${cancelTarget.sessionType} on ${day} ${month} at ${fmtHour(cancelTarget.hour)} with ${cancelTarget.physioName}? This will remove it from the clinic schedule immediately.`;
+                return `Cancel your ${cancelTarget.sessionType} on ${day} ${month} at ${fmtHour12(cancelTarget.hour)} with ${cancelTarget.physioName}? This will remove it from the clinic schedule immediately.`;
               })()}
             </div>
             {cancelError && (

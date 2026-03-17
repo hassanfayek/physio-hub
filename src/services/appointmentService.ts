@@ -268,9 +268,16 @@ export function getWeekStart(d: Date): Date {
   return monday;
 }
 
-/** Format hour as "09:00" */
+/** Format hour as "09:00" (24-hour) */
 export function fmtHour(h: number): string {
   return `${String(h).padStart(2, "0")}:00`;
+}
+
+/** Format hour as "9:00 AM / 1:00 PM" (12-hour) */
+export function fmtHour12(h: number): string {
+  const period = h < 12 ? "AM" : "PM";
+  const h12    = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:00 ${period}`;
 }
 
 // ─── Realtime: upcoming appointments for a patient ───────────────────────────
