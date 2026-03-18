@@ -88,36 +88,52 @@ function TeamTab() {
     }
     setSaving(true); setSaveError(null);
     try {
-      // Use secondaryAuth so the manager's session is NEVER interrupted
+      // IMPORTANT: use secondaryAuth — this keeps the manager logged in
+      // createUserWithEmailAndPassword on the main auth would sign out the manager
       const credential = await createUserWithEmailAndPassword(
         secondaryAuth, physioForm.email, physioForm.password
       );
-      const { user } = credential;
+      const newUser = credential.user;
       const displayName = `Dr. ${physioForm.firstName} ${physioForm.lastName}`;
-      await updateProfile(user, { displayName });
+
+      // Update display name on the secondary auth user
+      await updateProfile(newUser, { displayName });
+
       const now = serverTimestamp();
-      // Write /users/{uid} and /physiotherapists/{uid} using the main db
-      await setDoc(doc(db, "users", user.uid), {
-        email: physioForm.email, role: "physiotherapist",
-        displayName, createdAt: now, updatedAt: now,
+
+      // Write Firestore docs using the main db (manager's Firestore rules apply)
+      await setDoc(doc(db, "users", newUser.uid), {
+        email:       physioForm.email,
+        role:        "physiotherapist",
+        displayName,
+        createdAt:   now,
+        updatedAt:   now,
       });
-      await setDoc(doc(db, "physiotherapists", user.uid), {
+
+      await setDoc(doc(db, "physiotherapists", newUser.uid), {
         firstName:       physioForm.firstName,
         lastName:        physioForm.lastName,
         licenseNumber:   physioForm.licenseNumber,
         clinicName:      physioForm.clinicName || "Physio+ Clinic",
         phone:           physioForm.phone,
-        specializations: physioForm.specializations.split(",").map((s) => s.trim()).filter(Boolean),
+        specializations: physioForm.specializations.split(",").map((t) => t.trim()).filter(Boolean),
         createdAt:       now,
       });
-      // Sign out of the secondary app immediately — manager stays logged in
+
+      // Sign the secondary auth user out — does NOT affect main auth/manager session
       await secondaryAuth.signOut();
+
       setSaveSuccess(`Dr. ${physioForm.firstName} ${physioForm.lastName} added successfully.`);
       setPhysioForm(EMPTY_PHYSIO_FORM);
       setShowAddPhysio(false);
       setTimeout(() => setSaveSuccess(null), 4000);
     } catch (err: unknown) {
-      setSaveError((err as { message?: string }).message ?? "Failed to add physiotherapist.");
+      const msg = (err as { message?: string }).message ?? "";
+      setSaveError(
+        msg.includes("email-already-in-use")
+          ? "This email is already registered."
+          : msg || "Failed to add physiotherapist."
+      );
     }
     setSaving(false);
   };
@@ -143,30 +159,25 @@ function TeamTab() {
         .tm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
         .tm-card {
           background: #fff; border: 1.5px solid #e5e0d8; border-radius: 16px;
-          overflow: hidden; transition: border-color 0.15s;
-          position: relative;
+          overflow: hidden; transition: border-color 0.15s; position: relative;
         }
         .tm-card:hover { border-color: #B3DEF0; }
         .tm-card-header {
           display: flex; align-items: center; gap: 14px;
           padding: 18px 20px; cursor: pointer; position: relative;
         }
-        .tm-card-expand-icon {
-          position: absolute; right: 44px; top: 50%; transform: translateY(-50%);
-          color: #c0bbb4; transition: transform 0.2s;
-        }
-        .tm-card-expand-icon.open { transform: translateY(-50%) rotate(180deg); }
-        .tm-card-details {
-          border-top: 1px solid #f5f3ef;
-          padding: 14px 20px;
+        .tm-card-chevron { color: #c0bbb4; transition: transform 0.2s; flex-shrink: 0; }
+        .tm-card-chevron.open { transform: rotate(180deg); }
+        .tm-card-body {
+          border-top: 1px solid #f0ede8; padding: 14px 20px;
           display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px;
           background: #fafaf8;
-          animation: tmExpand 0.2s ease;
+          animation: tmSlide 0.18s ease;
         }
-        @keyframes tmExpand { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-        .tm-detail-row { display: flex; flex-direction: column; gap: 2px; }
-        .tm-detail-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: #c0bbb4; font-weight: 600; }
-        .tm-detail-val   { font-size: 13.5px; color: #1a1a1a; font-weight: 500; }
+        @keyframes tmSlide { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+        .tm-info-row { display: flex; flex-direction: column; gap: 2px; }
+        .tm-info-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #c0bbb4; }
+        .tm-info-val   { font-size: 13.5px; font-weight: 500; color: #1a1a1a; }
         .tm-del-btn {
           position: absolute; top: 10px; right: 10px;
           width: 26px; height: 26px; border-radius: 50%;
@@ -253,26 +264,22 @@ function TeamTab() {
         <div className="tm-grid">
           {physios.map((p) => (
             <div key={p.uid} className="tm-card">
-              {/* Card header — click to expand */}
-              <div className="tm-card-header" onClick={() => setExpandedUid(expandedUid === p.uid ? null : p.uid)}>
+              <div className="tm-card-header"
+                onClick={() => setExpandedUid(expandedUid === p.uid ? null : p.uid)}>
                 <div className="tm-avatar">{p.firstName[0]}{p.lastName[0]}</div>
                 <div style={{ flex: 1 }}>
                   <div className="tm-name">Dr. {p.firstName} {p.lastName}</div>
                   <div className="tm-spec">{p.clinicName || "Physio+ Clinic"}</div>
                   {p.specializations?.[0] && <span className="tm-badge">{p.specializations[0]}</span>}
                 </div>
-                {/* Chevron */}
-                <svg
-                  className={`tm-card-expand-icon ${expandedUid === p.uid ? "open" : ""}`}
+                <svg className={`tm-card-chevron ${expandedUid === p.uid ? "open" : ""}`}
                   width="14" height="14" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                >
+                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="6 9 12 15 18 9"/>
                 </svg>
-                {/* Delete button */}
                 <button
                   className="tm-del-btn"
-                  style={{ position: "static", flexShrink: 0 }}
+                  style={{ position: "static", marginLeft: 4 }}
                   disabled={deletingUid === p.uid}
                   onClick={(e) => { e.stopPropagation(); handleDeletePhysio(p.uid, `${p.firstName} ${p.lastName}`); }}
                   title="Remove physiotherapist"
@@ -280,19 +287,17 @@ function TeamTab() {
                   {deletingUid === p.uid ? "…" : "✕"}
                 </button>
               </div>
-
-              {/* Expanded details dropdown */}
               {expandedUid === p.uid && (
-                <div className="tm-card-details">
-                  {[
-                    ["License",         p.licenseNumber  || "—"],
-                    ["Phone",           p.phone          || "—"],
-                    ["Clinic",          p.clinicName     || "—"],
-                    ["Specializations", (p.specializations ?? []).join(", ") || "—"],
-                  ].map(([label, val]) => (
-                    <div key={label} className="tm-detail-row">
-                      <span className="tm-detail-label">{label}</span>
-                      <span className="tm-detail-val">{val}</span>
+                <div className="tm-card-body">
+                  {([
+                    ["License No.",      p.licenseNumber || "—"],
+                    ["Phone",            p.phone         || "—"],
+                    ["Clinic",           p.clinicName    || "—"],
+                    ["Specializations",  (p.specializations ?? []).join(", ") || "—"],
+                  ] as [string, string][]).map(([label, val]) => (
+                    <div key={label} className="tm-info-row">
+                      <span className="tm-info-label">{label}</span>
+                      <span className="tm-info-val">{val}</span>
                     </div>
                   ))}
                 </div>
