@@ -7,7 +7,7 @@
 // • Cancel deletes from `appointments`, immediately removing from clinic schedule
 // All CSS classes and JSX structure are unchanged from the original design.
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import {
   subscribeToPatientAppointments,
@@ -27,7 +27,7 @@ import {
   type Patient,
 } from "../../services/patientService";
 import type { PatientProfile } from "../../services/authService";
-import { collection, query, where, getDocs, onSnapshot as fsOnSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot as fsOnSnapshot } from "firebase/firestore";
 import { db } from "../../firebase";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -144,18 +144,6 @@ export default function AppointmentsPage() {
   // ── Load slot counts for selected day — realtime via onSnapshot ───────────
   const selectedDayObj = DAYS.find((d) => d.label === selectedDay) ?? DAYS[0];
 
-  // Keep a stable ref for loadSlotCounts (still used after booking to refresh UI)
-  const loadSlotCounts = useCallback(async (dateStr: string) => {
-    const snap = await getDocs(
-      query(collection(db, "appointments"), where("date", "==", dateStr))
-    );
-    const counts: Record<number, number> = {};
-    snap.forEach((d) => {
-      const h = (d.data().hour as number) ?? -1;
-      if (h >= 0) counts[h] = (counts[h] ?? 0) + 1;
-    });
-    setSlotCounts(counts);
-  }, []);
 
   // Live slot availability — updates instantly when any appointment is added/removed
   useEffect(() => {

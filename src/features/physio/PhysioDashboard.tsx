@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, getDoc, deleteDoc, collection } from "firebase/firestore";
+import { doc, getDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAuth } from "../../hooks/useAuth";
 import PatientsTab      from "./PatientsTab";
@@ -14,7 +14,7 @@ import {
   type DashboardStats,
 } from "../../services/dashboardService";
 import type { PhysioProfile } from "../../services/authService";
-import { registerPatient, registerPhysio } from "../../services/authService";
+import { registerPhysio } from "../../services/authService";
 import logo from "../../assets/physio-logo.svg";
 import { subscribeToPhysiotherapists, type Physiotherapist } from "../../services/patientService";
 
@@ -100,30 +100,6 @@ function TeamTab() {
     setSaving(false);
   };
 
-  const handleAddPatient = async () => {
-    if (!patientForm.email || !patientForm.password || !patientForm.firstName || !patientForm.lastName) {
-      setSaveError("First name, last name, email and password are required."); return;
-    }
-    setSaving(true); setSaveError(null);
-    try {
-      await registerPatient({
-        email:            patientForm.email,
-        password:         patientForm.password,
-        firstName:        patientForm.firstName,
-        lastName:         patientForm.lastName,
-        dateOfBirth:      patientForm.dateOfBirth,
-        phone:            patientForm.phone,
-        primaryCondition: patientForm.primaryCondition,
-      });
-      setSaveSuccess(`${patientForm.firstName} ${patientForm.lastName} added successfully.`);
-      setPatientForm(EMPTY_PATIENT_FORM);
-      setShowAddPatient(false);
-      setTimeout(() => setSaveSuccess(null), 4000);
-    } catch (err: unknown) {
-      setSaveError((err as { message?: string }).message ?? "Failed to add patient.");
-    }
-    setSaving(false);
-  };
 
   return (
     <>
