@@ -1461,9 +1461,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
                 <label className="ps-field-label">Contraindications & Precautions (one per line)</label>
                 <textarea className="ps-field-textarea" value={diagDraft.contraindications}
                   onChange={(e) => setDiagDraft({ ...diagDraft, contraindications: e.target.value })}
-                  placeholder={"Avoid full weight-bearing until week 12
-No return to sport until cleared
-Avoid deep knee flexion beyond 90°"} />
+                  placeholder="Avoid full weight-bearing until week 12&#10;No return to sport until cleared&#10;Avoid deep knee flexion beyond 90°" />
               </div>
             </div>
           )}
@@ -1659,7 +1657,7 @@ Avoid deep knee flexion beyond 90°"} />
           {/* READ MODE */}
           {!asmEditing && !assessment.subjectiveComplaints && (
             <div className="ps-asm-empty">
-              No assessment recorded yet.{canEdit ? " Click "Create Assessment" to begin." : ""}
+              No assessment recorded yet.{canEdit ? ' Click "Create Assessment" to begin.' : ""}
             </div>
           )}
           {!asmEditing && assessment.subjectiveComplaints && (() => {
