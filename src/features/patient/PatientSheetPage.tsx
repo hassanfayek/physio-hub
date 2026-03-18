@@ -1402,8 +1402,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
                 <div className="ps-diag-card full">
                   <div className="ps-diag-label">Contraindications & Precautions</div>
                   <ul className="ps-contra-list" style={{ marginTop: 4 }}>
-                    {diagData.contraindications.split("
-").filter(Boolean).map((c, i) => (
+                    {diagData.contraindications.split("\n").filter(Boolean).map((c, i) => (
                       <li key={i} className="ps-contra-item">
                         <div className="ps-contra-dot" />{c}
                       </li>
