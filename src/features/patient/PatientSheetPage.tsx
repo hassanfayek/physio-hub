@@ -12,7 +12,7 @@ import {
 import type { PhysioProfile } from "../../services/authService";
 import ExerciseProgram      from "./ExerciseProgram";
 import {
-  collection, addDoc, doc, setDoc, updateDoc, query, where, orderBy,
+  collection, addDoc, doc, setDoc, query, where, orderBy,
   onSnapshot, serverTimestamp, type Timestamp,
 } from "firebase/firestore";
 import {

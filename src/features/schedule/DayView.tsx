@@ -5,7 +5,6 @@ import {
   subscribeToAppointmentsByDay,
   deleteAppointment,
   updateAppointmentStatus,
-  fmtHour,
   fmtHour12,
   type Appointment,
   type ClinicSettings,

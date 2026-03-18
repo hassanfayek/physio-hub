@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import {
   subscribeToAppointmentsByWeek,
-  fmtHour,
   fmtHour12,
   toDateStr,
   getWeekStart,
