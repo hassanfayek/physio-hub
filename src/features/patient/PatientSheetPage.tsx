@@ -12,13 +12,13 @@ import {
 import type { PhysioProfile } from "../../services/authService";
 import ExerciseProgram      from "./ExerciseProgram";
 import {
-  collection, addDoc, query, where, orderBy,
+  collection, addDoc, doc, setDoc, updateDoc, query, where, orderBy,
   onSnapshot, serverTimestamp, type Timestamp,
 } from "firebase/firestore";
 import {
   subscribeToPatientAllAppointments,
   updateAppointmentStatus,
-  fmtHour,
+  fmtHour12,
   type Appointment as ApptRecord,
 } from "../../services/appointmentService";
 import { db } from "../../firebase";
@@ -221,6 +221,72 @@ const TREATMENT_TYPES = [
   "Other",
 ];
 
+// ─── Diagnosis data structure ────────────────────────────────────────────────
+
+interface DiagnosisData {
+  primaryDiagnosis: string;
+  icdCode:          string;
+  onsetDate:        string;
+  mechanism:        string;
+  surgeryDate:      string;
+  surgeon:          string;
+  contraindications: string;   // newline-separated list
+}
+
+const EMPTY_DIAGNOSIS: DiagnosisData = {
+  primaryDiagnosis:  "",
+  icdCode:           "",
+  onsetDate:         "",
+  mechanism:         "",
+  surgeryDate:       "",
+  surgeon:           "",
+  contraindications: "",
+};
+
+// ─── PT Assessment structure ──────────────────────────────────────────────────
+
+interface PTAssessment {
+  subjectiveComplaints: string;
+  painLocation:         string;
+  painScore:            string;
+  aggravatingFactors:   string;
+  relievingFactors:     string;
+  medicalHistory:       string;
+  medications:          string;
+  postureObservation:   string;
+  rangeOfMotion:        string;
+  muscleStrength:       string;
+  specialTests:         string;
+  functionalLimits:     string;
+  shortTermGoals:       string;
+  longTermGoals:        string;
+  treatmentApproach:    string;
+  precautions:          string;
+  assessorName:         string;
+  assessmentDate:       string;
+}
+
+const EMPTY_ASSESSMENT: PTAssessment = {
+  subjectiveComplaints: "",
+  painLocation:         "",
+  painScore:            "",
+  aggravatingFactors:   "",
+  relievingFactors:     "",
+  medicalHistory:       "",
+  medications:          "",
+  postureObservation:   "",
+  rangeOfMotion:        "",
+  muscleStrength:       "",
+  specialTests:         "",
+  functionalLimits:     "",
+  shortTermGoals:       "",
+  longTermGoals:        "",
+  treatmentApproach:    "",
+  precautions:          "",
+  assessorName:         "",
+  assessmentDate:       new Date().toISOString().slice(0, 10),
+};
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export interface PatientSheetPageProps {
@@ -249,6 +315,70 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
     return subscribeToPatient(patientId, setPatient, () => setPatient(null));
   }, [patientId]);
 
+  // Load diagnosis from Firestore (stored in patients/{id}/diagnosis sub-doc)
+  useEffect(() => {
+    if (!patientId) return;
+    const unsub = onSnapshot(
+      doc(db, "patientDiagnosis", patientId),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data() as Partial<DiagnosisData>;
+          const filled: DiagnosisData = { ...EMPTY_DIAGNOSIS, ...d };
+          setDiagData(filled);
+          setDiagDraft(filled);
+        }
+      },
+      () => {}
+    );
+    return unsub;
+  }, [patientId]);
+
+  // Load PT assessment from Firestore
+  useEffect(() => {
+    if (!patientId) return;
+    const unsub = onSnapshot(
+      doc(db, "patientAssessments", patientId),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data() as Partial<PTAssessment>;
+          const filled: PTAssessment = { ...EMPTY_ASSESSMENT, ...d };
+          setAssessment(filled);
+          setAsmDraft(filled);
+        }
+      },
+      () => {}
+    );
+    return unsub;
+  }, [patientId]);
+
+  const handleSaveDiagnosis = async () => {
+    if (!patientId) return;
+    setDiagSaving(true);
+    await setDoc(doc(db, "patientDiagnosis", patientId), {
+      ...diagDraft,
+      updatedAt: serverTimestamp(),
+    });
+    setDiagData(diagDraft);
+    setDiagEditing(false);
+    setDiagSaving(false);
+    setDiagSaved(true);
+    setTimeout(() => setDiagSaved(false), 2500);
+  };
+
+  const handleSaveAssessment = async () => {
+    if (!patientId) return;
+    setAsmSaving(true);
+    await setDoc(doc(db, "patientAssessments", patientId), {
+      ...asmDraft,
+      updatedAt: serverTimestamp(),
+    });
+    setAssessment(asmDraft);
+    setAsmEditing(false);
+    setAsmSaving(false);
+    setAsmSaved(true);
+    setTimeout(() => setAsmSaved(false), 2500);
+  };
+
   // Load physio roster only when the current user is a manager (for assignment dropdown)
   useEffect(() => {
     if (user?.role !== "clinic_manager") return;
@@ -271,12 +401,27 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
 
   const isManager = role === "clinic_manager";
 
+  // ── Diagnosis state (editable by canEdit) ─────────────────────────────────
+  const [diagData,     setDiagData]     = useState<DiagnosisData>(EMPTY_DIAGNOSIS);
+  const [diagEditing,  setDiagEditing]  = useState(false);
+  const [diagDraft,    setDiagDraft]    = useState<DiagnosisData>(EMPTY_DIAGNOSIS);
+  const [diagSaving,   setDiagSaving]   = useState(false);
+  const [diagSaved,    setDiagSaved]    = useState(false);
+
+  // ── PT Assessment state (editable by canEdit) ─────────────────────────────
+  const [assessment,    setAssessment]   = useState<PTAssessment>(EMPTY_ASSESSMENT);
+  const [asmEditing,    setAsmEditing]   = useState(false);
+  const [asmDraft,      setAsmDraft]     = useState<PTAssessment>(EMPTY_ASSESSMENT);
+  const [asmSaving,     setAsmSaving]    = useState(false);
+  const [asmSaved,      setAsmSaved]     = useState(false);
+
   // ── Local UI state (unchanged) ─────────────────────────────────────────────
   const [activeSection, setActiveSection] = useState<string>("diagnosis");
   const [previewDoc,    setPreviewDoc]    = useState<MedicalDoc | null>(null);
 
   const allSections = [
     { id: "diagnosis",         label: "Diagnosis" },
+    { id: "assessment",        label: "PT Assessment",    physioOnly: true },
     { id: "notes",             label: "Treatment Program", physioOnly: true },
     { id: "session-notes",     label: "Session Notes",     physioOnly: true },
     { id: "documents",         label: "Documents" },
@@ -1011,6 +1156,91 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         .ps-sh-btn.cancel  { border-color: #fca5a5; color: #991b1b; background: #fff5f5; }
         .ps-sh-btn.cancel:hover  { background: #fee2e2; }
         .ps-sh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        /* ── Editable diagnosis fields ── */
+        .ps-edit-btn {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 7px 14px; border-radius: 9px;
+          border: 1.5px solid #B3DEF0; background: #EAF5FC;
+          font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
+          color: #2E8BC0; cursor: pointer; transition: all 0.15s;
+        }
+        .ps-edit-btn:hover { background: #D6EEF8; border-color: #2E8BC0; }
+        .ps-save-btn {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 7px 14px; border-radius: 9px; border: none;
+          background: #2E8BC0; color: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
+          cursor: pointer; transition: background 0.15s;
+        }
+        .ps-save-btn:hover:not(:disabled) { background: #0C3C60; }
+        .ps-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .ps-cancel-btn {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 7px 14px; border-radius: 9px;
+          border: 1.5px solid #e5e0d8; background: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
+          color: #5a5550; cursor: pointer; transition: all 0.15s;
+        }
+        .ps-cancel-btn:hover { background: #f5f3ef; }
+        .ps-field-input {
+          width: 100%; padding: 9px 12px; border-radius: 9px;
+          border: 1.5px solid #B3DEF0; background: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 14px; color: #1a1a1a;
+          outline: none; transition: border-color 0.15s;
+        }
+        .ps-field-input:focus { border-color: #2E8BC0; box-shadow: 0 0 0 3px rgba(46,139,192,0.08); }
+        .ps-field-textarea {
+          width: 100%; padding: 9px 12px; border-radius: 9px;
+          border: 1.5px solid #B3DEF0; background: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 14px; color: #1a1a1a;
+          outline: none; resize: vertical; min-height: 80px; line-height: 1.6;
+          transition: border-color 0.15s;
+        }
+        .ps-field-textarea:focus { border-color: #2E8BC0; box-shadow: 0 0 0 3px rgba(46,139,192,0.08); }
+        .ps-field-label {
+          font-size: 11px; font-weight: 600; text-transform: uppercase;
+          letter-spacing: 0.08em; color: #9a9590; margin-bottom: 5px; display: block;
+        }
+        .ps-field-group { margin-bottom: 14px; }
+        .ps-field-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+        .ps-edit-toolbar {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 20px; flex-wrap: wrap; gap: 10px;
+        }
+        .ps-edit-toolbar-right { display: flex; gap: 8px; align-items: center; }
+        .ps-edit-badge {
+          font-size: 12px; font-weight: 600; color: #e07a5f;
+          background: #fff5f3; padding: 4px 10px; border-radius: 100px;
+          border: 1px solid #fca5a5;
+        }
+
+        /* ── PT Assessment ── */
+        .ps-asm-section-title {
+          font-size: 11px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.1em; color: #2E8BC0;
+          padding: 14px 0 8px; margin-top: 10px;
+          border-top: 1.5px solid #e5e0d8;
+        }
+        .ps-asm-section-title:first-child { border-top: none; padding-top: 0; }
+        .ps-asm-read-card {
+          background: #fff; border: 1px solid #e5e0d8;
+          border-radius: 14px; padding: 20px 22px; margin-bottom: 12px;
+        }
+        .ps-asm-read-row {
+          display: grid; grid-template-columns: 180px 1fr;
+          gap: 8px 16px; padding: 9px 0;
+          border-bottom: 1px solid #f5f3ef; font-size: 14px;
+        }
+        .ps-asm-read-row:last-child { border-bottom: none; }
+        .ps-asm-key { color: #9a9590; font-weight: 500; font-size: 13px; }
+        .ps-asm-val { color: #1a1a1a; white-space: pre-wrap; line-height: 1.5; }
+        .ps-asm-empty {
+          text-align: center; padding: 44px 24px;
+          background: #fafaf8; border-radius: 14px;
+          border: 1.5px dashed #e5e0d8;
+          font-size: 14px; color: #9a9590;
+        }
+
         /* ── Treatment mode toggle ── */
         .ps-tp-mode-toggle {
           display: flex; gap: 6px; margin-bottom: 16px;
@@ -1096,52 +1326,147 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
       {/* ── DIAGNOSIS (unchanged) ── */}
       {activeSection === "diagnosis" && (
         <>
-          <div className="ps-diag-grid">
-            <div className="ps-diag-card accent full">
-              <div className="ps-diag-label">Primary Diagnosis</div>
-              <div className="ps-diag-value" style={{ fontSize: 16, fontWeight: 600 }}>
-                Right ACL Rupture — Grade III, Post-Operative (Hamstring Graft)
+          {/* Toolbar */}
+          <div className="ps-edit-toolbar">
+            <div>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 500, color: "#1a1a1a" }}>Patient Diagnosis</div>
+              <div style={{ fontSize: 13, color: "#9a9590", marginTop: 2 }}>
+                {diagEditing ? "Editing mode — make changes and save" : "View mode"}
               </div>
             </div>
-
-            <div className="ps-diag-card">
-              <div className="ps-diag-label">ICD-10 Code</div>
-              <div className="ps-diag-value"><span className="ps-icd-badge">S83.511A</span></div>
-            </div>
-            <div className="ps-diag-card">
-              <div className="ps-diag-label">Onset Date</div>
-              <div className="ps-diag-value">14 January 2025</div>
-            </div>
-            <div className="ps-diag-card full">
-              <div className="ps-diag-label">Mechanism of Injury</div>
-              <div className="ps-diag-value">Non-contact pivoting injury during competitive football. Heard audible "pop" followed by immediate pain and swelling. Valgus collapse on deceleration.</div>
-            </div>
-            <div className="ps-diag-card">
-              <div className="ps-diag-label">Surgery Date</div>
-              <div className="ps-diag-value">22 January 2025</div>
-            </div>
-            <div className="ps-diag-card">
-              <div className="ps-diag-label">Surgeon</div>
-              <div className="ps-diag-value">Mr. David Chan, FRCS</div>
-            </div>
-            <div className="ps-diag-card full">
-              <div className="ps-diag-label">Contraindications & Precautions</div>
-              <ul className="ps-contra-list" style={{ marginTop: 4 }}>
-                {[
-                  "Avoid full weight-bearing pivot maneuvers until week 12",
-                  "No return to sport until 9-month strength criteria met",
-                  "Avoid deep knee flexion beyond 90° until week 8",
-                  "No running until single-leg squat criteria achieved",
-                  "Contact sport requires formal physio clearance",
-                ].map((c) => (
-                  <li key={c} className="ps-contra-item">
-                    <div className="ps-contra-dot" />
-                    {c}
-                  </li>
-                ))}
-              </ul>
+            <div className="ps-edit-toolbar-right">
+              {diagSaved && !diagEditing && (
+                <span className="ps-sn-success">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  Saved
+                </span>
+              )}
+              {canEdit && !diagEditing && (
+                <button className="ps-edit-btn" onClick={() => { setDiagDraft(diagData); setDiagEditing(true); }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                  Edit Diagnosis
+                </button>
+              )}
+              {diagEditing && (
+                <>
+                  <span className="ps-edit-badge">Editing</span>
+                  <button className="ps-cancel-btn" onClick={() => { setDiagEditing(false); setDiagDraft(diagData); }}>Cancel</button>
+                  <button className="ps-save-btn" disabled={diagSaving} onClick={handleSaveDiagnosis}>
+                    {diagSaving
+                      ? <><span className="ps-senior-spinner" /> Saving…</>
+                      : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Changes</>
+                    }
+                  </button>
+                </>
+              )}
             </div>
           </div>
+
+          {/* READ MODE */}
+          {!diagEditing && (
+            <div className="ps-diag-grid">
+              <div className="ps-diag-card accent full">
+                <div className="ps-diag-label">Primary Diagnosis</div>
+                <div className="ps-diag-value" style={{ fontSize: 16, fontWeight: 600 }}>
+                  {diagData.primaryDiagnosis || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>Not recorded</span>}
+                </div>
+              </div>
+              <div className="ps-diag-card">
+                <div className="ps-diag-label">ICD-10 Code</div>
+                <div className="ps-diag-value">
+                  {diagData.icdCode
+                    ? <span className="ps-icd-badge">{diagData.icdCode}</span>
+                    : <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}
+                </div>
+              </div>
+              <div className="ps-diag-card">
+                <div className="ps-diag-label">Onset Date</div>
+                <div className="ps-diag-value">{diagData.onsetDate || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}</div>
+              </div>
+              <div className="ps-diag-card full">
+                <div className="ps-diag-label">Mechanism of Injury</div>
+                <div className="ps-diag-value">{diagData.mechanism || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}</div>
+              </div>
+              <div className="ps-diag-card">
+                <div className="ps-diag-label">Surgery Date</div>
+                <div className="ps-diag-value">{diagData.surgeryDate || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}</div>
+              </div>
+              <div className="ps-diag-card">
+                <div className="ps-diag-label">Surgeon</div>
+                <div className="ps-diag-value">{diagData.surgeon || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}</div>
+              </div>
+              {diagData.contraindications && (
+                <div className="ps-diag-card full">
+                  <div className="ps-diag-label">Contraindications & Precautions</div>
+                  <ul className="ps-contra-list" style={{ marginTop: 4 }}>
+                    {diagData.contraindications.split("
+").filter(Boolean).map((c, i) => (
+                      <li key={i} className="ps-contra-item">
+                        <div className="ps-contra-dot" />{c}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* EDIT MODE */}
+          {diagEditing && (
+            <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 16, padding: 24 }}>
+              <div className="ps-field-group">
+                <label className="ps-field-label">Primary Diagnosis</label>
+                <input className="ps-field-input" value={diagDraft.primaryDiagnosis}
+                  onChange={(e) => setDiagDraft({ ...diagDraft, primaryDiagnosis: e.target.value })}
+                  placeholder="e.g. Right ACL Rupture — Grade III" />
+              </div>
+              <div className="ps-field-row-2">
+                <div className="ps-field-group" style={{ marginBottom: 0 }}>
+                  <label className="ps-field-label">ICD-10 Code</label>
+                  <input className="ps-field-input" value={diagDraft.icdCode}
+                    onChange={(e) => setDiagDraft({ ...diagDraft, icdCode: e.target.value })}
+                    placeholder="e.g. S83.511A" />
+                </div>
+                <div className="ps-field-group" style={{ marginBottom: 0 }}>
+                  <label className="ps-field-label">Onset Date</label>
+                  <input className="ps-field-input" value={diagDraft.onsetDate}
+                    onChange={(e) => setDiagDraft({ ...diagDraft, onsetDate: e.target.value })}
+                    placeholder="e.g. 14 January 2025" />
+                </div>
+              </div>
+              <div className="ps-field-group">
+                <label className="ps-field-label">Mechanism of Injury</label>
+                <textarea className="ps-field-textarea" value={diagDraft.mechanism}
+                  onChange={(e) => setDiagDraft({ ...diagDraft, mechanism: e.target.value })}
+                  placeholder="Describe how the injury occurred…" />
+              </div>
+              <div className="ps-field-row-2">
+                <div className="ps-field-group" style={{ marginBottom: 0 }}>
+                  <label className="ps-field-label">Surgery Date</label>
+                  <input className="ps-field-input" value={diagDraft.surgeryDate}
+                    onChange={(e) => setDiagDraft({ ...diagDraft, surgeryDate: e.target.value })}
+                    placeholder="e.g. 22 January 2025" />
+                </div>
+                <div className="ps-field-group" style={{ marginBottom: 0 }}>
+                  <label className="ps-field-label">Surgeon</label>
+                  <input className="ps-field-input" value={diagDraft.surgeon}
+                    onChange={(e) => setDiagDraft({ ...diagDraft, surgeon: e.target.value })}
+                    placeholder="e.g. Mr. David Chan, FRCS" />
+                </div>
+              </div>
+              <div className="ps-field-group" style={{ marginBottom: 0 }}>
+                <label className="ps-field-label">Contraindications & Precautions (one per line)</label>
+                <textarea className="ps-field-textarea" value={diagDraft.contraindications}
+                  onChange={(e) => setDiagDraft({ ...diagDraft, contraindications: e.target.value })}
+                  placeholder={"Avoid full weight-bearing until week 12
+No return to sport until cleared
+Avoid deep knee flexion beyond 90°"} />
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -1286,6 +1611,191 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
                 <div className="ps-sn-card-notes">{entry.notes}</div>
               </div>
             ))
+          )}
+        </>
+      )}
+
+      {/* ── PT ASSESSMENT ── */}
+      {activeSection === "assessment" && role !== "patient" && (
+        <>
+          <div className="ps-edit-toolbar">
+            <div>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 500, color: "#1a1a1a" }}>Physical Therapy Assessment</div>
+              <div style={{ fontSize: 13, color: "#9a9590", marginTop: 2 }}>
+                {asmEditing ? "Editing mode — complete the assessment form" : "Professional PT assessment record"}
+              </div>
+            </div>
+            <div className="ps-edit-toolbar-right">
+              {asmSaved && !asmEditing && (
+                <span className="ps-sn-success">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  Saved
+                </span>
+              )}
+              {canEdit && !asmEditing && (
+                <button className="ps-edit-btn" onClick={() => { setAsmDraft(assessment); setAsmEditing(true); }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                  {assessment.subjectiveComplaints ? "Edit Assessment" : "Create Assessment"}
+                </button>
+              )}
+              {asmEditing && (
+                <>
+                  <span className="ps-edit-badge">Editing</span>
+                  <button className="ps-cancel-btn" onClick={() => { setAsmEditing(false); setAsmDraft(assessment); }}>Cancel</button>
+                  <button className="ps-save-btn" disabled={asmSaving} onClick={handleSaveAssessment}>
+                    {asmSaving
+                      ? <><span className="ps-senior-spinner" /> Saving…</>
+                      : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Assessment</>
+                    }
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* READ MODE */}
+          {!asmEditing && !assessment.subjectiveComplaints && (
+            <div className="ps-asm-empty">
+              No assessment recorded yet.{canEdit ? " Click "Create Assessment" to begin." : ""}
+            </div>
+          )}
+          {!asmEditing && assessment.subjectiveComplaints && (() => {
+            const sections = [
+              {
+                title: "Subjective (Patient History)",
+                rows: [
+                  ["Chief Complaints",      assessment.subjectiveComplaints],
+                  ["Pain Location",         assessment.painLocation],
+                  ["Pain Score (NRS 0–10)", assessment.painScore],
+                  ["Aggravating Factors",   assessment.aggravatingFactors],
+                  ["Relieving Factors",     assessment.relievingFactors],
+                  ["Medical History",       assessment.medicalHistory],
+                  ["Current Medications",   assessment.medications],
+                ],
+              },
+              {
+                title: "Objective (Physical Findings)",
+                rows: [
+                  ["Posture / Observation",  assessment.postureObservation],
+                  ["Range of Motion",        assessment.rangeOfMotion],
+                  ["Muscle Strength (MMT)",  assessment.muscleStrength],
+                  ["Special Tests",          assessment.specialTests],
+                  ["Functional Limitations", assessment.functionalLimits],
+                ],
+              },
+              {
+                title: "Assessment & Plan",
+                rows: [
+                  ["Short-Term Goals",    assessment.shortTermGoals],
+                  ["Long-Term Goals",     assessment.longTermGoals],
+                  ["Treatment Approach",  assessment.treatmentApproach],
+                  ["Precautions",         assessment.precautions],
+                ],
+              },
+              {
+                title: "Sign Off",
+                rows: [
+                  ["Assessed By",       assessment.assessorName],
+                  ["Assessment Date",   assessment.assessmentDate],
+                ],
+              },
+            ];
+            return sections.map((sec) => (
+              <div key={sec.title} className="ps-asm-read-card">
+                <div className="ps-asm-section-title">{sec.title}</div>
+                {sec.rows.filter(([, v]) => v).map(([k, v]) => (
+                  <div key={k} className="ps-asm-read-row">
+                    <span className="ps-asm-key">{k}</span>
+                    <span className="ps-asm-val">{v}</span>
+                  </div>
+                ))}
+              </div>
+            ));
+          })()}
+
+          {/* EDIT MODE */}
+          {asmEditing && (
+            <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 16, padding: 24 }}>
+              {/* Subjective */}
+              <div className="ps-asm-section-title">Subjective (Patient History)</div>
+              {([
+                ["subjectiveComplaints", "Chief Complaints / Reason for Referral", true],
+                ["painLocation",         "Pain Location",                           false],
+                ["painScore",            "Pain Score (NRS 0–10)",                  false],
+                ["aggravatingFactors",   "Aggravating Factors",                     true],
+                ["relievingFactors",     "Relieving Factors",                       true],
+                ["medicalHistory",       "Relevant Medical History",                true],
+                ["medications",          "Current Medications",                     true],
+              ] as [keyof PTAssessment, string, boolean][]).map(([field, label, multi]) => (
+                <div key={field} className="ps-field-group">
+                  <label className="ps-field-label">{label}</label>
+                  {multi
+                    ? <textarea className="ps-field-textarea" value={asmDraft[field] as string}
+                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
+                    : <input className="ps-field-input" value={asmDraft[field] as string}
+                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
+                  }
+                </div>
+              ))}
+
+              {/* Objective */}
+              <div className="ps-asm-section-title">Objective (Physical Findings)</div>
+              {([
+                ["postureObservation", "Posture & Observation",   true],
+                ["rangeOfMotion",      "Range of Motion (ROM)",   true],
+                ["muscleStrength",     "Muscle Strength (MMT)",   true],
+                ["specialTests",       "Special Tests",           true],
+                ["functionalLimits",   "Functional Limitations",  true],
+              ] as [keyof PTAssessment, string, boolean][]).map(([field, label, multi]) => (
+                <div key={field} className="ps-field-group">
+                  <label className="ps-field-label">{label}</label>
+                  {multi
+                    ? <textarea className="ps-field-textarea" value={asmDraft[field] as string}
+                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
+                    : <input className="ps-field-input" value={asmDraft[field] as string}
+                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
+                  }
+                </div>
+              ))}
+
+              {/* Assessment & Plan */}
+              <div className="ps-asm-section-title">Assessment & Plan</div>
+              {([
+                ["shortTermGoals",    "Short-Term Goals (0–4 weeks)", true],
+                ["longTermGoals",     "Long-Term Goals",              true],
+                ["treatmentApproach", "Treatment Approach & Plan",    true],
+                ["precautions",       "Precautions",                  true],
+              ] as [keyof PTAssessment, string, boolean][]).map(([field, label, multi]) => (
+                <div key={field} className="ps-field-group">
+                  <label className="ps-field-label">{label}</label>
+                  {multi
+                    ? <textarea className="ps-field-textarea" value={asmDraft[field] as string}
+                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
+                    : <input className="ps-field-input" value={asmDraft[field] as string}
+                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
+                  }
+                </div>
+              ))}
+
+              {/* Sign off */}
+              <div className="ps-asm-section-title">Sign Off</div>
+              <div className="ps-field-row-2">
+                <div className="ps-field-group" style={{ marginBottom: 0 }}>
+                  <label className="ps-field-label">Assessed By</label>
+                  <input className="ps-field-input" value={asmDraft.assessorName}
+                    onChange={(e) => setAsmDraft({ ...asmDraft, assessorName: e.target.value })}
+                    placeholder="Physiotherapist name" />
+                </div>
+                <div className="ps-field-group" style={{ marginBottom: 0 }}>
+                  <label className="ps-field-label">Assessment Date</label>
+                  <input type="date" className="ps-field-input" value={asmDraft.assessmentDate}
+                    onChange={(e) => setAsmDraft({ ...asmDraft, assessmentDate: e.target.value })} />
+                </div>
+              </div>
+            </div>
           )}
         </>
       )}
@@ -1546,7 +2056,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
                   <div className="ps-sh-info">
                     <div className="ps-sh-type">{appt.sessionType}</div>
                     <div className="ps-sh-meta">
-                      {fmtHour(appt.hour)}{appt.physioName ? ` · ${appt.physioName}` : ""}
+                      {fmtHour12(appt.hour)}{appt.physioName ? ` · ${appt.physioName}` : ""}
                     </div>
                   </div>
                   <div className="ps-sh-actions">

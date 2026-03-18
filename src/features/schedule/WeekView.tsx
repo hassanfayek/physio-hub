@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import {
   subscribeToAppointmentsByWeek,
   fmtHour,
+  fmtHour12,
   toDateStr,
   getWeekStart,
   type Appointment,
@@ -213,7 +214,7 @@ export default function WeekView({
                 ))
               : hours.map((h) => (
                   <React.Fragment key={h}>
-                    <div className="wv-time-cell">{fmtHour(h)}</div>
+                    <div className="wv-time-cell">{fmtHour12(h)}</div>
                     {weekDays.map((d, di) => {
                       const dateStr  = toDateStr(d);
                       const slotAppt = appts(dateStr, h);
@@ -226,7 +227,7 @@ export default function WeekView({
                           key={di}
                           className={`wv-cell ${isFull ? "full" : ""}`}
                           onClick={() => !isFull && setModalSlot({ date: dateStr, hour: h })}
-                          title={isFull ? "Slot full" : `Book at ${fmtHour(h)}`}
+                          title={isFull ? "Slot full" : `Book at ${fmtHour12(h)}`}
                         >
                           {slotAppt.map((a) => (
                             <div key={a.id} className="wv-pill">

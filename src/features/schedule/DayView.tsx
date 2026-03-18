@@ -6,6 +6,7 @@ import {
   deleteAppointment,
   updateAppointmentStatus,
   fmtHour,
+  fmtHour12,
   type Appointment,
   type ClinicSettings,
 } from "../../services/appointmentService";
@@ -295,7 +296,7 @@ export default function DayView({
                 return (
                   <div key={h} className={`dv-slot ${count > 0 ? "has-appts" : ""} ${isFull ? "full" : ""}`}>
                     <div className="dv-slot-header">
-                      <span className="dv-slot-time">{fmtHour(h)}</span>
+                      <span className="dv-slot-time">{fmtHour12(h)}</span>
                       <div className="dv-slot-center">
                         <span className={`dv-slot-load ${loadCls}`}>
                           {count} / {max}
