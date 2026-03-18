@@ -27,7 +27,7 @@ import {
   type Patient,
 } from "../../services/patientService";
 import type { PatientProfile } from "../../services/authService";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, onSnapshot as fsOnSnapshot } from "firebase/firestore";
 import { db } from "../../firebase";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -96,11 +96,19 @@ export default function AppointmentsPage() {
   const assignedPhysio = physios.find((p) => p.uid === (patientDoc?.physioId ?? patient?.assignedPhysioId))
     ?? physios[0]
     ?? null;
+  // Find clinic manager in physio list as default fallback
+  const managerPhysio = physios.find((p) => p.firstName?.toLowerCase().includes("hassan") || p.lastName?.toLowerCase().includes("fayek"))
+    ?? physios[0]
+    ?? null;
+  const defaultName = managerPhysio
+    ? `Dr. ${managerPhysio.firstName} ${managerPhysio.lastName}`
+    : "Dr. Hassan Fayek";
+
   const assignedPhysioName = seniorName
     ? seniorName
     : assignedPhysio
       ? `Dr. ${assignedPhysio.firstName} ${assignedPhysio.lastName}`
-      : "Your Physiotherapist";
+      : defaultName;
   const [slotCounts,     setSlotCounts]     = useState<Record<number, number>>({});
   const [upcoming,       setUpcoming]       = useState<FSAppt[]>([]);
   const [apptLoading,    setApptLoading]    = useState(true);
@@ -133,9 +141,10 @@ export default function AppointmentsPage() {
     });
   }, []);
 
-  // ── Load slot counts for selected day ─────────────────────────────────────
+  // ── Load slot counts for selected day — realtime via onSnapshot ───────────
   const selectedDayObj = DAYS.find((d) => d.label === selectedDay) ?? DAYS[0];
 
+  // Keep a stable ref for loadSlotCounts (still used after booking to refresh UI)
   const loadSlotCounts = useCallback(async (dateStr: string) => {
     const snap = await getDocs(
       query(collection(db, "appointments"), where("date", "==", dateStr))
@@ -148,11 +157,24 @@ export default function AppointmentsPage() {
     setSlotCounts(counts);
   }, []);
 
+  // Live slot availability — updates instantly when any appointment is added/removed
   useEffect(() => {
-    loadSlotCounts(selectedDayObj.dateStr);
     setSelectedSlot(null);
     setBookError(null);
-  }, [selectedDayObj.dateStr, loadSlotCounts]);
+    const q = query(
+      collection(db, "appointments"),
+      where("date", "==", selectedDayObj.dateStr)
+    );
+    const unsub = fsOnSnapshot(q, (snap) => {
+      const counts: Record<number, number> = {};
+      snap.forEach((d) => {
+        const h = (d.data().hour as number) ?? -1;
+        if (h >= 0) counts[h] = (counts[h] ?? 0) + 1;
+      });
+      setSlotCounts(counts);
+    });
+    return unsub;
+  }, [selectedDayObj.dateStr]);
 
   // ── Realtime upcoming appointments ───────────────────────────────────────
   useEffect(() => {
@@ -220,7 +242,6 @@ export default function AppointmentsPage() {
       return;
     }
 
-    await loadSlotCounts(selectedDayObj.dateStr);
     setSelectedSlot(null);
     setBooked(true);
     setTimeout(() => setBooked(false), 3500);

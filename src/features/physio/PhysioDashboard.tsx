@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, deleteDoc, collection } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAuth } from "../../hooks/useAuth";
 import PatientsTab      from "./PatientsTab";
@@ -43,33 +43,36 @@ interface AddPhysioForm {
   firstName: string; lastName: string; email: string; password: string;
   licenseNumber: string; clinicName: string; phone: string; specializations: string;
 }
-interface AddPatientForm {
-  firstName: string; lastName: string; email: string; password: string;
-  dateOfBirth: string; phone: string; primaryCondition: string;
-}
 
 const EMPTY_PHYSIO_FORM: AddPhysioForm = {
   firstName: "", lastName: "", email: "", password: "",
   licenseNumber: "", clinicName: "", phone: "", specializations: "",
 };
-const EMPTY_PATIENT_FORM: AddPatientForm = {
-  firstName: "", lastName: "", email: "", password: "",
-  dateOfBirth: "", phone: "", primaryCondition: "",
-};
 
 function TeamTab() {
   const [physios,        setPhysios]        = React.useState<Physiotherapist[]>([]);
   const [showAddPhysio,  setShowAddPhysio]  = React.useState(false);
-  const [showAddPatient, setShowAddPatient] = React.useState(false);
   const [physioForm,     setPhysioForm]     = React.useState<AddPhysioForm>(EMPTY_PHYSIO_FORM);
-  const [patientForm,    setPatientForm]    = React.useState<AddPatientForm>(EMPTY_PATIENT_FORM);
   const [saving,         setSaving]         = React.useState(false);
+  const [deletingUid,    setDeletingUid]    = React.useState<string | null>(null);
   const [saveError,      setSaveError]      = React.useState<string | null>(null);
   const [saveSuccess,    setSaveSuccess]    = React.useState<string | null>(null);
 
   React.useEffect(() => {
     return subscribeToPhysiotherapists(setPhysios, () => {});
   }, []);
+
+  const handleDeletePhysio = async (uid: string, name: string) => {
+    if (!window.confirm(`Remove Dr. ${name} from the team? This will delete their physiotherapist record but not their login account.`)) return;
+    setDeletingUid(uid);
+    try {
+      await deleteDoc(doc(db, "physiotherapists", uid));
+      await deleteDoc(doc(db, "users", uid));
+    } catch (err: unknown) {
+      alert((err as { message?: string }).message ?? "Failed to delete physiotherapist.");
+    }
+    setDeletingUid(null);
+  };
 
   const handleAddPhysio = async () => {
     if (!physioForm.email || !physioForm.password || !physioForm.firstName || !physioForm.lastName) {
@@ -142,8 +145,17 @@ function TeamTab() {
         .tm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
         .tm-card {
           background: #fff; border: 1.5px solid #e5e0d8; border-radius: 16px; padding: 20px;
-          display: flex; align-items: center; gap: 14px;
+          display: flex; align-items: center; gap: 14px; position: relative;
         }
+        .tm-del-btn {
+          position: absolute; top: 10px; right: 10px;
+          width: 26px; height: 26px; border-radius: 50%;
+          border: 1.5px solid #e5e0d8; background: #fff;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; color: #9a9590; transition: all 0.15s; font-size: 11px;
+        }
+        .tm-del-btn:hover { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+        .tm-del-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .tm-avatar {
           width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
           background: linear-gradient(135deg, #2E8BC0, #5BC0BE);
@@ -202,16 +214,13 @@ function TeamTab() {
       `}</style>
 
       <div className="tm-title">Team</div>
-      <div className="tm-sub">Manage your physiotherapy team and add new patient accounts.</div>
+      <div className="tm-sub">Manage your physiotherapy team. Add or remove physiotherapist accounts.</div>
 
       {saveSuccess && <div className="tm-success">✓ {saveSuccess}</div>}
 
       <div className="tm-action-row">
         <button className="tm-add-btn physio" onClick={() => { setShowAddPhysio(true); setSaveError(null); }}>
           <IconAdd /> Add Physiotherapist
-        </button>
-        <button className="tm-add-btn patient" onClick={() => { setShowAddPatient(true); setSaveError(null); }}>
-          <IconAdd /> Add Patient Account
         </button>
       </div>
 
@@ -230,6 +239,14 @@ function TeamTab() {
                 <div className="tm-spec">{p.clinicName || "Physio+ Clinic"}</div>
                 {p.specializations?.[0] && <span className="tm-badge">{p.specializations[0]}</span>}
               </div>
+              <button
+                className="tm-del-btn"
+                disabled={deletingUid === p.uid}
+                onClick={() => handleDeletePhysio(p.uid, `${p.firstName} ${p.lastName}`)}
+                title="Remove physiotherapist"
+              >
+                {deletingUid === p.uid ? "…" : "✕"}
+              </button>
             </div>
           ))}
         </div>
@@ -264,33 +281,7 @@ function TeamTab() {
         </div>
       )}
 
-      {/* Add Patient Modal */}
-      {showAddPatient && (
-        <div className="tm-modal-overlay" onClick={() => !saving && setShowAddPatient(false)}>
-          <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="tm-modal-title">Add Patient Account</div>
-            <div className="tm-modal-sub">Create a patient account. They will use this email and password to access their portal.</div>
-            <div className="tm-field-row">
-              <div className="tm-field"><label className="tm-label">First Name</label><input className="tm-input" value={patientForm.firstName} onChange={(e) => setPatientForm({ ...patientForm, firstName: e.target.value })} placeholder="Sara" /></div>
-              <div className="tm-field"><label className="tm-label">Last Name</label><input className="tm-input" value={patientForm.lastName} onChange={(e) => setPatientForm({ ...patientForm, lastName: e.target.value })} placeholder="Mohamed" /></div>
-            </div>
-            <div className="tm-field"><label className="tm-label">Email Address</label><input className="tm-input" type="email" value={patientForm.email} onChange={(e) => setPatientForm({ ...patientForm, email: e.target.value })} placeholder="patient@email.com" /></div>
-            <div className="tm-field"><label className="tm-label">Password</label><input className="tm-input" type="password" value={patientForm.password} onChange={(e) => setPatientForm({ ...patientForm, password: e.target.value })} placeholder="Min. 6 characters" /></div>
-            <div className="tm-field-row">
-              <div className="tm-field"><label className="tm-label">Date of Birth</label><input className="tm-input" type="date" value={patientForm.dateOfBirth} onChange={(e) => setPatientForm({ ...patientForm, dateOfBirth: e.target.value })} /></div>
-              <div className="tm-field"><label className="tm-label">Phone</label><input className="tm-input" value={patientForm.phone} onChange={(e) => setPatientForm({ ...patientForm, phone: e.target.value })} placeholder="+20 100 000 0000" /></div>
-            </div>
-            <div className="tm-field"><label className="tm-label">Primary Condition</label><input className="tm-input" value={patientForm.primaryCondition} onChange={(e) => setPatientForm({ ...patientForm, primaryCondition: e.target.value })} placeholder="e.g. ACL Rehabilitation" /></div>
-            {saveError && <div className="tm-modal-error">{saveError}</div>}
-            <div className="tm-modal-actions">
-              <button className="tm-modal-cancel" onClick={() => setShowAddPatient(false)}>Cancel</button>
-              <button className="tm-modal-save" disabled={saving} onClick={handleAddPatient}>
-                {saving ? "Creating account…" : "Create Account"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </>
   );
 }
