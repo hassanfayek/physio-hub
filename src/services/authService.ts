@@ -282,9 +282,13 @@ export async function sendPasswordReset(email: string): Promise<void> {
 export async function loadUserProfile(
   user: User
 ): Promise<PatientProfile | PhysioProfile | null> {
-  const userSnap = await getDoc(doc(db, "users", user.uid));
+  try {
+    const userSnap = await getDoc(doc(db, "users", user.uid));
 
-  if (!userSnap.exists()) return null;
+    if (!userSnap.exists()) {
+      console.warn("loadUserProfile: no /users doc for", user.uid);
+      return null;
+    }
 
   const userData = userSnap.data() as DocumentData;
   const role: UserRole = userData.role;
@@ -334,6 +338,10 @@ export async function loadUserProfile(
   }
 
   return null;
+  } catch (err) {
+    console.error("loadUserProfile failed:", err);
+    return null;
+  }
 }
 
 // ─── Update user profile ──────────────────────────────────────────────────────
