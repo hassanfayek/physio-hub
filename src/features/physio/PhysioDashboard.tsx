@@ -11,8 +11,11 @@ import SchedulePage        from "../schedule/SchedulePage";
 import ExerciseLibraryPage from "../exercises/ExerciseLibraryPage";
 import {
   subscribeToDashboardStats,
+  subscribeTodayAppointments,
   type DashboardStats,
+  type TodayAppointment,
 } from "../../services/dashboardService";
+import { fmtHour12 } from "../../services/appointmentService";
 import type { PhysioProfile } from "../../services/authService";
 import { registerPhysio } from "../../services/authService";
 import logo from "../../assets/physio-logo.svg";
@@ -271,15 +274,24 @@ function OverviewTab({ physio, isManager }: { physio: PhysioProfile; isManager: 
   const [stats,        setStats]        = useState<DashboardStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
+  const [todayAppts,  setTodayAppts]  = useState<TodayAppointment[]>([]);
+  const [apptLoading, setApptLoading] = useState(true);
+
   useEffect(() => {
-    // Managers see clinic-wide stats — pass a sentinel so dashboardService
-    // returns totals across all patients (it already queries the full collection
-    // when physioId is "__all__").
-    // For regular physios pass their own uid as before.
     const unsubscribe = subscribeToDashboardStats(
       isManager ? "__all__" : physio.uid,
       (data) => { setStats(data); setStatsLoading(false); },
       ()     => setStatsLoading(false)
+    );
+    return () => unsubscribe();
+  }, [physio.uid, isManager]);
+
+  useEffect(() => {
+    setApptLoading(true);
+    const unsubscribe = subscribeTodayAppointments(
+      isManager ? "__all__" : physio.uid,
+      (data) => { setTodayAppts(data); setApptLoading(false); },
+      ()     => setApptLoading(false)
     );
     return () => unsubscribe();
   }, [physio.uid, isManager]);
@@ -320,6 +332,7 @@ function OverviewTab({ physio, isManager }: { physio: PhysioProfile; isManager: 
           text-align: center; padding: 32px; color: #c0bbb4;
           font-size: 13.5px;
         }
+        @keyframes phShimmer { to { background-position: -200% 0; } }
       `}</style>
 
       <div className="ph-ov-header">
@@ -347,10 +360,52 @@ function OverviewTab({ physio, isManager }: { physio: PhysioProfile; isManager: 
       </div>
 
       <div className="ph-ov-card">
-        <div className="ph-ov-card-title">Today's Schedule</div>
-        <div className="ph-ov-empty">
-          Schedule feature coming soon. Your appointments will appear here.
+        <div className="ph-ov-card-title" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span>Today&#39;s Schedule</span>
+          <span style={{ fontSize: 11, color: "#c0bbb4", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+            {new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
+          </span>
         </div>
+        {apptLoading ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[1,2,3].map((n) => (
+              <div key={n} style={{ height: 48, borderRadius: 10, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "phShimmer 1.4s ease infinite" }} />
+            ))}
+          </div>
+        ) : todayAppts.length === 0 ? (
+          <div className="ph-ov-empty">No appointments scheduled for today.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {todayAppts.map((a) => (
+              <div key={a.id} style={{
+                display: "flex", alignItems: "center", gap: 14,
+                padding: "11px 14px", borderRadius: 10,
+                background: "#f5f3ef", border: "1px solid #e5e0d8",
+              }}>
+                <div style={{
+                  minWidth: 58, textAlign: "center",
+                  fontFamily: "'Playfair Display', serif",
+                  fontSize: 15, fontWeight: 600, color: "#2E8BC0",
+                }}>
+                  {fmtHour12(a.hour)}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>{a.patientName}</div>
+                  <div style={{ fontSize: 12, color: "#9a9590" }}>
+                    {a.sessionType}{isManager && a.physioName ? ` · ${a.physioName}` : ""}
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 100,
+                  background: a.status === "completed" ? "#d8f3dc" : a.status === "cancelled" ? "#fee2e2" : "#D6EEF8",
+                  color:      a.status === "completed" ? "#1b4332" : a.status === "cancelled" ? "#b91c1c" : "#0C3C60",
+                }}>
+                  {a.status === "completed" ? "Done" : a.status === "cancelled" ? "Cancelled" : "Scheduled"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </>
   );

@@ -10,8 +10,6 @@ import {
   type Patient,
   type Physiotherapist,
 } from "../../services/patientService";
-import AddPatientModal from "../../components/AddPatientModal";
-import AddPhysioModal  from "../../components/AddPhysioModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -111,8 +109,6 @@ export default function PatientsTab({ physioId, isManager = false, onViewPatient
   const [physios,        setPhysios]        = useState<Physiotherapist[]>([]);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState<string | null>(null);
-  const [showAddPatient, setShowAddPatient] = useState(false);
-  const [showAddPhysio,  setShowAddPhysio]  = useState(false);
   const [toastMsg,       setToastMsg]       = useState<string | null>(null);
   const [searchQuery,    setSearchQuery]    = useState("");
 
@@ -163,16 +159,6 @@ export default function PatientsTab({ physioId, isManager = false, onViewPatient
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 4000);
-  };
-
-  const handlePatientCreated = (patient: Patient) => {
-    setShowAddPatient(false);
-    showToast(`✓ ${patient.firstName} ${patient.lastName} has been added successfully`);
-  };
-
-  const handlePhysioCreated = () => {
-    setShowAddPhysio(false);
-    showToast("✓ Physiotherapist account created successfully");
   };
 
   const STATUS_META: Record<string, { label: string; bg: string; text: string }> = {
@@ -414,31 +400,7 @@ export default function PatientsTab({ physioId, isManager = false, onViewPatient
               </div>
             )}
 
-            {/* Add Physiotherapist — manager only */}
-            {isManager && (
-              <button className="pt-btn-secondary" onClick={() => setShowAddPhysio(true)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                  <circle cx="8.5" cy="7" r="4"/>
-                  <line x1="20" y1="8" x2="20" y2="14"/>
-                  <line x1="23" y1="11" x2="17" y2="11"/>
-                </svg>
-                Add Physiotherapist
-              </button>
-            )}
 
-            {/* Add Patient — manager only */}
-            {isManager && (
-              <button className="pt-btn-primary" onClick={() => setShowAddPatient(true)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                  <circle cx="8.5" cy="7" r="4"/>
-                  <line x1="20" y1="8" x2="20" y2="14"/>
-                  <line x1="23" y1="11" x2="17" y2="11"/>
-                </svg>
-                Add Patient
-              </button>
-            )}
           </div>
         </div>
 
@@ -597,23 +559,6 @@ export default function PatientsTab({ physioId, isManager = false, onViewPatient
             </tbody>
           </table>
         </div>
-
-        {/* Modals */}
-        {showAddPatient && (
-          <AddPatientModal
-            physioId={physioId}
-            physios={isManager ? physios : []}
-            onClose={() => setShowAddPatient(false)}
-            onCreated={handlePatientCreated}
-          />
-        )}
-
-        {showAddPhysio && (
-          <AddPhysioModal
-            onClose={() => setShowAddPhysio(false)}
-            onCreated={handlePhysioCreated}
-          />
-        )}
 
         {/* Toast */}
         {toastMsg && (
