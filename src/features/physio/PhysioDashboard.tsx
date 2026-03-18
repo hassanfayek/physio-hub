@@ -1,6 +1,6 @@
 // FILE: src/features/physio/PhysioDashboard.tsx
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -14,11 +14,13 @@ import {
   type DashboardStats,
 } from "../../services/dashboardService";
 import type { PhysioProfile } from "../../services/authService";
+import { registerPatient, registerPhysio } from "../../services/authService";
 import logo from "../../assets/physio-logo.svg";
+import { subscribeToPhysiotherapists, type Physiotherapist } from "../../services/patientService";
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
-type Tab = "overview" | "patients" | "schedule" | "exercises" | "reports";
+type Tab = "overview" | "patients" | "team" | "schedule" | "exercises" | "reports";
 
 interface TabDef {
   id:    Tab;
@@ -32,6 +34,266 @@ function IconPatients()  { return <svg width="17" height="17" viewBox="0 0 24 24
 function IconSchedule()  { return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>; }
 function IconExercises() { return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6.5 6.5h.01M17.5 6.5h.01M6.5 17.5h.01M17.5 17.5h.01"/><path d="M3 6.5h3.5M17.5 6.5H21M3 17.5h3.5M17.5 17.5H21"/><path d="M6.5 3v3.5M6.5 17.5V21M17.5 3v3.5M17.5 17.5V21"/><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></svg>; }
 function IconReports()   { return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>; }
+function IconTeam()     { return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>; }
+function IconAdd()      { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
+
+// ─── Team tab (manager only) ─────────────────────────────────────────────────
+
+interface AddPhysioForm {
+  firstName: string; lastName: string; email: string; password: string;
+  licenseNumber: string; clinicName: string; phone: string; specializations: string;
+}
+interface AddPatientForm {
+  firstName: string; lastName: string; email: string; password: string;
+  dateOfBirth: string; phone: string; primaryCondition: string;
+}
+
+const EMPTY_PHYSIO_FORM: AddPhysioForm = {
+  firstName: "", lastName: "", email: "", password: "",
+  licenseNumber: "", clinicName: "", phone: "", specializations: "",
+};
+const EMPTY_PATIENT_FORM: AddPatientForm = {
+  firstName: "", lastName: "", email: "", password: "",
+  dateOfBirth: "", phone: "", primaryCondition: "",
+};
+
+function TeamTab() {
+  const [physios,        setPhysios]        = React.useState<Physiotherapist[]>([]);
+  const [showAddPhysio,  setShowAddPhysio]  = React.useState(false);
+  const [showAddPatient, setShowAddPatient] = React.useState(false);
+  const [physioForm,     setPhysioForm]     = React.useState<AddPhysioForm>(EMPTY_PHYSIO_FORM);
+  const [patientForm,    setPatientForm]    = React.useState<AddPatientForm>(EMPTY_PATIENT_FORM);
+  const [saving,         setSaving]         = React.useState(false);
+  const [saveError,      setSaveError]      = React.useState<string | null>(null);
+  const [saveSuccess,    setSaveSuccess]    = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    return subscribeToPhysiotherapists(setPhysios, () => {});
+  }, []);
+
+  const handleAddPhysio = async () => {
+    if (!physioForm.email || !physioForm.password || !physioForm.firstName || !physioForm.lastName) {
+      setSaveError("First name, last name, email and password are required."); return;
+    }
+    setSaving(true); setSaveError(null);
+    try {
+      await registerPhysio({
+        email:           physioForm.email,
+        password:        physioForm.password,
+        firstName:       physioForm.firstName,
+        lastName:        physioForm.lastName,
+        licenseNumber:   physioForm.licenseNumber,
+        clinicName:      physioForm.clinicName,
+        phone:           physioForm.phone,
+        specializations: physioForm.specializations.split(",").map((s) => s.trim()).filter(Boolean),
+      });
+      setSaveSuccess(`Dr. ${physioForm.firstName} ${physioForm.lastName} added successfully.`);
+      setPhysioForm(EMPTY_PHYSIO_FORM);
+      setShowAddPhysio(false);
+      setTimeout(() => setSaveSuccess(null), 4000);
+    } catch (err: unknown) {
+      setSaveError((err as { message?: string }).message ?? "Failed to add physiotherapist.");
+    }
+    setSaving(false);
+  };
+
+  const handleAddPatient = async () => {
+    if (!patientForm.email || !patientForm.password || !patientForm.firstName || !patientForm.lastName) {
+      setSaveError("First name, last name, email and password are required."); return;
+    }
+    setSaving(true); setSaveError(null);
+    try {
+      await registerPatient({
+        email:            patientForm.email,
+        password:         patientForm.password,
+        firstName:        patientForm.firstName,
+        lastName:         patientForm.lastName,
+        dateOfBirth:      patientForm.dateOfBirth,
+        phone:            patientForm.phone,
+        primaryCondition: patientForm.primaryCondition,
+      });
+      setSaveSuccess(`${patientForm.firstName} ${patientForm.lastName} added successfully.`);
+      setPatientForm(EMPTY_PATIENT_FORM);
+      setShowAddPatient(false);
+      setTimeout(() => setSaveSuccess(null), 4000);
+    } catch (err: unknown) {
+      setSaveError((err as { message?: string }).message ?? "Failed to add patient.");
+    }
+    setSaving(false);
+  };
+
+  return (
+    <>
+      <style>{`
+        .tm-title { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 500; color: #1a1a1a; margin-bottom: 4px; }
+        .tm-sub   { font-size: 14px; color: #9a9590; margin-bottom: 24px; }
+        .tm-action-row { display: flex; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; }
+        .tm-add-btn {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 11px 20px; border-radius: 11px; border: none;
+          font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s;
+        }
+        .tm-add-btn.physio { background: #2E8BC0; color: #fff; }
+        .tm-add-btn.physio:hover { background: #0C3C60; }
+        .tm-add-btn.patient { background: #EAF5FC; color: #2E8BC0; border: 1.5px solid #B3DEF0; }
+        .tm-add-btn.patient:hover { background: #D6EEF8; }
+        .tm-success { background: #d8f3dc; border: 1px solid #b7e4c7; border-radius: 10px; padding: 12px 16px; font-size: 13.5px; color: #1b4332; margin-bottom: 16px; }
+        .tm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+        .tm-card {
+          background: #fff; border: 1.5px solid #e5e0d8; border-radius: 16px; padding: 20px;
+          display: flex; align-items: center; gap: 14px;
+        }
+        .tm-avatar {
+          width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+          background: linear-gradient(135deg, #2E8BC0, #5BC0BE);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 16px; font-weight: 700; color: #fff; letter-spacing: 0.5px;
+        }
+        .tm-name  { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 2px; }
+        .tm-spec  { font-size: 12.5px; color: #9a9590; }
+        .tm-badge {
+          font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 100px;
+          background: #D6EEF8; color: #0C3C60; margin-top: 4px; display: inline-block;
+        }
+
+        /* Modal */
+        .tm-modal-overlay {
+          position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 300; backdrop-filter: blur(3px);
+        }
+        .tm-modal {
+          background: #fff; border-radius: 20px; padding: 28px;
+          width: min(480px, 94vw); max-height: 90vh; overflow-y: auto;
+          box-shadow: 0 24px 80px rgba(0,0,0,0.18);
+          animation: tmModalIn 0.22s cubic-bezier(0.16,1,0.3,1) both;
+        }
+        @keyframes tmModalIn { from { opacity:0; transform:scale(0.95) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        .tm-modal-title { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 500; color: #1a1a1a; margin-bottom: 4px; }
+        .tm-modal-sub   { font-size: 13px; color: #9a9590; margin-bottom: 20px; }
+        .tm-field { margin-bottom: 14px; }
+        .tm-label { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #9a9590; margin-bottom: 5px; display: block; }
+        .tm-input {
+          width: 100%; padding: 10px 13px; border-radius: 9px;
+          border: 1.5px solid #e5e0d8; background: #fafaf8;
+          font-family: 'Outfit', sans-serif; font-size: 14px; color: #1a1a1a; outline: none;
+          transition: border-color 0.15s;
+        }
+        .tm-input:focus { border-color: #2E8BC0; background: #fff; }
+        .tm-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .tm-modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .tm-modal-save {
+          flex: 1; padding: 11px; border-radius: 10px; border: none;
+          background: #2E8BC0; color: #fff; font-family: 'Outfit', sans-serif;
+          font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s;
+        }
+        .tm-modal-save:hover:not(:disabled) { background: #0C3C60; }
+        .tm-modal-save:disabled { opacity: 0.6; cursor: not-allowed; }
+        .tm-modal-cancel {
+          padding: 11px 20px; border-radius: 10px;
+          border: 1.5px solid #e5e0d8; background: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 14px; color: #5a5550;
+          cursor: pointer; transition: background 0.15s;
+        }
+        .tm-modal-cancel:hover { background: #f5f3ef; }
+        .tm-modal-error { font-size: 13px; color: #b91c1c; margin-top: 10px; }
+        .tm-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255,255,255,0.35); font-weight: 700; padding: 0; margin-bottom: 4px; margin-top: 14px; color: #9a9590; }
+      `}</style>
+
+      <div className="tm-title">Team</div>
+      <div className="tm-sub">Manage your physiotherapy team and add new patient accounts.</div>
+
+      {saveSuccess && <div className="tm-success">✓ {saveSuccess}</div>}
+
+      <div className="tm-action-row">
+        <button className="tm-add-btn physio" onClick={() => { setShowAddPhysio(true); setSaveError(null); }}>
+          <IconAdd /> Add Physiotherapist
+        </button>
+        <button className="tm-add-btn patient" onClick={() => { setShowAddPatient(true); setSaveError(null); }}>
+          <IconAdd /> Add Patient Account
+        </button>
+      </div>
+
+      <div className="tm-section-label" style={{ color: "#9a9590", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: 12 }}>
+        Physiotherapy Team ({physios.length})
+      </div>
+      {physios.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "32px 0", color: "#9a9590", fontSize: 14 }}>No physiotherapists added yet.</div>
+      ) : (
+        <div className="tm-grid">
+          {physios.map((p) => (
+            <div key={p.uid} className="tm-card">
+              <div className="tm-avatar">{p.firstName[0]}{p.lastName[0]}</div>
+              <div>
+                <div className="tm-name">Dr. {p.firstName} {p.lastName}</div>
+                <div className="tm-spec">{p.clinicName || "Physio+ Clinic"}</div>
+                {p.specializations?.[0] && <span className="tm-badge">{p.specializations[0]}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add Physio Modal */}
+      {showAddPhysio && (
+        <div className="tm-modal-overlay" onClick={() => !saving && setShowAddPhysio(false)}>
+          <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="tm-modal-title">Add Physiotherapist</div>
+            <div className="tm-modal-sub">Create a new physiotherapist account. They will use this email and password to log in.</div>
+            <div className="tm-field-row">
+              <div className="tm-field"><label className="tm-label">First Name</label><input className="tm-input" value={physioForm.firstName} onChange={(e) => setPhysioForm({ ...physioForm, firstName: e.target.value })} placeholder="Ahmed" /></div>
+              <div className="tm-field"><label className="tm-label">Last Name</label><input className="tm-input" value={physioForm.lastName} onChange={(e) => setPhysioForm({ ...physioForm, lastName: e.target.value })} placeholder="Hassan" /></div>
+            </div>
+            <div className="tm-field"><label className="tm-label">Email Address</label><input className="tm-input" type="email" value={physioForm.email} onChange={(e) => setPhysioForm({ ...physioForm, email: e.target.value })} placeholder="dr.ahmed@clinic.com" /></div>
+            <div className="tm-field"><label className="tm-label">Password</label><input className="tm-input" type="password" value={physioForm.password} onChange={(e) => setPhysioForm({ ...physioForm, password: e.target.value })} placeholder="Min. 6 characters" /></div>
+            <div className="tm-field-row">
+              <div className="tm-field"><label className="tm-label">License Number</label><input className="tm-input" value={physioForm.licenseNumber} onChange={(e) => setPhysioForm({ ...physioForm, licenseNumber: e.target.value })} placeholder="PT-12345" /></div>
+              <div className="tm-field"><label className="tm-label">Phone</label><input className="tm-input" value={physioForm.phone} onChange={(e) => setPhysioForm({ ...physioForm, phone: e.target.value })} placeholder="+20 100 000 0000" /></div>
+            </div>
+            <div className="tm-field"><label className="tm-label">Clinic Name</label><input className="tm-input" value={physioForm.clinicName} onChange={(e) => setPhysioForm({ ...physioForm, clinicName: e.target.value })} placeholder="Physio+ Clinic" /></div>
+            <div className="tm-field"><label className="tm-label">Specializations (comma separated)</label><input className="tm-input" value={physioForm.specializations} onChange={(e) => setPhysioForm({ ...physioForm, specializations: e.target.value })} placeholder="Sports Rehab, Orthopaedics" /></div>
+            {saveError && <div className="tm-modal-error">{saveError}</div>}
+            <div className="tm-modal-actions">
+              <button className="tm-modal-cancel" onClick={() => setShowAddPhysio(false)}>Cancel</button>
+              <button className="tm-modal-save" disabled={saving} onClick={handleAddPhysio}>
+                {saving ? "Creating account…" : "Create Account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Patient Modal */}
+      {showAddPatient && (
+        <div className="tm-modal-overlay" onClick={() => !saving && setShowAddPatient(false)}>
+          <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="tm-modal-title">Add Patient Account</div>
+            <div className="tm-modal-sub">Create a patient account. They will use this email and password to access their portal.</div>
+            <div className="tm-field-row">
+              <div className="tm-field"><label className="tm-label">First Name</label><input className="tm-input" value={patientForm.firstName} onChange={(e) => setPatientForm({ ...patientForm, firstName: e.target.value })} placeholder="Sara" /></div>
+              <div className="tm-field"><label className="tm-label">Last Name</label><input className="tm-input" value={patientForm.lastName} onChange={(e) => setPatientForm({ ...patientForm, lastName: e.target.value })} placeholder="Mohamed" /></div>
+            </div>
+            <div className="tm-field"><label className="tm-label">Email Address</label><input className="tm-input" type="email" value={patientForm.email} onChange={(e) => setPatientForm({ ...patientForm, email: e.target.value })} placeholder="patient@email.com" /></div>
+            <div className="tm-field"><label className="tm-label">Password</label><input className="tm-input" type="password" value={patientForm.password} onChange={(e) => setPatientForm({ ...patientForm, password: e.target.value })} placeholder="Min. 6 characters" /></div>
+            <div className="tm-field-row">
+              <div className="tm-field"><label className="tm-label">Date of Birth</label><input className="tm-input" type="date" value={patientForm.dateOfBirth} onChange={(e) => setPatientForm({ ...patientForm, dateOfBirth: e.target.value })} /></div>
+              <div className="tm-field"><label className="tm-label">Phone</label><input className="tm-input" value={patientForm.phone} onChange={(e) => setPatientForm({ ...patientForm, phone: e.target.value })} placeholder="+20 100 000 0000" /></div>
+            </div>
+            <div className="tm-field"><label className="tm-label">Primary Condition</label><input className="tm-input" value={patientForm.primaryCondition} onChange={(e) => setPatientForm({ ...patientForm, primaryCondition: e.target.value })} placeholder="e.g. ACL Rehabilitation" /></div>
+            {saveError && <div className="tm-modal-error">{saveError}</div>}
+            <div className="tm-modal-actions">
+              <button className="tm-modal-cancel" onClick={() => setShowAddPatient(false)}>Cancel</button>
+              <button className="tm-modal-save" disabled={saving} onClick={handleAddPatient}>
+                {saving ? "Creating account…" : "Create Account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 // ─── Overview tab ─────────────────────────────────────────────────────────────
 
@@ -169,6 +431,7 @@ export default function PhysioDashboard() {
   const TABS: TabDef[] = [
     { id: "overview",  label: "Overview",         icon: <IconOverview /> },
     { id: "patients",  label: "Patients",         icon: <IconPatients /> },
+    ...(isManager ? [{ id: "team" as Tab, label: "Team",    icon: <IconTeam /> }] : []),
     { id: "schedule",  label: "Schedule",         icon: <IconSchedule /> },
     { id: "exercises", label: "Exercise Library", icon: <IconExercises /> },
     { id: "reports",   label: "Reports",          icon: <IconReports /> },
@@ -508,6 +771,7 @@ export default function PhysioDashboard() {
                     isManager={isManager}
                   />
                 )}
+                {activeTab === "team"      && isManager && <TeamTab />}
                 {activeTab === "exercises" && (
                   <ExerciseLibraryPage
                     physioId={physio.uid}
