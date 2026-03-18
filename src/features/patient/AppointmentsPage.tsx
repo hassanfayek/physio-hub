@@ -22,7 +22,9 @@ import {
 } from "../../services/appointmentService";
 import {
   subscribeToPhysiotherapists,
+  subscribeToPatient,
   type Physiotherapist,
+  type Patient,
 } from "../../services/patientService";
 import type { PatientProfile } from "../../services/authService";
 import { collection, query, where, getDocs } from "firebase/firestore";
@@ -83,12 +85,22 @@ export default function AppointmentsPage() {
   // ── Data state ────────────────────────────────────────────────────────────
   const [physios,        setPhysios]        = useState<Physiotherapist[]>([]);
   const [clinicSettings, setClinicSettings] = useState<ClinicSettings>({ maxPatientsPerHour: 4, openingHour: 9, closingHour: 21 });
+  const [patientDoc,     setPatientDoc]     = useState<Patient | null>(null);
 
-  // Derive assigned physio name for history display
-  const assignedPhysio = physios.find((p) => p.uid === patient?.assignedPhysioId) ?? physios[0] ?? null;
-  const assignedPhysioName = assignedPhysio
-    ? `Dr. ${assignedPhysio.firstName} ${assignedPhysio.lastName}`
-    : "Your Physiotherapist";
+  // Derive the subtitle name:
+  //   1. Senior physio assigned to this patient (seniorEditorName)
+  //   2. Assigned physio by uid match
+  //   3. First physio in list (fallback — likely clinic manager)
+  const seniorName = patientDoc?.seniorEditorName
+    ?? null;
+  const assignedPhysio = physios.find((p) => p.uid === (patientDoc?.physioId ?? patient?.assignedPhysioId))
+    ?? physios[0]
+    ?? null;
+  const assignedPhysioName = seniorName
+    ? seniorName
+    : assignedPhysio
+      ? `Dr. ${assignedPhysio.firstName} ${assignedPhysio.lastName}`
+      : "Your Physiotherapist";
   const [slotCounts,     setSlotCounts]     = useState<Record<number, number>>({});
   const [upcoming,       setUpcoming]       = useState<FSAppt[]>([]);
   const [apptLoading,    setApptLoading]    = useState(true);
@@ -106,6 +118,12 @@ export default function AppointmentsPage() {
 
   // ── Load clinic settings once ─────────────────────────────────────────────
   useEffect(() => { getClinicSettings().then(setClinicSettings); }, []);
+
+  // ── Load patient Firestore doc (for seniorEditorName + physioId) ──────────
+  useEffect(() => {
+    if (!patient?.uid) return;
+    return subscribeToPatient(patient.uid, setPatientDoc, () => {});
+  }, [patient?.uid]);
 
   // ── Load physio list (realtime) ───────────────────────────────────────────
   useEffect(() => {
