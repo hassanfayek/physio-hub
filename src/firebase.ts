@@ -28,6 +28,15 @@ export const db      = getFirestore(app);
 export const storage = getStorage(app);
 export default app;
 
+// ─── Secondary auth instance ──────────────────────────────────────────────────
+// Used exclusively for creating new accounts (physio/patient) from the manager
+// dashboard WITHOUT signing out the currently logged-in manager.
+// Firebase Auth sessions are per-app-instance, so this keeps them isolated.
+const SECONDARY_APP_NAME = "physio-hub-secondary";
+const secondaryApp = getApps().find((a) => a.name === SECONDARY_APP_NAME)
+  ?? initializeApp(firebaseConfig, SECONDARY_APP_NAME);
+export const secondaryAuth = getAuth(secondaryApp);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Required .env.local file at project root:
 //
