@@ -12,7 +12,7 @@ import {
 import type { PhysioProfile } from "../../services/authService";
 import ExerciseProgram      from "./ExerciseProgram";
 import {
-  collection, addDoc, doc, setDoc, query, where, orderBy,
+  collection, addDoc, deleteDoc, doc, setDoc, query, where, orderBy,
   onSnapshot, serverTimestamp, type Timestamp,
 } from "firebase/firestore";
 import {
@@ -21,29 +21,51 @@ import {
   fmtHour12,
   type Appointment as ApptRecord,
 } from "../../services/appointmentService";
-import { db } from "../../firebase";
+import { db, storage } from "../../firebase";
+import {
+  ref, uploadBytesResumable, getDownloadURL, deleteObject,
+} from "firebase/storage";
 
 // ─── Static mock data (unchanged from original) ───────────────────────────────
 
 type DocType = "mri" | "xray" | "report" | "referral";
 
-interface MedicalDoc {
-  id: number;
-  type: DocType;
-  label: string;
-  date: string;
-  size: string;
-  icon: string;
+// Live document stored in Firestore (replaces static MedicalDoc)
+interface PatientDocument {
+  id:           string;
+  patientId:    string;
+  uploadedBy:   string;
+  type:         DocType;
+  label:        string;
+  fileName:     string;
+  size:         number;   // bytes
+  downloadUrl:  string;
+  storagePath:  string;
+  createdAt:    Timestamp | null;
 }
 
-const DOCS: MedicalDoc[] = [
-  { id: 1, type: "mri",      label: "MRI Knee — Right",         date: "14 Jan 2025", size: "28.4 MB", icon: "🩻" },
-  { id: 2, type: "report",   label: "Surgical Op Report",        date: "22 Jan 2025", size: "2.1 MB",  icon: "📄" },
-  { id: 3, type: "xray",     label: "X-Ray Post-Op",             date: "6 Feb 2025",  size: "14.8 MB", icon: "🩻" },
-  { id: 4, type: "referral", label: "GP Referral Letter",        date: "10 Jan 2025", size: "0.8 MB",  icon: "📋" },
-  { id: 5, type: "report",   label: "Anaesthesia Report",        date: "22 Jan 2025", size: "1.2 MB",  icon: "📄" },
-  { id: 6, type: "xray",     label: "X-Ray Follow-Up 6 Weeks",   date: "5 Mar 2025",  size: "12.1 MB", icon: "🩻" },
-];
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmtBytes(bytes: number): string {
+  if (bytes < 1024)          return `${bytes} B`;
+  if (bytes < 1024 * 1024)   return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function guessDocType(fileName: string): DocType {
+  const lower = fileName.toLowerCase();
+  if (lower.includes("mri"))                         return "mri";
+  if (lower.includes("xray") || lower.includes("x-ray")) return "xray";
+  if (lower.includes("referral"))                    return "referral";
+  return "report";
+}
+
+function docTypeIcon(type: DocType): string {
+  const icons: Record<DocType, string> = {
+    mri: "🩻", xray: "🩻", report: "📄", referral: "📋",
+  };
+  return icons[type] ?? "📄";
+}
 
 
 const DOC_COLORS: Record<DocType, { bg: string; text: string }> = {
@@ -315,6 +337,32 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
     return subscribeToPatient(patientId, setPatient, () => setPatient(null));
   }, [patientId]);
 
+  // Realtime documents subscription
+  useEffect(() => {
+    if (!patientId) return;
+    setDocsLoading(true);
+    const q = query(
+      collection(db, "patientDocuments"),
+      where("patientId", "==", patientId),
+      orderBy("createdAt", "desc")
+    );
+    return onSnapshot(q, (snap) => {
+      setPatientDocs(snap.docs.map((d) => ({
+        id:          d.id,
+        patientId:   (d.data().patientId   as string) ?? "",
+        uploadedBy:  (d.data().uploadedBy  as string) ?? "",
+        type:        (d.data().type        as DocType) ?? "report",
+        label:       (d.data().label       as string) ?? "",
+        fileName:    (d.data().fileName    as string) ?? "",
+        size:        (d.data().size        as number) ?? 0,
+        downloadUrl: (d.data().downloadUrl as string) ?? "",
+        storagePath: (d.data().storagePath as string) ?? "",
+        createdAt:   (d.data().createdAt   as Timestamp | null) ?? null,
+      })));
+      setDocsLoading(false);
+    }, () => setDocsLoading(false));
+  }, [patientId]);
+
   // Load diagnosis from Firestore (stored in patients/{id}/diagnosis sub-doc)
   useEffect(() => {
     if (!patientId) return;
@@ -350,6 +398,54 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
     );
     return unsub;
   }, [patientId]);
+
+  // ── Upload document to Firebase Storage + save metadata ─────────────────
+  const handleUpload = async (file: File) => {
+    if (!patientId || !user?.uid) return;
+    setUploadError(null);
+    setUploadProgress(0);
+
+    const docType  = guessDocType(file.name);
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path     = `patientDocuments/${patientId}/${Date.now()}_${safeName}`;
+    const storageRef = ref(storage, path);
+    const task     = uploadBytesResumable(storageRef, file);
+
+    task.on(
+      "state_changed",
+      (snap) => setUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+      (err) => {
+        setUploadError(err.message ?? "Upload failed. Please try again.");
+        setUploadProgress(null);
+      },
+      async () => {
+        const downloadUrl = await getDownloadURL(task.snapshot.ref);
+        await addDoc(collection(db, "patientDocuments"), {
+          patientId,
+          uploadedBy:  user.uid,
+          type:        docType,
+          label:       file.name.replace(/\.[^/.]+$/, ""),
+          fileName:    file.name,
+          size:        file.size,
+          downloadUrl,
+          storagePath: path,
+          createdAt:   serverTimestamp(),
+        });
+        setUploadProgress(null);
+      }
+    );
+  };
+
+  const handleDeleteDoc = async (document: PatientDocument) => {
+    if (!window.confirm(`Delete "${document.label}"? This cannot be undone.`)) return;
+    setDeletingDocId(document.id);
+    try {
+      await deleteObject(ref(storage, document.storagePath));
+    } catch { /* file may already be gone */ }
+    await deleteDoc(doc(db, "patientDocuments", document.id));
+    setDeletingDocId(null);
+    if (previewDoc?.id === document.id) setPreviewDoc(null);
+  };
 
   const handleSaveDiagnosis = async () => {
     if (!patientId) return;
@@ -417,7 +513,14 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
 
   // ── Local UI state (unchanged) ─────────────────────────────────────────────
   const [activeSection, setActiveSection] = useState<string>("diagnosis");
-  const [previewDoc,    setPreviewDoc]    = useState<MedicalDoc | null>(null);
+  const [previewDoc,    setPreviewDoc]    = useState<PatientDocument | null>(null);
+
+  // ── Live documents state ──────────────────────────────────────────────────
+  const [patientDocs,   setPatientDocs]   = useState<PatientDocument[]>([]);
+  const [docsLoading,   setDocsLoading]   = useState(true);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError,   setUploadError]   = useState<string | null>(null);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
 
   const allSections = [
     { id: "diagnosis",         label: "Diagnosis" },
@@ -777,6 +880,46 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         .ps-upload-icon { font-size: 28px; margin-bottom: 8px; }
         .ps-upload-text { font-size: 14px; color: #5a5550; margin-bottom: 4px; }
         .ps-upload-sub { font-size: 12px; color: #c0bbb4; }
+
+        .ps-upload-progress {
+          margin-top: 12px; height: 6px; border-radius: 6px;
+          background: #e5e0d8; overflow: hidden;
+        }
+        .ps-upload-progress-fill {
+          height: 100%; border-radius: 6px;
+          background: linear-gradient(90deg, #2E8BC0, #5BC0BE);
+          transition: width 0.2s;
+        }
+        .ps-upload-error {
+          margin-top: 10px; font-size: 13px; color: #b91c1c;
+        }
+        .ps-doc-del {
+          position: absolute; top: 8px; right: 8px;
+          width: 24px; height: 24px; border-radius: 50%;
+          background: rgba(0,0,0,0.06); border: none;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; color: #9a9590; transition: all 0.15s;
+          font-size: 12px;
+        }
+        .ps-doc-del:hover { background: #fee2e2; color: #b91c1c; }
+        .ps-doc-card { position: relative; }
+        .ps-docs-empty {
+          text-align: center; padding: 44px 24px;
+          background: #fafaf8; border-radius: 14px;
+          border: 1.5px dashed #e5e0d8;
+          font-size: 14px; color: #9a9590; margin-bottom: 16px;
+        }
+        .ps-doc-filter-row {
+          display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
+        }
+        .ps-doc-filter-btn {
+          padding: 5px 14px; border-radius: 100px;
+          border: 1.5px solid #e5e0d8; background: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 500;
+          color: #9a9590; cursor: pointer; transition: all 0.15s;
+        }
+        .ps-doc-filter-btn.active { background: #2E8BC0; border-color: #2E8BC0; color: #fff; }
+        .ps-doc-filter-btn:hover:not(.active) { border-color: #B3DEF0; color: #2E8BC0; }
 
         /* Modal */
         .ps-doc-modal {
@@ -1797,42 +1940,129 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         </>
       )}
 
-      {/* ── DOCUMENTS — upload zone and download button gated by canEdit ── */}
+      {/* ── DOCUMENTS — live Firebase Storage ── */}
       {activeSection === "documents" && (
         <>
-          <div className="ps-doc-grid">
-            {DOCS.map((doc) => {
-              const colors = DOC_COLORS[doc.type];
-              return (
-                <div key={doc.id} className="ps-doc-card" onClick={() => setPreviewDoc(doc)}>
-                  <span
-                    className="ps-doc-type-badge"
-                    style={{ background: colors.bg, color: colors.text }}
-                  >{doc.type.toUpperCase()}</span>
-                  <span className="ps-doc-icon">{doc.icon}</span>
-                  <div className="ps-doc-label">{doc.label}</div>
-                  <div className="ps-doc-meta">{doc.date} · {doc.size}</div>
-                </div>
-              );
-            })}
-          </div>
+          {/* Filter row */}
+          {!docsLoading && patientDocs.length > 0 && (() => {
+            const types: DocType[] = ["mri", "xray", "report", "referral"];
+            const present = types.filter((t) => patientDocs.some((d) => d.type === t));
+            return present.length > 1 ? (
+              <div className="ps-doc-filter-row">
+                {present.map((t) => (
+                  <button key={t} className="ps-doc-filter-btn"
+                    onClick={() => {
+                      const section = document.querySelector(`[data-doctype="${t}"]`);
+                      section?.scrollIntoView({ behavior: "smooth" });
+                    }}>
+                    {docTypeIcon(t)} {t.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            ) : null;
+          })()}
 
-          {/* Upload zone: visible always, interactive only for editors */}
-          <div className={`ps-upload-zone${canEdit ? "" : " ps-disabled"}`}>
-            <div className="ps-upload-icon">📤</div>
-            <div className="ps-upload-text">Upload a medical document</div>
-            <div className="ps-upload-sub">MRI, X-Ray, reports, referral letters · Max 50MB</div>
-          </div>
+          {/* Document grid */}
+          {docsLoading ? (
+            <div className="ps-doc-grid">
+              {[1,2,3].map((n) => (
+                <div key={n} style={{ height: 140, borderRadius: 14, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "epShimmer 1.4s ease infinite" }} />
+              ))}
+            </div>
+          ) : patientDocs.length === 0 ? (
+            <div className="ps-docs-empty">
+              No documents uploaded yet.
+              {" "}Upload X-rays, MRIs, or reports using the upload zone below.
+            </div>
+          ) : (
+            <div className="ps-doc-grid">
+              {patientDocs.map((document) => {
+                const colors = DOC_COLORS[document.type] ?? { bg: "#f5f3ef", text: "#5a5550" };
+                return (
+                  <div key={document.id} className="ps-doc-card"
+                    data-doctype={document.type}
+                    onClick={() => setPreviewDoc(document)}>
+                    <span className="ps-doc-type-badge"
+                      style={{ background: colors.bg, color: colors.text }}>
+                      {document.type.toUpperCase()}
+                    </span>
+                    <span className="ps-doc-icon">{docTypeIcon(document.type)}</span>
+                    <div className="ps-doc-label">{document.label}</div>
+                    <div className="ps-doc-meta">
+                      {document.createdAt
+                        ? new Date((document.createdAt as unknown as { toDate(): Date }).toDate()).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+                        : "—"
+                      } · {fmtBytes(document.size)}
+                    </div>
+                    {(canEdit || user?.uid === document.uploadedBy) && (
+                      <button
+                        className="ps-doc-del"
+                        disabled={deletingDocId === document.id}
+                        onClick={(e) => { e.stopPropagation(); handleDeleteDoc(document); }}
+                        title="Delete document"
+                      >
+                        {deletingDocId === document.id ? "…" : "✕"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
+          {/* Upload zone — any authenticated user can upload */}
+          <label
+            className={`ps-upload-zone${uploadProgress !== null ? " ps-disabled" : ""}`}
+            style={{ cursor: uploadProgress !== null ? "not-allowed" : "pointer", display: "block" }}
+          >
+            <input
+              type="file"
+              style={{ display: "none" }}
+              accept=".pdf,.jpg,.jpeg,.png,.dcm,.doc,.docx"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) { handleUpload(file); e.target.value = ""; }
+              }}
+            />
+            <div className="ps-upload-icon">
+              {uploadProgress !== null ? "⏳" : "📤"}
+            </div>
+            <div className="ps-upload-text">
+              {uploadProgress !== null
+                ? `Uploading… ${uploadProgress}%`
+                : "Click to upload a document"}
+            </div>
+            <div className="ps-upload-sub">
+              X-Ray, MRI, PDF reports, referral letters · Max 50MB
+            </div>
+            {uploadProgress !== null && (
+              <div className="ps-upload-progress">
+                <div className="ps-upload-progress-fill" style={{ width: `${uploadProgress}%` }} />
+              </div>
+            )}
+            {uploadError && <div className="ps-upload-error">{uploadError}</div>}
+          </label>
+
+          {/* Document preview modal */}
           {previewDoc && (
             <div className="ps-doc-modal" onClick={() => setPreviewDoc(null)}>
               <div className="ps-doc-modal-inner" onClick={(e) => e.stopPropagation()}>
-                <div className="ps-doc-preview-box">{previewDoc.icon}</div>
+                <div className="ps-doc-preview-box">{docTypeIcon(previewDoc.type)}</div>
                 <div className="ps-doc-modal-name">{previewDoc.label}</div>
-                <div className="ps-doc-modal-meta">{previewDoc.date} · {previewDoc.size} · {previewDoc.type.toUpperCase()}</div>
+                <div className="ps-doc-modal-meta">
+                  {previewDoc.fileName} · {fmtBytes(previewDoc.size)} · {previewDoc.type.toUpperCase()}
+                </div>
                 <div className="ps-doc-modal-actions">
-                  {/* Download is an edit-level action: disabled for read-only users */}
-                  <button className="ps-doc-dl" disabled={!canEdit}>⬇ Download</button>
+                  <a
+                    className="ps-doc-dl"
+                    href={previewDoc.downloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download={previewDoc.fileName}
+                    style={{ textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    ⬇ Download
+                  </a>
                   <button className="ps-doc-close" onClick={() => setPreviewDoc(null)}>Close</button>
                 </div>
               </div>
