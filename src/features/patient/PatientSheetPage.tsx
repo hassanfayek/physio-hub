@@ -243,6 +243,32 @@ const TREATMENT_TYPES = [
   "Other",
 ];
 
+// ─── Patient extended profile ────────────────────────────────────────────────
+
+interface PatientExtProfile {
+  dateOfBirth:  string;
+  gender:       string;
+  occupation:   string;
+  phone:        string;
+  address:      string;
+  nationality:  string;
+  emergencyContact: string;
+  emergencyPhone:   string;
+  notes:        string;
+}
+
+const EMPTY_EXT: PatientExtProfile = {
+  dateOfBirth:      "",
+  gender:           "",
+  occupation:       "",
+  phone:            "",
+  address:          "",
+  nationality:      "",
+  emergencyContact: "",
+  emergencyPhone:   "",
+  notes:            "",
+};
+
 // ─── Diagnosis data structure ────────────────────────────────────────────────
 
 interface DiagnosisData {
@@ -381,6 +407,38 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
     return unsub;
   }, [patientId]);
 
+  // Load extended patient profile
+  useEffect(() => {
+    if (!patientId) return;
+    const unsub = onSnapshot(
+      doc(db, "patientProfiles", patientId),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data() as Partial<PatientExtProfile>;
+          const filled: PatientExtProfile = { ...EMPTY_EXT, ...d };
+          setExtProfile(filled);
+          setExtDraft(filled);
+        }
+      },
+      () => {}
+    );
+    return unsub;
+  }, [patientId]);
+
+  const handleSaveExtProfile = async () => {
+    if (!patientId) return;
+    setExtSaving(true);
+    await setDoc(doc(db, "patientProfiles", patientId), {
+      ...extDraft,
+      updatedAt: serverTimestamp(),
+    });
+    setExtProfile(extDraft);
+    setExtEditing(false);
+    setExtSaving(false);
+    setExtSaved(true);
+    setTimeout(() => setExtSaved(false), 2500);
+  };
+
   // Load PT assessment from Firestore
   useEffect(() => {
     if (!patientId) return;
@@ -511,6 +569,13 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
   const [asmSaving,     setAsmSaving]    = useState(false);
   const [asmSaved,      setAsmSaved]     = useState(false);
 
+  // ── Extended patient profile state ────────────────────────────────────────
+  const [extProfile,    setExtProfile]   = useState<PatientExtProfile>(EMPTY_EXT);
+  const [extEditing,    setExtEditing]   = useState(false);
+  const [extDraft,      setExtDraft]     = useState<PatientExtProfile>(EMPTY_EXT);
+  const [extSaving,     setExtSaving]    = useState(false);
+  const [extSaved,      setExtSaved]     = useState(false);
+
   // ── Local UI state (unchanged) ─────────────────────────────────────────────
   const [activeSection, setActiveSection] = useState<string>("diagnosis");
   const [previewDoc,    setPreviewDoc]    = useState<PatientDocument | null>(null);
@@ -523,6 +588,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
 
   const allSections = [
+    { id: "profile",           label: "Patient Profile" },
     { id: "diagnosis",         label: "Diagnosis" },
     { id: "assessment",        label: "PT Assessment",    physioOnly: true },
     { id: "notes",             label: "Treatment Program", physioOnly: true },
@@ -1299,6 +1365,34 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         .ps-sh-btn.cancel  { border-color: #fca5a5; color: #991b1b; background: #fff5f5; }
         .ps-sh-btn.cancel:hover  { background: #fee2e2; }
         .ps-sh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        /* ── Patient Profile section ── */
+        .ps-profile-grid {
+          display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+          margin-bottom: 20px;
+        }
+        .ps-profile-card {
+          background: #fff; border: 1px solid #e5e0d8;
+          border-radius: 14px; padding: 18px 20px;
+        }
+        .ps-profile-card.full { grid-column: 1 / -1; }
+        .ps-profile-card.accent { border-top: 3px solid #2E8BC0; }
+        .ps-profile-key {
+          font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.08em; color: #c0bbb4; margin-bottom: 5px;
+        }
+        .ps-profile-val {
+          font-size: 15px; font-weight: 500; color: #1a1a1a; line-height: 1.4;
+        }
+        .ps-profile-val.empty { color: #c0bbb4; font-style: italic; font-weight: 400; font-size: 14px; }
+        .ps-profile-team-row {
+          display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;
+        }
+        .ps-profile-team-chip {
+          display: flex; align-items: center; gap: 5px;
+          padding: 4px 10px; border-radius: 100px;
+          font-size: 12.5px; font-weight: 500;
+        }
+
         /* ── Editable diagnosis fields ── */
         .ps-edit-btn {
           display: inline-flex; align-items: center; gap: 6px;
@@ -1465,6 +1559,220 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
           ))}
         </select>
       </div>
+
+      {/* ── PATIENT PROFILE ── */}
+      {activeSection === "profile" && (
+        <>
+          {/* Toolbar */}
+          <div className="ps-edit-toolbar">
+            <div>
+              <div style={{ fontFamily: "Playfair Display, serif", fontSize: 18, fontWeight: 500, color: "#1a1a1a" }}>Patient Profile</div>
+              <div style={{ fontSize: 13, color: "#9a9590", marginTop: 2 }}>
+                {extEditing ? "Editing mode" : "Personal & contact information"}
+              </div>
+            </div>
+            <div className="ps-edit-toolbar-right">
+              {extSaved && !extEditing && (
+                <span className="ps-sn-success">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  Saved
+                </span>
+              )}
+              {canEdit && !extEditing && (
+                <button className="ps-edit-btn" onClick={() => { setExtDraft(extProfile); setExtEditing(true); }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                  Edit Profile
+                </button>
+              )}
+              {extEditing && (
+                <>
+                  <span className="ps-edit-badge">Editing</span>
+                  <button className="ps-cancel-btn" onClick={() => { setExtEditing(false); setExtDraft(extProfile); }}>Cancel</button>
+                  <button className="ps-save-btn" disabled={extSaving} onClick={handleSaveExtProfile}>
+                    {extSaving
+                      ? <><span className="ps-senior-spinner" /> Saving…</>
+                      : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save</>
+                    }
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* READ MODE */}
+          {!extEditing && (
+            <div className="ps-profile-grid">
+              {/* Name — always visible */}
+              <div className="ps-profile-card accent full">
+                <div className="ps-profile-key">Full Name</div>
+                <div className="ps-profile-val">
+                  {patient ? `${patient.firstName} ${patient.lastName}` : "—"}
+                </div>
+              </div>
+
+              {/* Contact info — manager only */}
+              {isManager && (
+                <>
+                  <div className="ps-profile-card">
+                    <div className="ps-profile-key">Email</div>
+                    <div className="ps-profile-val">{patient?.email || <span className="ps-profile-val empty">—</span>}</div>
+                  </div>
+                  <div className="ps-profile-card">
+                    <div className="ps-profile-key">Phone</div>
+                    <div className="ps-profile-val">{extProfile.phone || <span className="ps-profile-val empty">Not recorded</span>}</div>
+                  </div>
+                </>
+              )}
+
+              {/* Personal info — all physios can see */}
+              {[
+                { key: "Date of Birth",     val: extProfile.dateOfBirth  },
+                { key: "Gender",            val: extProfile.gender       },
+                { key: "Occupation",        val: extProfile.occupation   },
+                { key: "Nationality",       val: extProfile.nationality  },
+              ].map(({ key, val }) => (
+                <div key={key} className="ps-profile-card">
+                  <div className="ps-profile-key">{key}</div>
+                  <div className={`ps-profile-val ${!val ? "empty" : ""}`}>{val || "Not recorded"}</div>
+                </div>
+              ))}
+
+              <div className="ps-profile-card full">
+                <div className="ps-profile-key">Address</div>
+                <div className={`ps-profile-val ${!extProfile.address ? "empty" : ""}`}>{extProfile.address || "Not recorded"}</div>
+              </div>
+
+              {/* Emergency contact — all physios */}
+              <div className="ps-profile-card full" style={{ borderTop: "2px solid #f5f3ef" }}>
+                <div className="ps-profile-key" style={{ marginBottom: 10 }}>Emergency Contact</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <div className="ps-profile-key">Name</div>
+                    <div className={`ps-profile-val ${!extProfile.emergencyContact ? "empty" : ""}`}>{extProfile.emergencyContact || "—"}</div>
+                  </div>
+                  {isManager && (
+                    <div>
+                      <div className="ps-profile-key">Phone</div>
+                      <div className={`ps-profile-val ${!extProfile.emergencyPhone ? "empty" : ""}`}>{extProfile.emergencyPhone || "—"}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Assigned Team */}
+              <div className="ps-profile-card full">
+                <div className="ps-profile-key" style={{ marginBottom: 8 }}>Assigned Team</div>
+                <div className="ps-profile-team-row">
+                  {patient?.seniorEditorName && (
+                    <span className="ps-profile-team-chip" style={{ background: "#fef3c7", color: "#92400e" }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                      Senior: {patient.seniorEditorName}
+                    </span>
+                  )}
+                  {patient?.juniorName && (
+                    <span className="ps-profile-team-chip" style={{ background: "#D6EEF8", color: "#0C3C60" }}>
+                      Junior: {patient.juniorName}
+                    </span>
+                  )}
+                  {patient?.traineeName && (
+                    <span className="ps-profile-team-chip" style={{ background: "#f3f4f6", color: "#374151" }}>
+                      Trainee: {patient.traineeName}
+                    </span>
+                  )}
+                  {!patient?.seniorEditorName && !patient?.juniorName && !patient?.traineeName && (
+                    <span style={{ fontSize: 13, color: "#c0bbb4", fontStyle: "italic" }}>No team assigned yet</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Notes */}
+              {extProfile.notes && (
+                <div className="ps-profile-card full">
+                  <div className="ps-profile-key">Notes</div>
+                  <div className="ps-profile-val" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{extProfile.notes}</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* EDIT MODE */}
+          {extEditing && (
+            <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 16, padding: 24 }}>
+              <div className="ps-field-row-2">
+                <div className="ps-field-group">
+                  <label className="ps-field-label">Date of Birth</label>
+                  <input className="ps-field-input" value={extDraft.dateOfBirth}
+                    onChange={(e) => setExtDraft({ ...extDraft, dateOfBirth: e.target.value })}
+                    placeholder="e.g. 15 March 1990" />
+                </div>
+                <div className="ps-field-group">
+                  <label className="ps-field-label">Gender</label>
+                  <select className="ps-field-input" value={extDraft.gender}
+                    onChange={(e) => setExtDraft({ ...extDraft, gender: e.target.value })}
+                    style={{ cursor: "pointer" }}>
+                    <option value="">— Select —</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                    <option value="Prefer not to say">Prefer not to say</option>
+                  </select>
+                </div>
+              </div>
+              <div className="ps-field-row-2">
+                <div className="ps-field-group">
+                  <label className="ps-field-label">Occupation / Job</label>
+                  <input className="ps-field-input" value={extDraft.occupation}
+                    onChange={(e) => setExtDraft({ ...extDraft, occupation: e.target.value })}
+                    placeholder="e.g. Teacher, Engineer" />
+                </div>
+                <div className="ps-field-group">
+                  <label className="ps-field-label">Nationality</label>
+                  <input className="ps-field-input" value={extDraft.nationality}
+                    onChange={(e) => setExtDraft({ ...extDraft, nationality: e.target.value })}
+                    placeholder="e.g. Egyptian" />
+                </div>
+              </div>
+              <div className="ps-field-row-2">
+                <div className="ps-field-group">
+                  <label className="ps-field-label">Phone</label>
+                  <input className="ps-field-input" value={extDraft.phone}
+                    onChange={(e) => setExtDraft({ ...extDraft, phone: e.target.value })}
+                    placeholder="+20 100 000 0000" />
+                </div>
+                <div className="ps-field-group">
+                  <label className="ps-field-label">Condition / Reason for Referral</label>
+                  <input className="ps-field-input" value={extDraft.notes}
+                    onChange={(e) => setExtDraft({ ...extDraft, notes: e.target.value })}
+                    placeholder="Primary reason for visit" />
+                </div>
+              </div>
+              <div className="ps-field-group">
+                <label className="ps-field-label">Address</label>
+                <textarea className="ps-field-textarea" value={extDraft.address}
+                  onChange={(e) => setExtDraft({ ...extDraft, address: e.target.value })}
+                  placeholder="Street, City, Country" style={{ minHeight: 70 }} />
+              </div>
+              <div className="ps-field-row-2">
+                <div className="ps-field-group" style={{ marginBottom: 0 }}>
+                  <label className="ps-field-label">Emergency Contact Name</label>
+                  <input className="ps-field-input" value={extDraft.emergencyContact}
+                    onChange={(e) => setExtDraft({ ...extDraft, emergencyContact: e.target.value })}
+                    placeholder="Full name" />
+                </div>
+                <div className="ps-field-group" style={{ marginBottom: 0 }}>
+                  <label className="ps-field-label">Emergency Contact Phone</label>
+                  <input className="ps-field-input" value={extDraft.emergencyPhone}
+                    onChange={(e) => setExtDraft({ ...extDraft, emergencyPhone: e.target.value })}
+                    placeholder="+20 100 000 0000" />
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* ── DIAGNOSIS (unchanged) ── */}
       {activeSection === "diagnosis" && (
