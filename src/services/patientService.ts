@@ -32,7 +32,13 @@ export interface Patient {
   createdAt:        Timestamp | null;
   seniorEditorId:   string | null;
   seniorEditorName: string | null;
+  juniorId:         string | null;
+  juniorName:       string | null;
+  traineeId:        string | null;
+  traineeName:      string | null;
 }
+
+export type PhysioRank = "senior" | "junior" | "trainee";
 
 export interface Physiotherapist {
   uid:             string;
@@ -42,6 +48,7 @@ export interface Physiotherapist {
   licenseNumber:   string;
   phone:           string;
   specializations: string[];
+  rank:            PhysioRank;
 }
 
 export interface CreatePatientPayload {
@@ -88,8 +95,12 @@ function docToPatient(id: string, data: Record<string, unknown>): Patient {
     physioId:  (data.physioId  as string) ?? "",
     status:           (data.status           as Patient["status"]) ?? "active",
     createdAt:        (data.createdAt        as Timestamp | null) ?? null,
-    seniorEditorId:   (data.seniorEditorId   as string | null)    ?? null,
-    seniorEditorName: (data.seniorEditorName as string | null)    ?? null,
+    seniorEditorId:   (data.seniorEditorId   as string | null) ?? null,
+    seniorEditorName: (data.seniorEditorName as string | null) ?? null,
+    juniorId:         (data.juniorId         as string | null) ?? null,
+    juniorName:       (data.juniorName       as string | null) ?? null,
+    traineeId:        (data.traineeId        as string | null) ?? null,
+    traineeName:      (data.traineeName      as string | null) ?? null,
   };
 }
 
@@ -102,6 +113,9 @@ function docToPhysio(id: string, data: Record<string, unknown>): Physiotherapist
     licenseNumber:   (data.licenseNumber   as string)   ?? "",
     phone:           (data.phone           as string)   ?? "",
     specializations: (data.specializations as string[]) ?? [],
+    rank:            ((data.rank as string) === "junior" ? "junior"
+                   : (data.rank as string) === "trainee" ? "trainee"
+                   : "senior") as PhysioRank,
   };
 }
 
@@ -160,8 +174,12 @@ export async function createPatient(
         physioId:  payload.physioId,
         status:    "active",
         createdAt: null,
-        seniorEditorId: null,
-        seniorEditorName: null
+        seniorEditorId:   null,
+        seniorEditorName: null,
+        juniorId:         null,
+        juniorName:       null,
+        traineeId:        null,
+        traineeName:      null,
       },
     };
   } catch (err) {
@@ -215,6 +233,30 @@ export async function assignSeniorEditor(
     await updateDoc(doc(db, "patients", patientId), {
       seniorEditorId,
       seniorEditorName,
+      updatedAt: serverTimestamp(),
+    });
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+// ─── Assign all staff to a patient (senior required, junior/trainee optional) ──
+
+export async function assignPatientStaff(
+  patientId: string,
+  updates: {
+    seniorEditorId?:   string | null;
+    seniorEditorName?: string | null;
+    juniorId?:         string | null;
+    juniorName?:       string | null;
+    traineeId?:        string | null;
+    traineeName?:      string | null;
+  }
+): Promise<{ error?: string }> {
+  try {
+    await updateDoc(doc(db, "patients", patientId), {
+      ...updates,
       updatedAt: serverTimestamp(),
     });
     return {};

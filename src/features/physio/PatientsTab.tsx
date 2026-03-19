@@ -6,6 +6,7 @@ import {
   subscribeToAllPatients,
   subscribeToPhysiotherapists,
   assignPatientToPhysio,
+  assignPatientStaff,
   deletePatient,
   type Patient,
   type Physiotherapist,
@@ -70,34 +71,86 @@ function DeleteButton({ patientId, onDeleted }: { patientId: string; onDeleted: 
   );
 }
 
-// ─── Physio assignment dropdown ───────────────────────────────────────────────
+// ─── Staff assignment panel (senior required, junior/trainee optional) ──────────
 
-function PhysioSelector({ patient, physios }: { patient: Patient; physios: Physiotherapist[] }) {
-  const [saving, setSaving] = useState(false);
+const RANK_COLORS: Record<string, { bg: string; color: string }> = {
+  senior:  { bg: "#fef3c7", color: "#92400e" },
+  junior:  { bg: "#D6EEF8", color: "#0C3C60" },
+  trainee: { bg: "#f3f4f6", color: "#374151" },
+};
+
+function StaffAssignmentPanel({ patient, physios }: { patient: Patient; physios: Physiotherapist[] }) {
+  const [saving, setSaving] = useState<string | null>(null);
   const [err,    setErr]    = useState<string | null>(null);
 
-  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSaving(true); setErr(null);
-    const result = await assignPatientToPhysio(patient.uid, e.target.value);
-    setSaving(false);
+  const seniors  = physios.filter((p) => (p.rank ?? "junior") === "senior");
+  const juniors  = physios.filter((p) => (p.rank ?? "junior") === "junior");
+  const trainees = physios.filter((p) => (p.rank ?? "junior") === "trainee");
+
+  const assign = async (field: string, uid: string, name: string) => {
+    setSaving(field); setErr(null);
+    let result: { error?: string };
+    if (field === "primary") {
+      result = await assignPatientToPhysio(patient.uid, uid);
+    } else if (field === "senior") {
+      result = await assignPatientStaff(patient.uid, {
+        seniorEditorId:   uid   || null,
+        seniorEditorName: name  || null,
+      });
+    } else if (field === "junior") {
+      result = await assignPatientStaff(patient.uid, {
+        juniorId:   uid  || null,
+        juniorName: name || null,
+      });
+    } else {
+      result = await assignPatientStaff(patient.uid, {
+        traineeId:   uid  || null,
+        traineeName: name || null,
+      });
+    }
+    setSaving(null);
     if (result.error) setErr(result.error);
   };
 
+  const makeSelect = (
+    field: string,
+    value: string,
+    options: Physiotherapist[],
+    label: string,
+    required: boolean
+  ) => (
+    <div className="sa-field">
+      <label className="sa-label">
+        {label}{required && <span style={{ color: "#e07a5f", marginLeft: 3 }}>*</span>}
+      </label>
+      <div className="sa-select-wrap">
+        <select
+          className={`ps-select sa-select ${saving === field ? "ps-saving" : ""} ${!value && required ? "sa-required" : ""}`}
+          value={value ?? ""}
+          onChange={(e) => {
+            const uid = e.target.value;
+            const physio = physios.find((p) => p.uid === uid);
+            const name = physio ? `Dr. ${physio.firstName} ${physio.lastName}` : "";
+            assign(field, uid, name);
+          }}
+          disabled={saving === field}
+        >
+          <option value="">{required ? "— Select (required) —" : "— None —"}</option>
+          {options.map((p) => (
+            <option key={p.uid} value={p.uid}>Dr. {p.firstName} {p.lastName}</option>
+          ))}
+        </select>
+        {saving === field && <span className="ps-spinner" />}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="ps-wrap">
-      <select
-        className={`ps-select ${saving ? "ps-saving" : ""}`}
-        value={patient.physioId ?? ""}
-        onChange={handleChange}
-        disabled={saving}
-      >
-        <option value="">— Unassigned —</option>
-        {physios.map((p) => (
-          <option key={p.uid} value={p.uid}>{p.firstName} {p.lastName}</option>
-        ))}
-      </select>
-      {saving && <span className="ps-spinner" />}
-      {err    && <span className="ps-err">{err}</span>}
+    <div className="sa-panel">
+      {makeSelect("senior",  patient.seniorEditorId ?? "", seniors,  "Senior",  true)}
+      {makeSelect("junior",  patient.juniorId        ?? "", juniors,  "Junior",  false)}
+      {makeSelect("trainee", patient.traineeId       ?? "", trainees, "Trainee", false)}
+      {err && <div className="sa-err">{err}</div>}
     </div>
   );
 }
@@ -324,6 +377,15 @@ export default function PatientsTab({ physioId, isManager = false, onViewPatient
 
         /* Physio selector */
         .ps-wrap { display: flex; align-items: center; gap: 6px; }
+
+        /* Staff assignment panel */
+        .sa-panel { display: flex; flex-direction: column; gap: 6px; min-width: 200px; }
+        .sa-field  { display: flex; flex-direction: column; gap: 3px; }
+        .sa-label  { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #9a9590; }
+        .sa-select-wrap { display: flex; align-items: center; gap: 6px; }
+        .sa-select { min-width: 160px; }
+        .sa-required { border-color: #fca5a5 !important; }
+        .sa-err { font-size: 11.5px; color: #b91c1c; margin-top: 2px; }
         .ps-select {
           font-family: 'Outfit', sans-serif; font-size: 13px; color: #1a1a1a;
           background: #f5f3ef; border: 1.5px solid #e5e0d8; border-radius: 8px;
@@ -469,8 +531,8 @@ export default function PatientsTab({ physioId, isManager = false, onViewPatient
                 <th>Patient</th>
                 <th>Condition</th>
                 <th>Status</th>
-                <th>Assigned Physiotherapist</th>
-                {isManager && <th>Reassign</th>}
+                <th>Team</th>
+                {isManager && <th>Assign Staff</th>}
                 {isManager && <th></th>}
               </tr>
             </thead>
@@ -531,17 +593,36 @@ export default function PatientsTab({ physioId, isManager = false, onViewPatient
                             <span className="pt-status-chip" style={{ background: sm.bg, color: sm.text }}>{sm.label}</span>
                           </td>
                           <td>
-                            {physioName
-                              ? <span style={{ fontSize: 13.5, color: "#1a1a1a", fontWeight: 500 }}>{physioName}</span>
-                              : <span className="pt-unassigned-chip">
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              {patient.seniorEditorName && (
+                                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, background: "#fef3c7", color: "#92400e", padding: "1px 6px", borderRadius: 100, textTransform: "uppercase" }}>Senior</span>
+                                  <span style={{ fontSize: 13, color: "#1a1a1a" }}>{patient.seniorEditorName}</span>
+                                </div>
+                              )}
+                              {patient.juniorName && (
+                                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, background: "#D6EEF8", color: "#0C3C60", padding: "1px 6px", borderRadius: 100, textTransform: "uppercase" }}>Junior</span>
+                                  <span style={{ fontSize: 13, color: "#1a1a1a" }}>{patient.juniorName}</span>
+                                </div>
+                              )}
+                              {patient.traineeName && (
+                                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, background: "#f3f4f6", color: "#374151", padding: "1px 6px", borderRadius: 100, textTransform: "uppercase" }}>Trainee</span>
+                                  <span style={{ fontSize: 13, color: "#1a1a1a" }}>{patient.traineeName}</span>
+                                </div>
+                              )}
+                              {!patient.seniorEditorName && !patient.juniorName && !patient.traineeName && (
+                                <span className="pt-unassigned-chip">
                                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                                   Unassigned
                                 </span>
-                            }
+                              )}
+                            </div>
                           </td>
                           {isManager && (
                             <td>
-                              <PhysioSelector patient={patient} physios={physios} />
+                              <StaffAssignmentPanel patient={patient} physios={physios} />
                             </td>
                           )}
                           {isManager && (

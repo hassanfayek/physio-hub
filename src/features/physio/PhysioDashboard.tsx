@@ -49,11 +49,12 @@ function IconAdd()      { return <svg width="14" height="14" viewBox="0 0 24 24"
 interface AddPhysioForm {
   firstName: string; lastName: string; email: string; password: string;
   licenseNumber: string; clinicName: string; phone: string; specializations: string;
+  rank: string;
 }
 
 const EMPTY_PHYSIO_FORM: AddPhysioForm = {
   firstName: "", lastName: "", email: "", password: "",
-  licenseNumber: "", clinicName: "", phone: "", specializations: "",
+  licenseNumber: "", clinicName: "", phone: "", specializations: "", rank: "junior",
 };
 
 function TeamTab() {
@@ -117,6 +118,7 @@ function TeamTab() {
         clinicName:      physioForm.clinicName || "Physio+ Clinic",
         phone:           physioForm.phone,
         specializations: physioForm.specializations.split(",").map((t) => t.trim()).filter(Boolean),
+        rank:            physioForm.rank || "junior",
         createdAt:       now,
       });
 
@@ -199,6 +201,13 @@ function TeamTab() {
           font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 100px;
           background: #D6EEF8; color: #0C3C60; margin-top: 4px; display: inline-block;
         }
+        .tm-rank-badge {
+          font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 100px;
+          display: inline-block; margin-right: 4px; text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .tm-rank-senior  { background: #fef3c7; color: #92400e; }
+        .tm-rank-junior  { background: #D6EEF8; color: #0C3C60; }
+        .tm-rank-trainee { background: #f3f4f6; color: #374151; }
 
         /* Modal */
         .tm-modal-overlay {
@@ -270,7 +279,12 @@ function TeamTab() {
                 <div style={{ flex: 1 }}>
                   <div className="tm-name">Dr. {p.firstName} {p.lastName}</div>
                   <div className="tm-spec">{p.clinicName || "Physio+ Clinic"}</div>
-                  {p.specializations?.[0] && <span className="tm-badge">{p.specializations[0]}</span>}
+                  <div style={{ marginTop: 4 }}>
+                    <span className={`tm-rank-badge tm-rank-${p.rank ?? "junior"}`}>
+                      {(p.rank ?? "junior").charAt(0).toUpperCase() + (p.rank ?? "junior").slice(1)}
+                    </span>
+                    {p.specializations?.[0] && <span className="tm-badge">{p.specializations[0]}</span>}
+                  </div>
                 </div>
                 <svg className={`tm-card-chevron ${expandedUid === p.uid ? "open" : ""}`}
                   width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -324,6 +338,16 @@ function TeamTab() {
               <div className="tm-field"><label className="tm-label">Phone</label><input className="tm-input" value={physioForm.phone} onChange={(e) => setPhysioForm({ ...physioForm, phone: e.target.value })} placeholder="+20 100 000 0000" /></div>
             </div>
             <div className="tm-field"><label className="tm-label">Clinic Name</label><input className="tm-input" value={physioForm.clinicName} onChange={(e) => setPhysioForm({ ...physioForm, clinicName: e.target.value })} placeholder="Physio+ Clinic" /></div>
+            <div className="tm-field">
+              <label className="tm-label">Rank / Level</label>
+              <select className="tm-input" value={physioForm.rank}
+                onChange={(e) => setPhysioForm({ ...physioForm, rank: e.target.value })}
+                style={{ cursor: "pointer" }}>
+                <option value="senior">Senior Physiotherapist</option>
+                <option value="junior">Junior Physiotherapist</option>
+                <option value="trainee">Trainee Physiotherapist</option>
+              </select>
+            </div>
             <div className="tm-field"><label className="tm-label">Specializations (comma separated)</label><input className="tm-input" value={physioForm.specializations} onChange={(e) => setPhysioForm({ ...physioForm, specializations: e.target.value })} placeholder="Sports Rehab, Orthopaedics" /></div>
             {saveError && <div className="tm-modal-error">{saveError}</div>}
             <div className="tm-modal-actions">
