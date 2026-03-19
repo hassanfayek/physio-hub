@@ -52,6 +52,7 @@ import {
 } from "firebase/firestore";
 
 import { auth, db, secondaryAuth } from "../firebase";
+import { getFirestore } from "firebase/firestore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -156,10 +157,13 @@ export async function registerPatient(
   // Update display name on secondary auth user
   await updateProfile(user, { displayName });
 
+  // Use the SECONDARY app's Firestore so the new patient writes their own docs.
+  // This guarantees isOwner(uid) passes in Firestore rules.
+  const secondaryApp = secondaryAuth.app;
+  const secondaryDb  = getFirestore(secondaryApp);
   const now = serverTimestamp();
 
-  // /users/{uid} — written using main db (works regardless of which auth is active)
-  await setDoc(doc(db, "users", user.uid), {
+  await setDoc(doc(secondaryDb, "users", user.uid), {
     email:       data.email,
     role:        "patient" as UserRole,
     displayName,
@@ -167,8 +171,7 @@ export async function registerPatient(
     updatedAt:   now,
   });
 
-  // /patients/{uid} — patient-specific profile
-  await setDoc(doc(db, "patients", user.uid), {
+  await setDoc(doc(secondaryDb, "patients", user.uid), {
     firstName:        data.firstName,
     lastName:         data.lastName,
     dateOfBirth:      data.dateOfBirth,
@@ -179,8 +182,11 @@ export async function registerPatient(
     createdAt:        now,
   });
 
-  // Sign out of secondaryAuth — current user session completely unaffected
+  // NOW sign out of secondaryAuth — all writes are done
   await secondaryAuth.signOut();
+
+  // Log the new patient into the MAIN auth so they are immediately signed in
+  await signInWithEmailAndPassword(auth, data.email, data.password);
 
   return {
     uid:              user.uid,
@@ -215,10 +221,11 @@ export async function registerPhysio(
 
   await updateProfile(user, { displayName });
 
+  const secondaryApp2 = secondaryAuth.app;
+  const secondaryDb2  = getFirestore(secondaryApp2);
   const now = serverTimestamp();
 
-  // /users/{uid}
-  await setDoc(doc(db, "users", user.uid), {
+  await setDoc(doc(secondaryDb2, "users", user.uid), {
     email:       data.email,
     role:        "physiotherapist" as UserRole,
     displayName,
@@ -226,8 +233,7 @@ export async function registerPhysio(
     updatedAt:   now,
   });
 
-  // /physiotherapists/{uid}
-  await setDoc(doc(db, "physiotherapists", user.uid), {
+  await setDoc(doc(secondaryDb2, "physiotherapists", user.uid), {
     firstName:       data.firstName,
     lastName:        data.lastName,
     licenseNumber:   data.licenseNumber,
@@ -238,6 +244,9 @@ export async function registerPhysio(
   });
 
   await secondaryAuth.signOut();
+
+  // Log the new physio into the MAIN auth
+  await signInWithEmailAndPassword(auth, data.email, data.password);
 
   return {
     uid:             user.uid,
