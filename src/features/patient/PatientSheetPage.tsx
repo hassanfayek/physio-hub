@@ -12,7 +12,7 @@ import {
 import type { PhysioProfile } from "../../services/authService";
 import ExerciseProgram      from "./ExerciseProgram";
 import {
-  collection, addDoc, deleteDoc, doc, setDoc, query, where, orderBy,
+  collection, addDoc, deleteDoc, updateDoc, doc, setDoc, query, where, orderBy,
   onSnapshot, serverTimestamp, type Timestamp,
 } from "firebase/firestore";
 import {
@@ -211,6 +211,7 @@ interface TreatmentEntry {
   patientId:     string;
   physioId:      string;
   date:          string;
+  endDate?:      string;
   treatmentType: string;
   notes:         string;
   entryMode:     "session" | "plan";
@@ -640,6 +641,13 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
   const [tpMode,           setTpMode]           = useState<"session" | "plan">("session");
   const [tpNumSessions,    setTpNumSessions]    = useState(6);
   const [tpGoals,          setTpGoals]          = useState("");
+  const [tpEndDate,        setTpEndDate]        = useState("");
+  // Edit / delete state for existing entries
+  const [editingEntry,     setEditingEntry]     = useState<TreatmentEntry | null>(null);
+  const [editDraft,        setEditDraft]        = useState<Partial<TreatmentEntry>>({});
+  const [editSaving,       setEditSaving]       = useState(false);
+  const [editError,        setEditError]        = useState<string | null>(null);
+  const [deletingEntryId,  setDeletingEntryId]  = useState<string | null>(null);
 
   // ── Session feedback (read-only view from sessionFeedback collection) ──────
   const [sessionFeedbackList, setSessionFeedbackList] = useState<SessionFeedback[]>([]);
@@ -735,6 +743,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
           patientId:     (d.data().patientId     as string) ?? "",
           physioId:      (d.data().physioId      as string) ?? "",
           date:          (d.data().date          as string) ?? "",
+          endDate:       (d.data().endDate       as string | undefined),
           treatmentType: (d.data().treatmentType as string) ?? "",
           notes:         (d.data().notes         as string) ?? "",
           entryMode:     ((d.data().entryMode    as string) === "plan" ? "plan" : "session") as "session" | "plan",
@@ -771,11 +780,13 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         ...(tpMode === "plan" && {
           numSessions: tpNumSessions,
           goals:       tpGoals.trim(),
+          ...(tpEndDate ? { endDate: tpEndDate } : {}),
         }),
         createdAt:     serverTimestamp(),
       });
       setTpNotes("");
       setTpGoals("");
+      setTpEndDate("");
       setTpSuccess(true);
       setTimeout(() => setTpSuccess(false), 2500);
     } catch (err: unknown) {
@@ -786,6 +797,34 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         : e.message ?? "Failed to save. Please try again.");
     }
     setTpSaving(false);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingEntry) return;
+    setEditSaving(true); setEditError(null);
+    try {
+      await updateDoc(doc(db, "patientSessions", editingEntry.id), {
+        ...editDraft,
+        updatedAt: serverTimestamp(),
+      });
+      setEditingEntry(null);
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      setEditError(e.message ?? "Failed to save changes.");
+    }
+    setEditSaving(false);
+  };
+
+  const handleDeleteEntry = async (entryId: string) => {
+    if (!window.confirm("Delete this treatment entry? This cannot be undone.")) return;
+    setDeletingEntryId(entryId);
+    try {
+      await deleteDoc(doc(db, "patientSessions", entryId));
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      alert(e.message ?? "Failed to delete entry.");
+    }
+    setDeletingEntryId(null);
   };
 
   const handleSaveSessionNote = async () => {
@@ -1350,6 +1389,25 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         }
         .ps-sn-card-date { font-size: 12px; color: #9a9590; margin-left: auto; }
         .ps-sn-card-notes { font-size: 14px; color: #5a5550; line-height: 1.6; }
+        .ps-sn-card-actions {
+          display: flex; gap: 6px; margin-top: 10px; padding-top: 10px;
+          border-top: 1px solid #f5f3ef;
+        }
+        .ps-sn-action-btn {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 5px 12px; border-radius: 8px; font-size: 12.5px;
+          font-family: 'Outfit', sans-serif; font-weight: 500;
+          cursor: pointer; border: 1.5px solid #e5e0d8; background: #fff;
+          color: #5a5550; transition: all 0.15s;
+        }
+        .ps-sn-action-btn:hover { background: #f5f3ef; }
+        .ps-sn-action-btn.danger { color: #b91c1c; }
+        .ps-sn-action-btn.danger:hover { border-color: #fca5a5; background: #fff5f3; }
+        .ps-sn-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .ps-entry-edit-form {
+          margin-top: 12px; padding: 14px; background: #f5f3ef;
+          border-radius: 10px; display: flex; flex-direction: column; gap: 10px;
+        }
         .ps-sn-empty {
           text-align: center; padding: 32px;
           font-size: 14px; color: #9a9590;
@@ -2044,6 +2102,13 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
                         value={tpDate} onChange={(e) => setTpDate(e.target.value)} />
                     </div>
                     <div className="ps-sn-field">
+                      <label className="ps-sn-label">End Date (optional)</label>
+                      <input type="date" className="ps-sn-input"
+                        value={tpEndDate} onChange={(e) => setTpEndDate(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="ps-sn-row">
+                    <div className="ps-sn-field">
                       <label className="ps-sn-label">Number of Sessions</label>
                       <select className="ps-sn-select"
                         value={tpNumSessions}
@@ -2099,27 +2164,147 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
           {treatmentEntries.length === 0 ? (
             <div className="ps-sn-empty">No treatment entries recorded yet.</div>
           ) : (
-            treatmentEntries.map((entry) => (
-              <div key={entry.id} className="ps-sn-card">
-                <div className="ps-sn-card-header">
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" as const }}>
-                    <span className="ps-sn-card-type">{entry.treatmentType}</span>
-                    <span className={`ps-tp-entry-type ${entry.entryMode === "plan" ? "ps-tp-entry-plan" : "ps-tp-entry-session"}`}>
-                      {entry.entryMode === "plan"
-                        ? `Treatment Plan · ${entry.numSessions ?? 6} sessions`
-                        : "Session Note"}
-                    </span>
+            treatmentEntries.map((entry) => {
+              const isEditing = editingEntry?.id === entry.id;
+              const isDeleting = deletingEntryId === entry.id;
+              return (
+                <div key={entry.id} className="ps-sn-card">
+                  <div className="ps-sn-card-header">
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" as const }}>
+                      <span className="ps-sn-card-type">
+                        {isEditing ? (editDraft.treatmentType ?? entry.treatmentType) : entry.treatmentType}
+                      </span>
+                      <span className={`ps-tp-entry-type ${entry.entryMode === "plan" ? "ps-tp-entry-plan" : "ps-tp-entry-session"}`}>
+                        {entry.entryMode === "plan"
+                          ? `Treatment Plan · ${entry.numSessions ?? 6} sessions`
+                          : "Session Note"}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="ps-sn-card-date">
+                        {entry.date}{entry.endDate ? ` → ${entry.endDate}` : ""}
+                      </span>
+                    </div>
                   </div>
-                  <span className="ps-sn-card-date">{entry.date}</span>
+
+                  {/* Read mode */}
+                  {!isEditing && (
+                    <>
+                      {entry.goals && (
+                        <div style={{ fontSize: 13, color: "#065f46", background: "#d1fae5", borderRadius: 8, padding: "6px 10px", marginBottom: 8 }}>
+                          <strong>Goals:</strong> {entry.goals}
+                        </div>
+                      )}
+                      <div className="ps-sn-card-notes">{entry.notes}</div>
+                      {/* Edit/Delete — only for canEdit users */}
+                      {canEdit && (
+                        <div className="ps-sn-card-actions">
+                          <button className="ps-sn-action-btn" onClick={() => {
+                            setEditingEntry(entry);
+                            setEditDraft({
+                              treatmentType: entry.treatmentType,
+                              notes:         entry.notes,
+                              goals:         entry.goals ?? "",
+                              date:          entry.date,
+                              endDate:       entry.endDate ?? "",
+                              numSessions:   entry.numSessions,
+                            });
+                            setEditError(null);
+                          }}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                            Edit
+                          </button>
+                          <button
+                            className="ps-sn-action-btn danger"
+                            disabled={isDeleting}
+                            onClick={() => handleDeleteEntry(entry.id)}
+                          >
+                            {isDeleting ? (
+                              <><span className="ps-senior-spinner" /> Deleting…</>
+                            ) : (
+                              <>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6"/>
+                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                  <path d="M10 11v6M14 11v6"/>
+                                </svg>
+                                Delete
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Edit mode */}
+                  {isEditing && (
+                    <div className="ps-entry-edit-form">
+                      <div className="ps-sn-row">
+                        <div className="ps-sn-field">
+                          <label className="ps-sn-label">Start Date</label>
+                          <input type="date" className="ps-sn-input"
+                            value={editDraft.date ?? ""}
+                            onChange={(e) => setEditDraft({ ...editDraft, date: e.target.value })} />
+                        </div>
+                        {entry.entryMode === "plan" && (
+                          <div className="ps-sn-field">
+                            <label className="ps-sn-label">End Date</label>
+                            <input type="date" className="ps-sn-input"
+                              value={editDraft.endDate ?? ""}
+                              onChange={(e) => setEditDraft({ ...editDraft, endDate: e.target.value })} />
+                          </div>
+                        )}
+                      </div>
+                      {entry.entryMode === "plan" && (
+                        <>
+                          <div className="ps-sn-field">
+                            <label className="ps-sn-label">Goals</label>
+                            <textarea className="ps-sn-textarea" style={{ minHeight: 60 }}
+                              value={editDraft.goals ?? ""}
+                              onChange={(e) => setEditDraft({ ...editDraft, goals: e.target.value })} />
+                          </div>
+                          <div className="ps-sn-field">
+                            <label className="ps-sn-label">Number of Sessions</label>
+                            <select className="ps-sn-select"
+                              value={editDraft.numSessions ?? 6}
+                              onChange={(e) => setEditDraft({ ...editDraft, numSessions: Number(e.target.value) })}>
+                              {[3, 4, 5, 6, 8, 10, 12].map((n) => (
+                                <option key={n} value={n}>{n} sessions</option>
+                              ))}
+                            </select>
+                          </div>
+                        </>
+                      )}
+                      <div className="ps-sn-field">
+                        <label className="ps-sn-label">Notes</label>
+                        <textarea className="ps-sn-textarea"
+                          value={editDraft.notes ?? ""}
+                          onChange={(e) => setEditDraft({ ...editDraft, notes: e.target.value })} />
+                      </div>
+                      {editError && <div className="ps-sn-error">{editError}</div>}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button className="ps-sn-save-btn" disabled={editSaving} onClick={handleSaveEdit}>
+                          {editSaving
+                            ? <><span className="ps-senior-spinner" /> Saving…</>
+                            : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Changes</>
+                          }
+                        </button>
+                        <button
+                          style={{ padding: "8px 16px", borderRadius: 9, border: "1.5px solid #e5e0d8", background: "#fff", fontFamily: "'Outfit', sans-serif", fontSize: 13, cursor: "pointer" }}
+                          onClick={() => { setEditingEntry(null); setEditDraft({}); setEditError(null); }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                {entry.goals && (
-                  <div style={{ fontSize: 13, color: "#065f46", background: "#d1fae5", borderRadius: 8, padding: "6px 10px", marginBottom: 8 }}>
-                    <strong>Goals:</strong> {entry.goals}
-                  </div>
-                )}
-                <div className="ps-sn-card-notes">{entry.notes}</div>
-              </div>
-            ))
+              );
+            })
           )}
         </>
       )}
