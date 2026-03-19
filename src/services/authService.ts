@@ -51,7 +51,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 
-import { auth, db } from "../firebase";
+import { auth, db, secondaryAuth } from "../firebase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -142,8 +142,10 @@ export function parseFirebaseError(error: unknown): AuthError {
 export async function registerPatient(
   data: RegisterPatientData
 ): Promise<PatientProfile> {
+  // Use secondaryAuth so the current user session is NOT replaced.
+  // After creating the account we sign out of secondaryAuth immediately.
   const credential: UserCredential = await createUserWithEmailAndPassword(
-    auth,
+    secondaryAuth,
     data.email,
     data.password
   );
@@ -151,12 +153,12 @@ export async function registerPatient(
   const { user } = credential;
   const displayName = `${data.firstName} ${data.lastName}`;
 
-  // Update Firebase Auth display name
+  // Update display name on secondary auth user
   await updateProfile(user, { displayName });
 
   const now = serverTimestamp();
 
-  // /users/{uid} — shared role document (used for role-based routing)
+  // /users/{uid} — written using main db (works regardless of which auth is active)
   await setDoc(doc(db, "users", user.uid), {
     email:       data.email,
     role:        "patient" as UserRole,
@@ -176,6 +178,9 @@ export async function registerPatient(
     status:           "active",
     createdAt:        now,
   });
+
+  // Sign out of secondaryAuth — current user session completely unaffected
+  await secondaryAuth.signOut();
 
   return {
     uid:              user.uid,
@@ -200,7 +205,7 @@ export async function registerPhysio(
   data: RegisterPhysioData
 ): Promise<PhysioProfile> {
   const credential: UserCredential = await createUserWithEmailAndPassword(
-    auth,
+    secondaryAuth,
     data.email,
     data.password
   );
@@ -231,6 +236,8 @@ export async function registerPhysio(
     phone:           data.phone,
     createdAt:       now,
   });
+
+  await secondaryAuth.signOut();
 
   return {
     uid:             user.uid,
@@ -282,13 +289,9 @@ export async function sendPasswordReset(email: string): Promise<void> {
 export async function loadUserProfile(
   user: User
 ): Promise<PatientProfile | PhysioProfile | null> {
-  try {
-    const userSnap = await getDoc(doc(db, "users", user.uid));
+  const userSnap = await getDoc(doc(db, "users", user.uid));
 
-    if (!userSnap.exists()) {
-      console.warn("loadUserProfile: no /users doc for", user.uid);
-      return null;
-    }
+  if (!userSnap.exists()) return null;
 
   const userData = userSnap.data() as DocumentData;
   const role: UserRole = userData.role;
@@ -338,10 +341,6 @@ export async function loadUserProfile(
   }
 
   return null;
-  } catch (err) {
-    console.error("loadUserProfile failed:", err);
-    return null;
-  }
 }
 
 // ─── Update user profile ──────────────────────────────────────────────────────
