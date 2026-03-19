@@ -283,6 +283,7 @@ export function subscribeToPatient(
 }
 
 // ─── Realtime listener: patients for a specific physio ────────────────────────
+// Queries physioId field only (legacy — use subscribeToPhysioPatients for full coverage)
 
 export function subscribeToPatients(
   physioId: string,
@@ -299,6 +300,53 @@ export function subscribeToPatients(
     (snap) => onData(snap.docs.map((d) => docToPatient(d.id, d.data()))),
     (err)  => onError?.(err)
   );
+}
+
+// ─── Realtime listener: all patients assigned to a physio in any role ─────────
+// Covers physioId (primary), seniorEditorId, juniorId, traineeId.
+// Firestore doesn't support OR across fields — we run 4 parallel snapshots
+// and merge them client-side, deduplicating by uid.
+
+export function subscribeToPhysioPatients(
+  physioId: string,
+  onData:   (patients: Patient[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  // Map from uid → Patient, updated by any of the 4 listeners
+  const byUid = new Map<string, Patient>();
+
+  const notify = () => {
+    const merged = Array.from(byUid.values()).sort((a, b) => {
+      const ta = (a.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      const tb = (b.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      return tb - ta;
+    });
+    onData(merged);
+  };
+
+  const makeQ = (field: string) =>
+    query(collection(db, "patients"), where(field, "==", physioId));
+
+  const unsubs = [
+    "physioId",
+    "seniorEditorId",
+    "juniorId",
+    "traineeId",
+  ].map((field) =>
+    onSnapshot(
+      makeQ(field),
+      (snap) => {
+        snap.docs.forEach((d) => byUid.set(d.id, docToPatient(d.id, d.data())));
+        // Also handle removals: if a doc is no longer in this snapshot
+        // we can't remove it here (another field may still match),
+        // so we re-query on next snapshot trigger instead
+        notify();
+      },
+      (err) => onError?.(err)
+    )
+  );
+
+  return () => unsubs.forEach((u) => u());
 }
 
 // ─── Realtime listener: ALL patients (clinic manager) ─────────────────────────

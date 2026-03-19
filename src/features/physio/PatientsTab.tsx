@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-  subscribeToPatients,
+  subscribeToPhysioPatients,
   subscribeToAllPatients,
   subscribeToPhysiotherapists,
   assignPatientToPhysio,
@@ -174,7 +174,7 @@ export default function PatientsTab({ physioId, isManager = false, onViewPatient
           (data) => { setPatients(data); setLoading(false); },
           (err)  => { setError(err.message ?? "Failed to load patients."); setLoading(false); }
         )
-      : subscribeToPatients(
+      : subscribeToPhysioPatients(
           physioId,
           (data) => { setPatients(data); setLoading(false); },
           (err)  => { setError(err.message ?? "Failed to load patients."); setLoading(false); }

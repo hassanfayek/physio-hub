@@ -553,6 +553,18 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
       !!patient?.seniorEditorId &&
       (user as PhysioProfile).uid === patient.seniorEditorId);
 
+  // canViewPatient: true for any physio assigned to this patient in any role
+  const myUid = (user as PhysioProfile)?.uid ?? "";
+  const canViewPatient: boolean =
+    role === "clinic_manager" ||
+    role === "patient" ||
+    (role === "physiotherapist" && !!(
+      (patient?.seniorEditorId && patient.seniorEditorId === myUid) ||
+      (patient?.juniorId        && patient.juniorId        === myUid) ||
+      (patient?.traineeId       && patient.traineeId       === myUid) ||
+      (patient?.physioId        && patient.physioId        === myUid)
+    ));
+
   const isManager = role === "clinic_manager";
 
   // ── Diagnosis state (editable by canEdit) ─────────────────────────────────
@@ -1547,6 +1559,27 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
       {/* ── Read-only banner for non-editors ── */}
       {!canEdit && <ReadOnlyBanner role={role} />}
 
+      {/* ── Access guard for unassigned physios ── */}
+      {role === "physiotherapist" && patient && !canViewPatient && (
+        <div style={{
+          textAlign: "center", padding: "60px 24px",
+          background: "#fff", borderRadius: 16,
+          border: "1.5px solid #e5e0d8",
+        }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>🔒</div>
+          <div style={{ fontFamily: "Playfair Display, serif", fontSize: 20, color: "#1a1a1a", marginBottom: 8 }}>
+            Access Restricted
+          </div>
+          <div style={{ fontSize: 14, color: "#9a9590" }}>
+            You are not assigned to this patient. Contact the clinic manager.
+          </div>
+        </div>
+      )}
+
+      {/* Only show section content if canViewPatient */}
+      {(role !== "physiotherapist" || canViewPatient) && (
+      <>
+
       {/* ── Part 3: Section dropdown (replaces tab pills) ── */}
       <div className="ps-section-dropdown-wrap">
         <select
@@ -1736,12 +1769,14 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
                 </div>
               </div>
               <div className="ps-field-row-2">
-                <div className="ps-field-group">
-                  <label className="ps-field-label">Phone</label>
-                  <input className="ps-field-input" value={extDraft.phone}
-                    onChange={(e) => setExtDraft({ ...extDraft, phone: e.target.value })}
-                    placeholder="+20 100 000 0000" />
-                </div>
+                {isManager && (
+                  <div className="ps-field-group">
+                    <label className="ps-field-label">Phone</label>
+                    <input className="ps-field-input" value={extDraft.phone}
+                      onChange={(e) => setExtDraft({ ...extDraft, phone: e.target.value })}
+                      placeholder="+20 100 000 0000" />
+                  </div>
+                )}
                 <div className="ps-field-group">
                   <label className="ps-field-label">Condition / Reason for Referral</label>
                   <input className="ps-field-input" value={extDraft.notes}
@@ -2624,6 +2659,8 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
             })
           )}
         </>
+      )}
+    </>
       )}
     </>
   );
