@@ -694,44 +694,66 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
     if (!patientId) return;
     const q = query(
       collection(db, "patientSessions"),
-      where("patientId", "==", patientId),
-      orderBy("createdAt", "desc")
+      where("patientId", "==", patientId)
     );
-    return onSnapshot(q, (snap) => {
-      setSessionNotes(snap.docs.map((d) => ({
-        id:            d.id,
-        patientId:     (d.data().patientId     as string) ?? "",
-        physioId:      (d.data().physioId      as string) ?? "",
-        date:          (d.data().date          as string) ?? "",
-        treatmentType: (d.data().treatmentType as string) ?? "",
-        notes:         (d.data().notes         as string) ?? "",
-        createdAt:     (d.data().createdAt     as Timestamp | null) ?? null,
-      })));
-    });
+    return onSnapshot(
+      q,
+      (snap) => {
+        const notes = snap.docs.map((d) => ({
+          id:            d.id,
+          patientId:     (d.data().patientId     as string) ?? "",
+          physioId:      (d.data().physioId      as string) ?? "",
+          date:          (d.data().date          as string) ?? "",
+          treatmentType: (d.data().treatmentType as string) ?? "",
+          notes:         (d.data().notes         as string) ?? "",
+          createdAt:     (d.data().createdAt     as Timestamp | null) ?? null,
+        }));
+        notes.sort((a, b) => {
+          const ta = (a.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+          const tb = (b.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+          return tb - ta;
+        });
+        setSessionNotes(notes);
+      },
+      (err) => console.error("Session notes subscription error:", err)
+    );
   }, [patientId]);
 
-  // Subscribe to treatment entries — visible to all assigned physios + manager
+  // Subscribe to treatment entries — sorted client-side to avoid composite index
   useEffect(() => {
     if (!patientId || role === "patient") return;
+    // Simple query with no orderBy — avoids requiring a composite Firestore index
     const q = query(
       collection(db, "patientSessions"),
-      where("patientId", "==", patientId),
-      orderBy("createdAt", "desc")
+      where("patientId", "==", patientId)
     );
-    return onSnapshot(q, (snap) => {
-      setTreatmentEntries(snap.docs.map((d) => ({
-        id:            d.id,
-        patientId:     (d.data().patientId     as string) ?? "",
-        physioId:      (d.data().physioId      as string) ?? "",
-        date:          (d.data().date          as string) ?? "",
-        treatmentType: (d.data().treatmentType as string) ?? "",
-        notes:         (d.data().notes         as string) ?? "",
-        entryMode:     ((d.data().entryMode    as string) === "plan" ? "plan" : "session") as "session" | "plan",
-        numSessions:   (d.data().numSessions   as number | undefined),
-        goals:         (d.data().goals         as string | undefined),
-        createdAt:     (d.data().createdAt     as Timestamp | null) ?? null,
-      })));
-    });
+    return onSnapshot(
+      q,
+      (snap) => {
+        const entries: TreatmentEntry[] = snap.docs.map((d) => ({
+          id:            d.id,
+          patientId:     (d.data().patientId     as string) ?? "",
+          physioId:      (d.data().physioId      as string) ?? "",
+          date:          (d.data().date          as string) ?? "",
+          treatmentType: (d.data().treatmentType as string) ?? "",
+          notes:         (d.data().notes         as string) ?? "",
+          entryMode:     ((d.data().entryMode    as string) === "plan" ? "plan" : "session") as "session" | "plan",
+          numSessions:   (d.data().numSessions   as number | undefined),
+          goals:         (d.data().goals         as string | undefined),
+          createdAt:     (d.data().createdAt     as Timestamp | null) ?? null,
+        }));
+        // Sort newest first client-side
+        entries.sort((a, b) => {
+          const ta = (a.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+          const tb = (b.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+          return tb - ta;
+        });
+        setTreatmentEntries(entries);
+      },
+      (err) => {
+        console.error("Treatment entries subscription error:", err);
+      }
+    );
   }, [patientId, role]);
 
   const handleSaveTreatmentEntry = async () => {
@@ -742,10 +764,6 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
       await addDoc(collection(db, "patientSessions"), {
         patientId,
         physioId:      user?.uid ?? "",
-        // Store all assigned physio IDs so any team member can filter
-        seniorId:      patient?.seniorEditorId ?? null,
-        juniorId:      patient?.juniorId        ?? null,
-        traineeId:     patient?.traineeId       ?? null,
         date:          tpDate,
         treatmentType: tpType,
         notes:         tpNotes.trim(),
@@ -762,12 +780,10 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
       setTimeout(() => setTpSuccess(false), 2500);
     } catch (err: unknown) {
       const e = err as { code?: string; message?: string };
-      console.error("Treatment save error:", e);
-      if (e.code === "permission-denied") {
-        setTpError("Permission denied. Only assigned physios can add treatment entries.");
-      } else {
-        setTpError(e.message ?? "Failed to save. Please try again.");
-      }
+      console.error("Treatment save error:", e.code, e.message);
+      setTpError(e.code === "permission-denied"
+        ? "Permission denied — check Firestore rules for patientSessions."
+        : e.message ?? "Failed to save. Please try again.");
     }
     setTpSaving(false);
   };
@@ -1966,8 +1982,8 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
       {/* ── CLINICAL NOTES (unchanged) ── */}
       {activeSection === "notes" && role !== "patient" && (
         <>
-          {/* Add entry form — any assigned physio or manager can add */}
-          {(canEdit || (role === "physiotherapist" && canViewPatient)) && (
+          {/* Add entry form — manager + senior only */}
+          {canEdit && (
             <div className="ps-sn-form">
               <div className="ps-sn-form-title">Add to Treatment Program</div>
 
