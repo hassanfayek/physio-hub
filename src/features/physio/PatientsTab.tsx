@@ -73,12 +73,6 @@ function DeleteButton({ patientId, onDeleted }: { patientId: string; onDeleted: 
 
 // ─── Staff assignment panel (senior required, junior/trainee optional) ──────────
 
-const RANK_COLORS: Record<string, { bg: string; color: string }> = {
-  senior:  { bg: "#fef3c7", color: "#92400e" },
-  junior:  { bg: "#D6EEF8", color: "#0C3C60" },
-  trainee: { bg: "#f3f4f6", color: "#374151" },
-};
-
 function StaffAssignmentPanel({ patient, physios }: { patient: Patient; physios: Physiotherapist[] }) {
   const [saving, setSaving] = useState<string | null>(null);
   const [err,    setErr]    = useState<string | null>(null);
@@ -568,7 +562,6 @@ export default function PatientsTab({ physioId, isManager = false, onViewPatient
                       const fullName   = `${patient.firstName} ${patient.lastName}`;
                       const initials   = `${patient.firstName[0] ?? ""}${patient.lastName[0] ?? ""}`.toUpperCase();
                       const hue        = fullName.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
-                      const physioName = physioMap.current.get(patient.physioId) ?? (patient.physioId ? "Unknown" : null);
                       const sm         = STATUS_META[patient.status] ?? STATUS_META.active;
 
                       return (
