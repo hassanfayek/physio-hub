@@ -532,10 +532,9 @@ export default function PhysioDashboard() {
   const [sidebarOpen,      setSidebarOpen]      = useState(false);
   const [viewingPatientId, setViewingPatientId] = useState<string | null>(null);
 
-  // ── Resolve clinic manager role ───────────────────────────────────────────
-  // The /users/{uid} document stores the role. If role === "manager" the user
-  // sees all patients and can reassign them. We read this once on mount.
+  // ── Resolve clinic manager role + senior status ──────────────────────────
   const [isManager, setIsManager] = useState(false);
+  const [isSenior,  setIsSenior]  = useState(false);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -543,6 +542,13 @@ export default function PhysioDashboard() {
       if (snap.exists()) {
         const role = snap.data().role as string | undefined;
         setIsManager(role === "manager" || role === "clinic_manager");
+      }
+    });
+    // Read rank from physiotherapists collection
+    getDoc(doc(db, "physiotherapists", user.uid)).then((snap) => {
+      if (snap.exists()) {
+        const rank = snap.data().rank as string | undefined;
+        setIsSenior(rank === "senior");
       }
     });
   }, [user?.uid]);
@@ -900,6 +906,7 @@ export default function PhysioDashboard() {
                     firstName={physio.firstName}
                     lastName={physio.lastName}
                     isManager={isManager}
+                    isSenior={isSenior}
                   />
                 )}
                 {activeTab === "reports"   && <ComingSoon label="Reports" />}

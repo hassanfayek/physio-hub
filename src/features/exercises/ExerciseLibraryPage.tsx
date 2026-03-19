@@ -26,6 +26,7 @@ interface ExerciseLibraryPageProps {
   firstName: string;
   lastName:  string;
   isManager: boolean;
+  isSenior?: boolean;
 }
 
 type ModalMode = "add" | "edit" | "assign";
@@ -384,7 +385,9 @@ function AssignModal({ exercise, patients, physioId, onClose, onAssigned }: Assi
 export default function ExerciseLibraryPage({
   physioId,
   isManager,
+  isSenior = false,
 }: ExerciseLibraryPageProps) {
+  const canEdit = isManager || isSenior;
   const [exercises,   setExercises]   = useState<LibraryExercise[]>([]);
   const [patients,    setPatients]    = useState<Patient[]>([]);
   const [loading,     setLoading]     = useState(true);
@@ -777,12 +780,14 @@ export default function ExerciseLibraryPage({
               {loading ? "Loading…" : `${exercises.length} exercise${exercises.length !== 1 ? "s" : ""} in library`}
             </div>
           </div>
-          <button className="el-add-btn" onClick={() => setModal("add")}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            Add Exercise
-          </button>
+          {canEdit && (
+            <button className="el-add-btn" onClick={() => setModal("add")}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Add Exercise
+            </button>
+          )}
         </div>
 
         {/* Toolbar */}
@@ -828,7 +833,7 @@ export default function ExerciseLibraryPage({
                       ? "Add exercises to the library to get started."
                       : "Try a different search term or category."}
                   </div>
-                  {exercises.length === 0 && (
+                  {exercises.length === 0 && canEdit && (
                     <button className="el-add-btn" onClick={() => setModal("add")}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -894,7 +899,8 @@ export default function ExerciseLibraryPage({
 
                       {/* Actions */}
                       <div className="el-card-actions">
-                        <button className="el-btn-assign" onClick={() => openAssign(ex)}>
+                        {canEdit ? (
+                        <><button className="el-btn-assign" onClick={() => openAssign(ex)}>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                             <circle cx="9" cy="7" r="4"/>
@@ -925,6 +931,9 @@ export default function ExerciseLibraryPage({
                               </svg> Delete</>
                           }
                         </button>
+                        </>) : (
+                          <span style={{ fontSize: 12, color: "#c0bbb4", fontStyle: "italic", padding: "4px 0" }}>View only</span>
+                        )}
                       </div>
                     </div>
                   );
