@@ -710,7 +710,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
     });
   }, [patientId]);
 
-  // Subscribe to treatment entries (same collection as session notes)
+  // Subscribe to treatment entries — visible to all assigned physios + manager
   useEffect(() => {
     if (!patientId || role === "patient") return;
     const q = query(
@@ -742,6 +742,10 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
       await addDoc(collection(db, "patientSessions"), {
         patientId,
         physioId:      user?.uid ?? "",
+        // Store all assigned physio IDs so any team member can filter
+        seniorId:      patient?.seniorEditorId ?? null,
+        juniorId:      patient?.juniorId        ?? null,
+        traineeId:     patient?.traineeId       ?? null,
         date:          tpDate,
         treatmentType: tpType,
         notes:         tpNotes.trim(),
@@ -756,8 +760,14 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
       setTpGoals("");
       setTpSuccess(true);
       setTimeout(() => setTpSuccess(false), 2500);
-    } catch {
-      setTpError("Failed to save. Please try again.");
+    } catch (err: unknown) {
+      const e = err as { code?: string; message?: string };
+      console.error("Treatment save error:", e);
+      if (e.code === "permission-denied") {
+        setTpError("Permission denied. Only assigned physios can add treatment entries.");
+      } else {
+        setTpError(e.message ?? "Failed to save. Please try again.");
+      }
     }
     setTpSaving(false);
   };
@@ -1956,8 +1966,8 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
       {/* ── CLINICAL NOTES (unchanged) ── */}
       {activeSection === "notes" && role !== "patient" && (
         <>
-          {/* Add entry form — manager + senior only */}
-          {canEdit && (
+          {/* Add entry form — any assigned physio or manager can add */}
+          {(canEdit || (role === "physiotherapist" && canViewPatient)) && (
             <div className="ps-sn-form">
               <div className="ps-sn-form-title">Add to Treatment Program</div>
 
