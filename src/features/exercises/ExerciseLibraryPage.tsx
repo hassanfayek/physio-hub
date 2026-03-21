@@ -203,7 +203,7 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
           </div>
 
           <div className="el-modal-ft">
-            <button type="button" className="el-btn-cancel" onClick={onClose}>{assignedCount > 0 ? "Done" : "Cancel"}</button>
+            <button type="button" className="el-btn-cancel" onClick={onClose}>Cancel</button>
             <button type="submit" className="el-btn-primary" disabled={saving}>
               {saving
                 ? <><span className="el-spinner" /> Saving…</>
@@ -226,10 +226,9 @@ interface AssignModalProps {
   physioId:  string;
   isManager: boolean;
   onClose:   () => void;
-  onAssigned: () => void;
 }
 
-function AssignModal({ exercise, patients, physioId, onClose, onAssigned }: AssignModalProps) {
+function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps) {
   const [assignedCount, setAssignedCount] = useState(0);
   const [lastAssigned,  setLastAssigned]  = useState<string>("");
   const [search,   setSearch]   = useState("");
@@ -980,11 +979,6 @@ export default function ExerciseLibraryPage({
           physioId={physioId}
           isManager={isManager}
           onClose={() => { setModal(null); setAssignTarget(null); }}
-          onAssigned={() => {
-            setModal(null);
-            setAssignTarget(null);
-            showToast(`✓ Exercise assigned to patient`);
-          }}
         />
       )}
 
