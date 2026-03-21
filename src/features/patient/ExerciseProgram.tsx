@@ -14,6 +14,7 @@ import {
   assignExerciseToPatient,
   toggleExerciseCompletion,
   removePatientExercise,
+  updatePatientExercise,
   type PatientExercise,
   type LibraryExercise,
 } from "../../services/exerciseService";
@@ -215,6 +216,10 @@ export default function ExerciseProgram({
   const [showPicker,   setShowPicker]   = useState(false);
   const [togglingId,   setTogglingId]   = useState<string | null>(null);
   const [removingId,   setRemovingId]   = useState<string | null>(null);
+  const [editingId,    setEditingId]    = useState<string | null>(null);
+  const [editVals,     setEditVals]     = useState<{ sets: string; reps: string; holdTime: string; notes: string }>({ sets: "", reps: "", holdTime: "", notes: "" });
+  const [editSaving,   setEditSaving]   = useState(false);
+  const [editError,    setEditError]    = useState<string | null>(null);
   const [toast,        setToast]        = useState<string | null>(null);
 
   const canEdit     = canEditProgram(viewerRole, isSenior);
@@ -241,6 +246,30 @@ export default function ExerciseProgram({
     setTogglingId(rec.id);
     await toggleExerciseCompletion(rec.id, !currentCompleted);
     setTogglingId(null);
+  };
+
+  const handleEditOpen = (rec: PatientExercise) => {
+    setEditingId(rec.id);
+    setEditVals({
+      sets:     String(rec.sets),
+      reps:     String(rec.reps),
+      holdTime: String(rec.holdTime ?? 0),
+      notes:    rec.notes ?? "",
+    });
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async (rec: PatientExercise) => {
+    setEditSaving(true); setEditError(null);
+    const result = await updatePatientExercise(rec.id, {
+      sets:     Math.max(1, parseInt(editVals.sets)     || rec.sets),
+      reps:     Math.max(1, parseInt(editVals.reps)     || rec.reps),
+      holdTime: Math.max(0, parseInt(editVals.holdTime) || 0),
+      notes:    editVals.notes.trim(),
+    });
+    setEditSaving(false);
+    if (result.error) { setEditError(result.error); return; }
+    setEditingId(null);
   };
 
   const handleRemove = async (rec: PatientExercise) => {
@@ -351,6 +380,45 @@ export default function ExerciseProgram({
           display: inline-flex; align-items: center; gap: 4px;
           font-size: 11.5px; font-weight: 600; color: #2E8BC0;
           background: #D6EEF8; padding: 2px 8px; border-radius: 100px;
+        }
+        .ep-edit-btn {
+          display: inline-flex; align-items: center; gap: 4px;
+          padding: 3px 10px; border-radius: 7px; border: 1.5px solid #B3DEF0;
+          background: #EAF5FC; font-size: 11.5px; font-weight: 500;
+          color: #2E8BC0; cursor: pointer; transition: all 0.15s;
+          font-family: 'Outfit', sans-serif;
+        }
+        .ep-edit-btn:hover { background: #D6EEF8; }
+        .ep-inline-edit {
+          margin-top: 10px; padding: 12px;
+          background: #f5f3ef; border-radius: 10px;
+          display: flex; flex-direction: column; gap: 8px;
+        }
+        .ep-edit-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .ep-edit-field { display: flex; flex-direction: column; gap: 3px; }
+        .ep-edit-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #9a9590; }
+        .ep-edit-input {
+          padding: 6px 9px; border-radius: 7px;
+          border: 1.5px solid #e5e0d8; background: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 13px; color: #1a1a1a;
+          outline: none; width: 100%;
+        }
+        .ep-edit-input:focus { border-color: #2E8BC0; }
+        .ep-edit-actions { display: flex; gap: 7px; }
+        .ep-edit-save {
+          padding: 6px 14px; border-radius: 8px; border: none;
+          background: #2E8BC0; color: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 500;
+          cursor: pointer; transition: background 0.15s;
+          display: flex; align-items: center; gap: 5px;
+        }
+        .ep-edit-save:hover:not(:disabled) { background: #0C3C60; }
+        .ep-edit-save:disabled { opacity: 0.6; cursor: not-allowed; }
+        .ep-edit-cancel {
+          padding: 6px 12px; border-radius: 8px;
+          border: 1.5px solid #e5e0d8; background: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 12.5px;
+          color: #5a5550; cursor: pointer;
         }
         .ep-remove-btn {
           margin-left: auto;
@@ -657,6 +725,15 @@ export default function ExerciseProgram({
                         </span>
                       )}
 
+                      {canEdit && editingId !== rec.id && (
+                        <button className="ep-edit-btn" onClick={() => handleEditOpen(rec)}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                          Edit
+                        </button>
+                      )}
                       {canEdit && (
                         <button
                           className="ep-remove-btn"
@@ -673,6 +750,46 @@ export default function ExerciseProgram({
                         </button>
                       )}
                     </div>
+                    {canEdit && editingId === rec.id && (
+                      <div className="ep-inline-edit">
+                        <div className="ep-edit-row">
+                          <div className="ep-edit-field">
+                            <label className="ep-edit-label">Sets</label>
+                            <input className="ep-edit-input" type="number" min="1"
+                              value={editVals.sets}
+                              onChange={(e) => setEditVals({ ...editVals, sets: e.target.value })} />
+                          </div>
+                          <div className="ep-edit-field">
+                            <label className="ep-edit-label">Reps</label>
+                            <input className="ep-edit-input" type="number" min="1"
+                              value={editVals.reps}
+                              onChange={(e) => setEditVals({ ...editVals, reps: e.target.value })} />
+                          </div>
+                          <div className="ep-edit-field">
+                            <label className="ep-edit-label">Hold (s)</label>
+                            <input className="ep-edit-input" type="number" min="0"
+                              value={editVals.holdTime}
+                              onChange={(e) => setEditVals({ ...editVals, holdTime: e.target.value })} />
+                          </div>
+                        </div>
+                        <div className="ep-edit-field">
+                          <label className="ep-edit-label">Notes</label>
+                          <input className="ep-edit-input"
+                            value={editVals.notes} placeholder="Physio notes…"
+                            onChange={(e) => setEditVals({ ...editVals, notes: e.target.value })} />
+                        </div>
+                        {editError && <div style={{ fontSize: 12, color: "#b91c1c" }}>{editError}</div>}
+                        <div className="ep-edit-actions">
+                          <button className="ep-edit-save" disabled={editSaving} onClick={() => handleSaveEdit(rec)}>
+                            {editSaving
+                              ? "Saving…"
+                              : <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save</>
+                            }
+                          </button>
+                          <button className="ep-edit-cancel" onClick={() => { setEditingId(null); setEditError(null); }}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                 </div>

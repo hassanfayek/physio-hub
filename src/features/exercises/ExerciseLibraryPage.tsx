@@ -203,7 +203,7 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
           </div>
 
           <div className="el-modal-ft">
-            <button type="button" className="el-btn-cancel" onClick={onClose}>Cancel</button>
+            <button type="button" className="el-btn-cancel" onClick={onClose}>{assignedCount > 0 ? "Done" : "Cancel"}</button>
             <button type="submit" className="el-btn-primary" disabled={saving}>
               {saving
                 ? <><span className="el-spinner" /> Saving…</>
@@ -230,6 +230,8 @@ interface AssignModalProps {
 }
 
 function AssignModal({ exercise, patients, physioId, onClose, onAssigned }: AssignModalProps) {
+  const [assignedCount, setAssignedCount] = useState(0);
+  const [lastAssigned,  setLastAssigned]  = useState<string>("");
   const [search,   setSearch]   = useState("");
   const [selected, setSelected] = useState<Patient | null>(null);
   const [sets,     setSets]     = useState(String(exercise.defaultSets));
@@ -268,7 +270,10 @@ function AssignModal({ exercise, patients, physioId, onClose, onAssigned }: Assi
 
     setSaving(false);
     if ("error" in result && result.error) { setError(result.error); return; }
-    onAssigned();
+    // Stay open — show success feedback and let physio assign to more patients
+    setAssignedCount((c) => c + 1);
+    setLastAssigned(`${selected.firstName} ${selected.lastName}`);
+    setSelected(null);
   };
 
   return (
@@ -361,7 +366,18 @@ function AssignModal({ exercise, patients, physioId, onClose, onAssigned }: Assi
         </div>
 
         <div className="el-modal-ft">
-          <button type="button" className="el-btn-cancel" onClick={onClose}>Cancel</button>
+          <button type="button" className="el-btn-cancel" onClick={onClose}>{assignedCount > 0 ? "Done" : "Cancel"}</button>
+          {assignedCount > 0 && (
+            <div style={{
+              background: "#d8f3dc", border: "1px solid #b7e4c7",
+              borderRadius: 10, padding: "10px 14px",
+              fontSize: 13, color: "#1b4332", marginBottom: 12,
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Assigned to <strong>{lastAssigned}</strong> ({assignedCount} total this session)
+            </div>
+          )}
           <button type="button" className="el-btn-primary" disabled={!selected || saving} onClick={handleAssign}>
             {saving
               ? <><span className="el-spinner" /> Assigning…</>

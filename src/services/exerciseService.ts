@@ -235,6 +235,27 @@ export async function toggleExerciseCompletion(
 
 // ─── Patient Exercises: remove ───────────────────────────────────────────────
 
+export async function updatePatientExercise(
+  recordId: string,
+  updates: Partial<{
+    sets:     number;
+    reps:     number;
+    holdTime: number;
+    notes:    string;
+  }>
+): Promise<{ error?: string }> {
+  try {
+    await updateDoc(doc(db, "patientExercises", recordId), {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    });
+    return {};
+  } catch (err) {
+    const e = err as { message?: string };
+    return { error: e.message ?? "Failed to update exercise." };
+  }
+}
+
 export async function removePatientExercise(
   recordId: string
 ): Promise<{ error?: string }> {
