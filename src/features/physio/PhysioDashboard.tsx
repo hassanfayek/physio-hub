@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, getDoc, deleteDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, deleteDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAuth } from "../../hooks/useAuth";
 import PatientsTab      from "./PatientsTab";
@@ -64,6 +64,13 @@ function TeamTab() {
   const [saving,         setSaving]         = React.useState(false);
   const [expandedUid,    setExpandedUid]    = React.useState<string | null>(null);
   const [deletingUid,    setDeletingUid]    = React.useState<string | null>(null);
+  const [editingPhysio,  setEditingPhysio]  = React.useState<typeof physios[0] | null>(null);
+  const [editForm,       setEditForm]       = React.useState<{
+    firstName: string; lastName: string; rank: string;
+    licenseNumber: string; clinicName: string; phone: string; specializations: string;
+  }>({ firstName: "", lastName: "", rank: "junior", licenseNumber: "", clinicName: "", phone: "", specializations: "" });
+  const [editSaving,     setEditSaving]     = React.useState(false);
+  const [editError,      setEditError]      = React.useState<string | null>(null);
   const [saveError,      setSaveError]      = React.useState<string | null>(null);
   const [saveSuccess,    setSaveSuccess]    = React.useState<string | null>(null);
 
@@ -81,6 +88,32 @@ function TeamTab() {
       alert((err as { message?: string }).message ?? "Failed to delete physiotherapist.");
     }
     setDeletingUid(null);
+  };
+
+  const handleSavePhysioEdit = async () => {
+    if (!editingPhysio) return;
+    setEditSaving(true); setEditError(null);
+    try {
+      const displayName = `Dr. ${editForm.firstName} ${editForm.lastName}`;
+      await updateDoc(doc(db, "physiotherapists", editingPhysio.uid), {
+        firstName:       editForm.firstName,
+        lastName:        editForm.lastName,
+        rank:            editForm.rank,
+        licenseNumber:   editForm.licenseNumber,
+        clinicName:      editForm.clinicName,
+        phone:           editForm.phone,
+        specializations: editForm.specializations.split(",").map((t) => t.trim()).filter(Boolean),
+        updatedAt:       serverTimestamp(),
+      });
+      await updateDoc(doc(db, "users", editingPhysio.uid), {
+        displayName,
+        updatedAt: serverTimestamp(),
+      });
+      setEditingPhysio(null);
+    } catch (err: unknown) {
+      setEditError((err as { message?: string }).message ?? "Failed to save changes.");
+    }
+    setEditSaving(false);
   };
 
   const handleAddPhysio = async () => {
@@ -189,6 +222,14 @@ function TeamTab() {
         }
         .tm-del-btn:hover { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
         .tm-del-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .tm-edit-btn {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 5px 12px; border-radius: 8px;
+          border: 1.5px solid #B3DEF0; background: #EAF5FC;
+          font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500;
+          color: #2E8BC0; cursor: pointer; transition: all 0.15s;
+        }
+        .tm-edit-btn:hover { background: #D6EEF8; }
         .tm-avatar {
           width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
           background: linear-gradient(135deg, #2E8BC0, #5BC0BE);
@@ -314,10 +355,88 @@ function TeamTab() {
                       <span className="tm-info-val">{val}</span>
                     </div>
                   ))}
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #f0ede8" }}>
+                    <button
+                      className="tm-edit-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingPhysio(p);
+                        setEditForm({
+                          firstName:       p.firstName,
+                          lastName:        p.lastName,
+                          rank:            p.rank ?? "junior",
+                          licenseNumber:   p.licenseNumber || "",
+                          clinicName:      p.clinicName || "",
+                          phone:           p.phone || "",
+                          specializations: (p.specializations ?? []).join(", "),
+                        });
+                        setEditError(null);
+                      }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                      Edit Info
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Edit Physio Modal */}
+      {editingPhysio && (
+        <div className="tm-modal-overlay" onClick={() => !editSaving && setEditingPhysio(null)}>
+          <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="tm-modal-title">Edit Physiotherapist</div>
+            <div className="tm-modal-sub">Update Dr. {editingPhysio.firstName} {editingPhysio.lastName}'s information.</div>
+            <div className="tm-field-row">
+              <div className="tm-field"><label className="tm-label">First Name</label>
+                <input className="tm-input" value={editForm.firstName}
+                  onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })} /></div>
+              <div className="tm-field"><label className="tm-label">Last Name</label>
+                <input className="tm-input" value={editForm.lastName}
+                  onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })} /></div>
+            </div>
+            <div className="tm-field">
+              <label className="tm-label">Rank / Level</label>
+              <select className="tm-input" value={editForm.rank}
+                onChange={(e) => setEditForm({ ...editForm, rank: e.target.value })}
+                style={{ cursor: "pointer" }}>
+                <option value="senior">Senior Physiotherapist</option>
+                <option value="junior">Junior Physiotherapist</option>
+                <option value="trainee">Trainee Physiotherapist</option>
+              </select>
+            </div>
+            <div className="tm-field-row">
+              <div className="tm-field"><label className="tm-label">License Number</label>
+                <input className="tm-input" value={editForm.licenseNumber}
+                  onChange={(e) => setEditForm({ ...editForm, licenseNumber: e.target.value })}
+                  placeholder="PT-12345" /></div>
+              <div className="tm-field"><label className="tm-label">Phone</label>
+                <input className="tm-input" value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  placeholder="+20 100 000 0000" /></div>
+            </div>
+            <div className="tm-field"><label className="tm-label">Clinic Name</label>
+              <input className="tm-input" value={editForm.clinicName}
+                onChange={(e) => setEditForm({ ...editForm, clinicName: e.target.value })}
+                placeholder="Physio+ Clinic" /></div>
+            <div className="tm-field"><label className="tm-label">Specializations (comma separated)</label>
+              <input className="tm-input" value={editForm.specializations}
+                onChange={(e) => setEditForm({ ...editForm, specializations: e.target.value })}
+                placeholder="Sports Rehab, Orthopaedics" /></div>
+            {editError && <div className="tm-modal-error">{editError}</div>}
+            <div className="tm-modal-actions">
+              <button className="tm-modal-cancel" onClick={() => setEditingPhysio(null)}>Cancel</button>
+              <button className="tm-modal-save" disabled={editSaving} onClick={handleSavePhysioEdit}>
+                {editSaving ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
