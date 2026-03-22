@@ -227,7 +227,6 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
     try {
       const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
       const uid = credential.user.uid;
-      const secondaryDb = doc(db, "users", uid); // use main db with secondary token
       await setDoc(doc(db, "users", uid), {
         email, role: "patient",
         displayName: `${firstName} ${lastName}`,
