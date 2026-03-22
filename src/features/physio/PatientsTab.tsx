@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, getFirestore } from "firebase/firestore";
 import { secondaryAuth, db } from "../../firebase";
 import {
   subscribeToPhysioPatients,
@@ -227,12 +227,14 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
     try {
       const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
       const uid = credential.user.uid;
-      await setDoc(doc(db, "users", uid), {
+      // Use secondaryDb so the new patient's token authorises the writes (isOwner passes)
+      const secondaryDb = getFirestore(secondaryAuth.app);
+      await setDoc(doc(secondaryDb, "users", uid), {
         email, role: "patient",
         displayName: `${firstName} ${lastName}`,
         createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
       });
-      await setDoc(doc(db, "patients", uid), {
+      await setDoc(doc(secondaryDb, "patients", uid), {
         firstName, lastName, email,
         condition: condition || "",
         physioId: physioId,
