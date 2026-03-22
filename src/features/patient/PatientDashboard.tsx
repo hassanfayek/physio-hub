@@ -261,14 +261,6 @@ export default function PatientDashboard() {
         .pd2-nav-item:hover .pd2-nav-arrow { opacity: 1; }
 
         /* Progress section */
-        .pd2-rehab-section {
-          background: rgba(255,255,255,0.05);
-          border-radius: 12px;
-          padding: 14px;
-          margin-top: 8px;
-          border: 1px solid rgba(255,255,255,0.07);
-        }
-
         /* Sign out in sidebar */
         .pd2-sidebar-signout {
           margin-top: auto;
@@ -297,7 +289,7 @@ export default function PatientDashboard() {
           text-transform: uppercase;
           letter-spacing: 0.08em;
         }
-        .pd2-rehab-bar-row { margin-bottom: 10px; }
+
         .pd2-rehab-bar-top {
           display: flex;
           justify-content: space-between;
@@ -305,7 +297,7 @@ export default function PatientDashboard() {
           color: rgba(255,255,255,0.7);
           margin-bottom: 5px;
         }
-        .pd2-rehab-bar-top span:last-child { color: #5BC0BE; font-weight: 600; }
+
         .pd2-rehab-bar-track {
           height: 5px;
           border-radius: 5px;
@@ -437,7 +429,7 @@ export default function PatientDashboard() {
 
           {/* Centre: logo — truly centred via grid */}
           <div className="pd2-topbar-logo">
-            <img src={logo} alt="Physio+ Hub" style={{ height: 40, width: "auto", objectFit: "contain", display: "block" }} />
+            <img src={logo} alt="Physio+ Hub" style={{ height: 52, width: "auto", objectFit: "contain", display: "block" }} />
           </div>
 
           {/* Right: user chip + sign out */}
@@ -483,25 +475,7 @@ export default function PatientDashboard() {
               ))}
             </div>
 
-            {/* Rehab Progress */}
-            <div className="pd2-rehab-section">
-              <div className="pd2-rehab-title">Rehab Progress</div>
-              {[
-                { label: "Quad Strength", pct: 62 },
-                { label: "Range of Motion", pct: 78 },
-                { label: "Functional Score", pct: 55 },
-              ].map((p) => (
-                <div key={p.label} className="pd2-rehab-bar-row">
-                  <div className="pd2-rehab-bar-top">
-                    <span>{p.label}</span>
-                    <span>{p.pct}%</span>
-                  </div>
-                  <div className="pd2-rehab-bar-track">
-                    <div className="pd2-rehab-bar-fill" style={{ width: `${p.pct}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
+
 
             {/* Sign out */}
             <div className="pd2-sidebar-signout">
