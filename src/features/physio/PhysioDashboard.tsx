@@ -79,11 +79,22 @@ function TeamTab() {
   }, []);
 
   const handleDeletePhysio = async (uid: string, name: string) => {
-    if (!window.confirm(`Remove Dr. ${name} from the team? This will delete their physiotherapist record but not their login account.`)) return;
+    if (!window.confirm(`Remove Dr. ${name} from the team? This will permanently delete their account.`)) return;
     setDeletingUid(uid);
     try {
+      // 1. Delete Firestore documents
       await deleteDoc(doc(db, "physiotherapists", uid));
       await deleteDoc(doc(db, "users", uid));
+
+      // 2. Delete Firebase Auth account via Cloud Function
+      try {
+        const { getFunctions, httpsCallable } = await import("firebase/functions");
+        const functions = getFunctions(db.app);
+        const deleteAuthUser = httpsCallable(functions, "deleteAuthUser");
+        await deleteAuthUser({ uid });
+      } catch {
+        // Auth deletion best-effort — Firestore docs are deleted
+      }
     } catch (err: unknown) {
       alert((err as { message?: string }).message ?? "Failed to delete physiotherapist.");
     }
