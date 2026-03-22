@@ -208,9 +208,26 @@ export async function resetDailyHomeExercises(
   exercises: PatientExercise[]
 ): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
-  const toReset = exercises.filter(
-    (ex) => ex.completed && ex.lastResetDate < today
-  );
+
+  const toReset = exercises.filter((ex) => {
+    if (!ex.completed) return false;
+
+    // If completedAt exists, check if it was from a PREVIOUS day
+    if (ex.completedAt) {
+      const completedDate = (ex.completedAt as unknown as { toDate?: () => Date })
+        ?.toDate?.()
+        ?.toISOString()
+        ?.slice(0, 10);
+      // If completed today, do NOT reset
+      if (completedDate === today) return false;
+    }
+
+    // If no completedAt or completed on a previous day → reset
+    return true;
+  });
+
+  if (toReset.length === 0) return;
+
   await Promise.all(
     toReset.map((ex) =>
       updateDoc(doc(db, "patientExercises", ex.id), {
