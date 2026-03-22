@@ -7,12 +7,13 @@
 //   - Media link per exercise
 // CSS prefix: ep-  (exercise program — no collision with ps- classes)
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   subscribeToPatientExercises,
   subscribeToExerciseLibrary,
   assignExerciseToPatient,
   toggleExerciseCompletion,
+  resetDailyHomeExercises,
   removePatientExercise,
   updatePatientExercise,
   type PatientExercise,
@@ -64,7 +65,14 @@ function LibraryPicker({ patientId, viewerUid, onClose, onAdded }: LibraryPicker
   useEffect(() => {
     setLoading(true);
     return subscribeToExerciseLibrary(
-      (data) => { setExercises(data); setLoading(false); },
+      (data) => {
+        setExercises(data);
+        setLoading(false);
+        if (!resetDoneRef.current && data.length > 0) {
+          resetDoneRef.current = true;
+          resetDailyHomeExercises(data);
+        }
+      },
       ()     => setLoading(false)
     );
   }, []);
@@ -215,6 +223,7 @@ export default function ExerciseProgram({
   const [loading,      setLoading]      = useState(true);
   const [showPicker,   setShowPicker]   = useState(false);
   const [togglingId,   setTogglingId]   = useState<string | null>(null);
+  const resetDoneRef = useRef(false);
   const [removingId,   setRemovingId]   = useState<string | null>(null);
   const [editingId,    setEditingId]    = useState<string | null>(null);
   const [editVals,     setEditVals]     = useState<{ sets: string; reps: string; holdTime: string; notes: string }>({ sets: "", reps: "", holdTime: "", notes: "" });
@@ -230,7 +239,14 @@ export default function ExerciseProgram({
     setLoading(true);
     return subscribeToPatientExercises(
       patientId,
-      (data) => { setExercises(data); setLoading(false); },
+      (data) => {
+        setExercises(data);
+        setLoading(false);
+        if (!resetDoneRef.current && data.length > 0) {
+          resetDoneRef.current = true;
+          resetDailyHomeExercises(data);
+        }
+      },
       ()     => setLoading(false)
     );
   }, [patientId]);

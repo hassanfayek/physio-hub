@@ -209,10 +209,7 @@ export async function resetDailyHomeExercises(
 ): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   const toReset = exercises.filter(
-    (ex) =>
-      ex.programType === "home" &&
-      ex.completed &&
-      ex.lastResetDate < today
+    (ex) => ex.completed && ex.lastResetDate < today
   );
   await Promise.all(
     toReset.map((ex) =>

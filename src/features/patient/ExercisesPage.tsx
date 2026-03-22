@@ -4,7 +4,7 @@
 // Two tabs: Clinic Exercises | Home Program (filtered by programType field).
 // Checkbox writes completed + completedAt to Firestore via toggleExerciseCompletion.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import {
   subscribeToPatientExercises,
@@ -157,6 +157,7 @@ export default function ExercisesPage() {
   // Issue 2: Clinic / Home tab state
   const [activeTab,  setActiveTab]  = useState<"clinic" | "home">("clinic");
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const resetDoneRef = useRef(false);  // ensure daily reset only runs once per session
 
   // ── Issue 1: Realtime query on patientExercises collection ────────────────
   useEffect(() => {
@@ -167,8 +168,11 @@ export default function ExercisesPage() {
       (data) => {
         setExercises(data);
         setLoading(false);
-        // Auto-reset home exercises if a new day has started
-        resetDailyHomeExercises(data);
+        // Reset completed exercises once per session (not on every snapshot)
+        if (!resetDoneRef.current && data.length > 0) {
+          resetDoneRef.current = true;
+          resetDailyHomeExercises(data);
+        }
       },
       (err)  => { setError(err.message ?? "Failed to load exercises."); setLoading(false); }
     );
@@ -448,6 +452,7 @@ export default function ExercisesPage() {
                 exercise={ex}
                 onToggle={handleToggle}
                 toggling={togglingId === ex.id}
+                canToggle={true}
               />
             ))}
           </div>
