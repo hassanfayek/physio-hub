@@ -581,9 +581,6 @@ export default function PhysioDashboard() {
         .phd-root {
           min-height: 100vh; background: #f5f3ef;
           font-family: 'Outfit', sans-serif;
-          display: grid; grid-template-rows: 62px 1fr;
-        }
-
         .phd-root {
           min-height: 100vh; background: #f5f3ef;
           font-family: 'Outfit', sans-serif;
@@ -736,27 +733,28 @@ export default function PhysioDashboard() {
 
         @media (max-width: 768px) {
           .phd-hamburger { display: flex; }
-          .phd-topbar { grid-template-columns: auto 1fr auto; }
 
+          /* Body collapses to single column */
           .phd-body { grid-template-columns: 1fr; }
 
-          /* Sidebar becomes a fixed drawer on mobile */
+          /* Sidebar: display:none by default, slides in as drawer when .open */
           .phd-sidebar {
+            display: none;
             position: fixed;
             top: 0; left: 0;
             height: 100vh;
             width: 260px;
             z-index: 100;
-            transform: translateX(-100%);
-            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: none;
+            transform: translateX(0);
+            transition: none;
+            background: #0C3C60;
           }
           .phd-sidebar.open {
-            transform: translateX(0);
+            display: flex;
             box-shadow: 4px 0 24px rgba(0,0,0,0.15);
           }
 
-          .phd-main { padding: 20px 16px; }
+          .phd-main { padding: 24px 20px; }
 
           /* Shrink user chip on mobile */
           .phd-user-name { display: none; }

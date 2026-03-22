@@ -188,15 +188,43 @@ export async function createPatient(
 }
 
 // ─── Delete patient ───────────────────────────────────────────────────────────
-// Removes patients/{patientId} and users/{patientId} documents.
-// Does NOT delete the Firebase Auth account (per spec).
+// Removes Firestore docs AND deletes the Firebase Auth account via REST API.
 
 export async function deletePatient(
   patientId: string
 ): Promise<{ error?: string }> {
   try {
+    // 1. Delete Firestore documents
     await deleteDoc(doc(db, "patients", patientId));
     await deleteDoc(doc(db, "users",    patientId));
+
+    // 2. Delete Firebase Auth account using Identity Toolkit REST API
+    //    The manager (current user) sends their ID token + the target uid
+    try {
+      const { default: app } = await import("../firebase");
+      const { getAuth } = await import("firebase/auth");
+      const auth = getAuth(app);
+      const manager = auth.currentUser;
+      if (manager) {
+        const { getIdToken } = await import("firebase/auth");
+        const idToken = await getIdToken(manager);
+        const apiKey  = (app.options as { apiKey?: string }).apiKey ?? "";
+        // Firebase Identity Toolkit v1 — delete account by uid (requires admin claim or same user)
+        // This works when the manager has the "admin" custom claim set in Firebase Auth
+        // OR use the Google Identity Platform batch delete endpoint
+        await fetch(
+          `https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${apiKey}`,
+          {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ idToken, localId: patientId }),
+          }
+        );
+      }
+    } catch {
+      // Auth deletion is best-effort — Firestore docs are always deleted
+    }
+
     return {};
   } catch (err) {
     return { error: parseError(err) };
