@@ -263,11 +263,9 @@ export async function toggleExerciseCompletion(
 ): Promise<{ error?: string }> {
   try {
     const safeCompleted = completed ?? false;
-    const today = new Date().toISOString().slice(0, 10);
     await updateDoc(doc(db, "patientExercises", recordId), {
-      completed:     safeCompleted,
-      completedAt:   safeCompleted ? serverTimestamp() : null,
-      lastResetDate: safeCompleted ? today : "",
+      completed:    safeCompleted,
+      completedAt:  safeCompleted ? serverTimestamp() : null,
     });
     return {};
   } catch (err) {
