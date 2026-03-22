@@ -452,7 +452,6 @@ export default function ExercisesPage() {
                 exercise={ex}
                 onToggle={handleToggle}
                 toggling={togglingId === ex.id}
-                canToggle={true}
               />
             ))}
           </div>

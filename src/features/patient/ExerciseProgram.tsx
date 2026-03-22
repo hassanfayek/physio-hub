@@ -65,14 +65,7 @@ function LibraryPicker({ patientId, viewerUid, onClose, onAdded }: LibraryPicker
   useEffect(() => {
     setLoading(true);
     return subscribeToExerciseLibrary(
-      (data) => {
-        setExercises(data);
-        setLoading(false);
-        if (!resetDoneRef.current && data.length > 0) {
-          resetDoneRef.current = true;
-          resetDailyHomeExercises(data);
-        }
-      },
+      (data) => { setExercises(data); setLoading(false); },
       ()     => setLoading(false)
     );
   }, []);
