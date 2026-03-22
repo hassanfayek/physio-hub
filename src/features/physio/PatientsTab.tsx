@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc, serverTimestamp, getFirestore } from "firebase/firestore";
-import { secondaryAuth, db } from "../../firebase";
+import { secondaryAuth } from "../../firebase";
 import {
   subscribeToPhysioPatients,
   subscribeToAllPatients,
