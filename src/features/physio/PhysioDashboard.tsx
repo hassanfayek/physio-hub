@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, getDoc, deleteDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, deleteDoc, setDoc, updateDoc, serverTimestamp, getFirestore } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAuth } from "../../hooks/useAuth";
 import PatientsTab      from "./PatientsTab";
@@ -146,8 +146,9 @@ function TeamTab() {
 
       const now = serverTimestamp();
 
-      // Write Firestore docs using the main db (manager's Firestore rules apply)
-      await setDoc(doc(db, "users", newUser.uid), {
+      // Use secondaryDb so the new physio's token authorises the writes (isOwner passes)
+      const secondaryDb = getFirestore(secondaryAuth.app);
+      await setDoc(doc(secondaryDb, "users", newUser.uid), {
         email:       physioForm.email,
         role:        "physiotherapist",
         displayName,
@@ -155,7 +156,7 @@ function TeamTab() {
         updatedAt:   now,
       });
 
-      await setDoc(doc(db, "physiotherapists", newUser.uid), {
+      await setDoc(doc(secondaryDb, "physiotherapists", newUser.uid), {
         firstName:       physioForm.firstName,
         lastName:        physioForm.lastName,
         licenseNumber:   physioForm.licenseNumber,
