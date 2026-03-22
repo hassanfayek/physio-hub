@@ -188,7 +188,8 @@ export async function createPatient(
 }
 
 // ─── Delete patient ───────────────────────────────────────────────────────────
-// Removes Firestore docs AND deletes the Firebase Auth account via REST API.
+// Removes Firestore docs AND calls the deleteAuthUser Cloud Function to delete
+// the Firebase Auth account (requires Admin SDK — only possible server-side).
 
 export async function deletePatient(
   patientId: string
@@ -198,31 +199,15 @@ export async function deletePatient(
     await deleteDoc(doc(db, "patients", patientId));
     await deleteDoc(doc(db, "users",    patientId));
 
-    // 2. Delete Firebase Auth account using Identity Toolkit REST API
-    //    The manager (current user) sends their ID token + the target uid
+    // 2. Call Cloud Function to delete Auth account
     try {
+      const { getFunctions, httpsCallable } = await import("firebase/functions");
       const { default: app } = await import("../firebase");
-      const { getAuth } = await import("firebase/auth");
-      const auth = getAuth(app);
-      const manager = auth.currentUser;
-      if (manager) {
-        const { getIdToken } = await import("firebase/auth");
-        const idToken = await getIdToken(manager);
-        const apiKey  = (app.options as { apiKey?: string }).apiKey ?? "";
-        // Firebase Identity Toolkit v1 — delete account by uid (requires admin claim or same user)
-        // This works when the manager has the "admin" custom claim set in Firebase Auth
-        // OR use the Google Identity Platform batch delete endpoint
-        await fetch(
-          `https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${apiKey}`,
-          {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ idToken, localId: patientId }),
-          }
-        );
-      }
+      const functions = getFunctions(app);
+      const deleteAuthUser = httpsCallable(functions, "deleteAuthUser");
+      await deleteAuthUser({ uid: patientId });
     } catch {
-      // Auth deletion is best-effort — Firestore docs are always deleted
+      // Auth deletion is best-effort — Firestore docs are already deleted
     }
 
     return {};
