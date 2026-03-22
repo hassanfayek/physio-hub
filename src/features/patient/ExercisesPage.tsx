@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import {
   subscribeToPatientExercises,
+  resetDailyHomeExercises,
   toggleExerciseCompletion,
   type PatientExercise,
 } from "../../services/exerciseService";
@@ -39,12 +40,10 @@ function ExerciseCard({
   exercise,
   onToggle,
   toggling,
-  canToggle,
 }: {
-  exercise:  PatientExercise;
-  onToggle:  (rec: PatientExercise) => void;
-  toggling:  boolean;
-  canToggle: boolean;   // patients can only toggle home; clinic requires physio
+  exercise: PatientExercise;
+  onToggle: (rec: PatientExercise) => void;
+  toggling: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -127,33 +126,19 @@ function ExerciseCard({
             </button>
           )}
 
-          {/* Complete button — only shown when canToggle */}
-          {canToggle ? (
-            <button
-              className={`ep-complete-btn ${completed ? "ep-complete-btn-done" : ""} ${toggling ? "ep-complete-btn-busy" : ""}`}
-              disabled={toggling}
-              onClick={(e) => { e.stopPropagation(); onToggle(exercise); }}
-            >
-              {toggling
-                ? <><span className="ep-btn-spin" /> Saving…</>
-                : completed
-                  ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Completed — tap to undo</>
-                  : "☐ Mark as Complete"
-              }
-            </button>
-          ) : (
-            completed && (
-              <div style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "8px 12px", borderRadius: 10,
-                background: "#D6EEF8", color: "#0C3C60",
-                fontSize: 13, fontWeight: 500,
-              }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                Completed
-              </div>
-            )
-          )}
+          {/* Issue 3: checkbox writes to Firestore */}
+          <button
+            className={`ep-complete-btn ${completed ? "ep-complete-btn-done" : ""} ${toggling ? "ep-complete-btn-busy" : ""}`}
+            disabled={toggling}
+            onClick={(e) => { e.stopPropagation(); onToggle(exercise); }}
+          >
+            {toggling
+              ? <><span className="ep-btn-spin" /> Saving…</>
+              : completed
+                ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Completed — tap to undo</>
+                : "☐ Mark as Complete"
+            }
+          </button>
         </div>
       )}
     </div>
@@ -179,7 +164,12 @@ export default function ExercisesPage() {
     setLoading(true);
     const unsub = subscribeToPatientExercises(
       patient.uid,
-      (data) => { setExercises(data); setLoading(false); },
+      (data) => {
+        setExercises(data);
+        setLoading(false);
+        // Auto-reset home exercises if a new day has started
+        resetDailyHomeExercises(data);
+      },
       (err)  => { setError(err.message ?? "Failed to load exercises."); setLoading(false); }
     );
     return () => unsub();
@@ -458,7 +448,6 @@ export default function ExercisesPage() {
                 exercise={ex}
                 onToggle={handleToggle}
                 toggling={togglingId === ex.id}
-                canToggle={ex.programType === "home"}
               />
             ))}
           </div>

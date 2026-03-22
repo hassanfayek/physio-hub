@@ -44,10 +44,11 @@ export interface PatientExercise {
   notes:       string;
   createdBy:   string;
   createdAt:   Timestamp | null;
-  completed:   boolean;
-  completedAt: Timestamp | null;
-  mediaUrl:    string;   // copied from library at assign-time for display
-  programType: "clinic" | "home";  // defaults to "clinic"
+  completed:     boolean;
+  completedAt:   Timestamp | null;
+  lastResetDate: string;   // YYYY-MM-DD of last completion reset
+  mediaUrl:      string;
+  programType:   "clinic" | "home";
 }
 
 export interface CreateExercisePayload {
@@ -111,9 +112,10 @@ function docToPatientExercise(id: string, data: Record<string, unknown>): Patien
     notes:        (data.notes        as string)  ?? "",
     createdBy:    (data.createdBy    as string)  ?? "",
     createdAt:    (data.createdAt    as Timestamp | null) ?? null,
-    completed:    (data.completed    as boolean) ?? false,
-    completedAt:  (data.completedAt  as Timestamp | null) ?? null,
-    mediaUrl:     (data.mediaUrl     as string)  ?? "",
+    completed:     (data.completed     as boolean) ?? false,
+    completedAt:   (data.completedAt   as Timestamp | null) ?? null,
+    lastResetDate: (data.lastResetDate as string) ?? "",
+    mediaUrl:      (data.mediaUrl      as string)  ?? "",
     programType:  ((data.programType as string) === "home" ? "home" : "clinic") as "clinic" | "home",
   };
 }
@@ -199,6 +201,30 @@ export async function assignExerciseToPatient(
 
 // ─── Patient Exercises: realtime listener ─────────────────────────────────────
 
+// ─── Daily reset: called on subscribe to auto-reset completed home exercises ──
+// Checks each home exercise — if lastResetDate < today, resets completed to false.
+
+export async function resetDailyHomeExercises(
+  exercises: PatientExercise[]
+): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  const toReset = exercises.filter(
+    (ex) =>
+      ex.programType === "home" &&
+      ex.completed &&
+      ex.lastResetDate < today
+  );
+  await Promise.all(
+    toReset.map((ex) =>
+      updateDoc(doc(db, "patientExercises", ex.id), {
+        completed:     false,
+        completedAt:   null,
+        lastResetDate: today,
+      })
+    )
+  );
+}
+
 export function subscribeToPatientExercises(
   patientId: string,
   onData:    (exercises: PatientExercise[]) => void,
@@ -223,9 +249,11 @@ export async function toggleExerciseCompletion(
 ): Promise<{ error?: string }> {
   try {
     const safeCompleted = completed ?? false;
+    const today = new Date().toISOString().slice(0, 10);
     await updateDoc(doc(db, "patientExercises", recordId), {
-      completed:   safeCompleted,
-      completedAt: safeCompleted ? serverTimestamp() : null,
+      completed:     safeCompleted,
+      completedAt:   safeCompleted ? serverTimestamp() : null,
+      lastResetDate: safeCompleted ? today : "",
     });
     return {};
   } catch (err) {

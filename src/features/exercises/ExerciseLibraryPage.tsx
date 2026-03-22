@@ -90,8 +90,10 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
         }
       : BLANK_FORM
   );
-  const [saving,  setSaving]  = useState(false);
-  const [error,   setError]   = useState<string | null>(null);
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState<string | null>(null);
+  const [addedCount,  setAddedCount]  = useState(0);
+  const [lastAdded,   setLastAdded]   = useState<string>("");
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -126,7 +128,14 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
 
     setSaving(false);
     if ("error" in result && result.error) { setError(result.error); return; }
-    onSaved();
+    if (mode === "edit") {
+      onSaved();
+    } else {
+      setAddedCount((c) => c + 1);
+      setLastAdded(form.name.trim());
+      setForm(BLANK_FORM);
+      setError(null);
+    }
   };
 
   return (
@@ -202,12 +211,23 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
 
           </div>
 
+          {addedCount > 0 && mode === "add" && (
+            <div style={{
+              background: "#d8f3dc", border: "1px solid #b7e4c7",
+              borderRadius: 10, padding: "10px 14px", margin: "0 0 12px",
+              fontSize: 13, color: "#1b4332",
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <strong>{lastAdded}</strong> added — {addedCount} exercise{addedCount > 1 ? "s" : ""} this session
+            </div>
+          )}
           <div className="el-modal-ft">
-            <button type="button" className="el-btn-cancel" onClick={onClose}>Cancel</button>
+            <button type="button" className="el-btn-cancel" onClick={onClose}>{mode === "add" && addedCount > 0 ? `Done (${addedCount} added)` : "Cancel"}</button>
             <button type="submit" className="el-btn-primary" disabled={saving}>
               {saving
                 ? <><span className="el-spinner" /> Saving…</>
-                : mode === "add" ? "Add Exercise" : "Save Changes"
+                : mode === "add" ? (addedCount > 0 ? "Add Another" : "Add Exercise") : "Save Changes"
               }
             </button>
           </div>
@@ -966,7 +986,7 @@ export default function ExerciseLibraryPage({
           onSaved={() => {
             setModal(null);
             setEditTarget(null);
-            showToast(modal === "add" ? "✓ Exercise added to library" : "✓ Exercise updated");
+            showToast("✓ Exercise updated");
           }}
         />
       )}
