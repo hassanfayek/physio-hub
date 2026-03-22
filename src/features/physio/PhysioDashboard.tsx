@@ -888,6 +888,7 @@ export default function PhysioDashboard() {
                   <PatientsTab
                     physioId={physio.uid}
                     isManager={isManager}
+                    isSenior={isSenior}
                     onViewPatient={(id) => setViewingPatientId(id)}
                   />
                 )}
