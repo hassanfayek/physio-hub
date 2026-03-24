@@ -142,6 +142,14 @@ export default function MonthView({
           animation: mvShimmer 1.4s ease infinite;
         }
         @keyframes mvShimmer { to { background-position: -200% 0; } }
+
+        @media (max-width: 640px) {
+          .mv-day-hdr { font-size: 9px; letter-spacing: 0.04em; padding: 4px 0; }
+          .mv-cell { min-height: 46px; padding: 5px 3px 3px; }
+          .mv-cell-num { width: 20px; height: 20px; font-size: 11px; margin-bottom: 3px; }
+          .mv-count { font-size: 9.5px; padding: 1px 4px; }
+          .mv-busy-bar { margin-bottom: 3px; }
+        }
       `}</style>
 
       <div className="mv-root">

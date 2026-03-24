@@ -1,6 +1,7 @@
 // FILE: src/features/schedule/WeekView.tsx
 
 import React, { useState, useEffect } from "react";
+import { Check } from "lucide-react";
 import {
   subscribeToAppointmentsByWeek,
   fmtHour12,
@@ -270,9 +271,7 @@ export default function WeekView({
 
       {toast && (
         <div className="wv-toast">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
+          <Check size={14} strokeWidth={2.5} />
           {toast}
         </div>
       )}

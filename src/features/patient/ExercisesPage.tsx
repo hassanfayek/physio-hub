@@ -13,6 +13,7 @@ import {
   type PatientExercise,
 } from "../../services/exerciseService";
 import type { PatientProfile } from "../../services/authService";
+import { Check, Dumbbell, ChevronDown, Play } from "lucide-react";
 
 // ─── Skeleton card ────────────────────────────────────────────────────────────
 
@@ -56,8 +57,8 @@ function ExerciseCard({
         <div className="ep-card-left">
           <div className="ep-card-icon">
             {completed
-              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2E8BC0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a9590" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6.5 6.5h.01M17.5 6.5h.01M6.5 17.5h.01M17.5 17.5h.01"/><path d="M3 6.5h3.5M17.5 6.5H21M3 17.5h3.5M17.5 17.5H21"/><path d="M6.5 3v3.5M6.5 17.5V21M17.5 3v3.5M17.5 17.5V21"/><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></svg>
+              ? <Check size={18} strokeWidth={2.5} color="#2E8BC0" />
+              : <Dumbbell size={18} strokeWidth={1.8} color="#9a9590" />
             }
           </div>
           <div>
@@ -73,13 +74,10 @@ function ExerciseCard({
           {completed && (
             <span className="ep-diff-badge" style={{ background: "#D6EEF8", color: "#0C3C60" }}>Done</span>
           )}
-          <svg
-            width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="#9a9590" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          <ChevronDown
+            size={14} strokeWidth={2} color="#9a9590"
             style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }}
-          >
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
+          />
         </div>
       </div>
 
@@ -119,9 +117,7 @@ function ExerciseCard({
                 window.open(url, "_blank", "noopener,noreferrer");
               }}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="5 3 19 12 5 21 5 3"/>
-              </svg>
+              <Play size={13} strokeWidth={2} />
               Watch Video
             </button>
           )}
@@ -135,7 +131,7 @@ function ExerciseCard({
             {toggling
               ? <><span className="ep-btn-spin" /> Saving…</>
               : completed
-                ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Completed — tap to undo</>
+                ? <><Check size={14} strokeWidth={2.5} /> Completed — tap to undo</>
                 : "☐ Mark as Complete"
             }
           </button>

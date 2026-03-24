@@ -3,6 +3,7 @@
 import { useState, useEffect, type FormEvent, type ChangeEvent } from "react";
 import { createPatient, type CreatePatientPayload, type Physiotherapist } from "../services/patientService";
 import type { Patient } from "../services/patientService";
+import { X, AlertCircle, Eye, EyeOff, ArrowLeft, ArrowRight } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -324,9 +325,7 @@ export default function AddPatientModal({
               </div>
             </div>
             <button className="apm-close" onClick={onClose} aria-label="Close">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
+              <X size={14} strokeWidth={2.5} />
             </button>
           </div>
 
@@ -346,9 +345,7 @@ export default function AddPatientModal({
             <div className="apm-body">
               {error && (
                 <div className="apm-error">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                  </svg>
+                  <AlertCircle size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 2 }} />
                   {error}
                 </div>
               )}
@@ -392,9 +389,7 @@ export default function AddPatientModal({
               {step === 2 && (
                 <>
                   <div className="apm-info-box">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
-                      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                    </svg>
+                    <AlertCircle size={15} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
                     <span>
                       A login account will be created for <strong>{form.firstName} {form.lastName}</strong> using <strong>{form.email}</strong>. Share the password securely.
                     </span>
@@ -426,8 +421,8 @@ export default function AddPatientModal({
                       />
                       <button type="button" className="apm-pw-btn" onClick={() => setShowPw(!showPw)}>
                         {showPw
-                          ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                          : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                          ? <EyeOff size={15} strokeWidth={2} />
+                          : <Eye size={15} strokeWidth={2} />
                         }
                       </button>
                     </div>
@@ -441,9 +436,7 @@ export default function AddPatientModal({
               {step === 1
                 ? <button type="button" className="apm-cancel" onClick={onClose}>Cancel</button>
                 : <button type="button" className="apm-back" onClick={() => setStep(1)}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M19 12H5M12 19l-7-7 7-7"/>
-                    </svg>
+                    <ArrowLeft size={13} strokeWidth={2.5} />
                     Back
                   </button>
               }
@@ -451,7 +444,7 @@ export default function AddPatientModal({
                 {loading
                   ? <><div className="apm-spinner" /> Creating…</>
                   : step === 1
-                    ? <>Continue <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></>
+                    ? <>Continue <ArrowRight size={13} strokeWidth={2.5} /></>
                     : <>Create Patient Account</>
                 }
               </button>

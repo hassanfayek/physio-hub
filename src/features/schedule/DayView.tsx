@@ -1,6 +1,7 @@
 // FILE: src/features/schedule/DayView.tsx
 
 import { useState, useEffect } from "react";
+import { ArrowLeft, Plus, Trash2, Check } from "lucide-react";
 import {
   subscribeToAppointmentsByDay,
   deleteAppointment,
@@ -253,9 +254,7 @@ export default function DayView({
           <div style={{ display: "flex", gap: 10 }}>
             {onBack && (
               <button className="dv-back" onClick={onBack}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M19 12H5M12 19l-7-7 7-7"/>
-                </svg>
+                <ArrowLeft size={13} strokeWidth={2.5} />
                 Back
               </button>
             )}
@@ -316,9 +315,7 @@ export default function DayView({
                         disabled={isFull}
                         type="button"
                       >
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                        </svg>
+                        <Plus size={11} strokeWidth={2.5} />
                         {isFull ? "Full" : "Book"}
                       </button>
                     </div>
@@ -375,12 +372,7 @@ export default function DayView({
                                   >
                                     {deletingId === a.id
                                       ? <><span style={{ width: 12, height: 12, border: "2px solid #e5e0d8", borderTopColor: "#b91c1c", borderRadius: "50%", display: "block", animation: "dvDelSpin 0.7s linear infinite" }} /> Deleting…</>
-                                      : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                          <polyline points="3 6 5 6 21 6"/>
-                                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                                          <path d="M10 11v6M14 11v6"/>
-                                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                                        </svg> Delete</>
+                                      : <><Trash2 size={12} strokeWidth={2} /> Delete</>
                                     }
                                   </button>
                                 )}
@@ -418,9 +410,7 @@ export default function DayView({
 
       {toast && (
         <div className="dv-toast">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
+          <Check size={14} strokeWidth={2.5} />
           {toast}
         </div>
       )}

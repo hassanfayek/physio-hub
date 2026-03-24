@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import type { Patient } from "../services/patientService";
+import { ChevronUp, ChevronDown, Search, RefreshCw, Plus, AlertCircle } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,19 +69,10 @@ function Avatar({ name }: { name: string }) {
 // ─── Sort icon ────────────────────────────────────────────────────────────────
 
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
-  return (
-    <svg
-      width="12" height="12" viewBox="0 0 24 24"
-      fill="none" stroke="currentColor" strokeWidth="2.5"
-      strokeLinecap="round" strokeLinejoin="round"
-      style={{ opacity: active ? 1 : 0.3, transition: "opacity 0.15s" }}
-    >
-      {dir === "asc" || !active
-        ? <><polyline points="18 15 12 9 6 15"/></>
-        : <><polyline points="6 9 12 15 18 9"/></>
-      }
-    </svg>
-  );
+  const style = { opacity: active ? 1 : 0.3, transition: "opacity 0.15s" } as const;
+  return dir === "asc" || !active
+    ? <ChevronUp size={12} strokeWidth={2.5} style={style} />
+    : <ChevronDown size={12} strokeWidth={2.5} style={style} />;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -473,9 +465,7 @@ export default function PatientsList({
         <div className="pl-toolbar">
           <div className="pl-toolbar-top">
             <div className="pl-search-wrap">
-              <svg className="pl-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
+              <Search className="pl-search-icon" size={15} strokeWidth={2} />
               <input
                 className="pl-search"
                 placeholder="Search patients…"
@@ -485,15 +475,11 @@ export default function PatientsList({
             </div>
             <div className="pl-toolbar-right">
               <button className="pl-refresh-btn" onClick={onRefresh} title="Refresh list">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                </svg>
+                <RefreshCw size={14} strokeWidth={2} />
                 Refresh
               </button>
               <button className="pl-add-btn" onClick={onAddPatient}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
+                <Plus size={14} strokeWidth={2.5} />
                 Add Patient
               </button>
             </div>
@@ -516,9 +502,7 @@ export default function PatientsList({
         <div className="pl-card">
           {error && (
             <div className="pl-error-banner">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
+              <AlertCircle size={16} strokeWidth={2} />
               {error}
               <button className="pl-refresh-btn" style={{ marginLeft: "auto" }} onClick={onRefresh}>Retry</button>
             </div>
@@ -571,9 +555,7 @@ export default function PatientsList({
                         </div>
                         {!search && (
                           <button className="pl-add-btn" style={{ margin: "0 auto" }} onClick={onAddPatient}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                            </svg>
+                            <Plus size={14} strokeWidth={2.5} />
                             Add First Patient
                           </button>
                         )}

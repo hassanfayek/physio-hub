@@ -22,6 +22,7 @@ import {
   type PatientExercise,
 } from "../../services/exerciseService";
 import type { PatientProfile } from "../../services/authService";
+import { Dumbbell, Home, ChevronRight, Calendar, FileText } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -331,12 +332,7 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
           {/* ── Section 3: Today's Exercises (clinic) ── */}
           <div className="pth-card">
             <div className="pth-stat-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6.5 6.5h.01M17.5 6.5h.01M6.5 17.5h.01M17.5 17.5h.01"/>
-                <path d="M3 6.5h3.5M17.5 6.5H21M3 17.5h3.5M17.5 17.5H21"/>
-                <path d="M6.5 3v3.5M6.5 17.5V21M17.5 3v3.5M17.5 17.5V21"/>
-                <rect x="6.5" y="6.5" width="11" height="11" rx="2"/>
-              </svg>
+              <Dumbbell size={20} strokeWidth={1.8} />
             </div>
             <div className="pth-card-label">Today's Exercises</div>
             {exLoading ? (
@@ -349,9 +345,7 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
                 </div>
                 <button className="pth-stat-link" onClick={() => onNavigate("exercises")}>
                   View Exercises
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9 18l6-6-6-6"/>
-                  </svg>
+                  <ChevronRight size={12} strokeWidth={2.5} />
                 </button>
               </>
             )}
@@ -360,10 +354,7 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
           {/* ── Section 4: Home Program ── */}
           <div className="pth-card">
             <div className="pth-stat-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                <polyline points="9 22 9 12 15 12 15 22"/>
-              </svg>
+              <Home size={20} strokeWidth={1.8} />
             </div>
             <div className="pth-card-label">Home Program</div>
             {exLoading ? (
@@ -376,9 +367,7 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
                 </div>
                 <button className="pth-stat-link" onClick={() => onNavigate("exercises")}>
                   View Program
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9 18l6-6-6-6"/>
-                  </svg>
+                  <ChevronRight size={12} strokeWidth={2.5} />
                 </button>
               </>
             )}
@@ -426,28 +415,15 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
             <div className="pth-card-label">Quick Actions</div>
             <div className="pth-actions-row">
               <button className="pth-action-btn primary" onClick={() => onNavigate("exercises")}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M6.5 6.5h.01M17.5 6.5h.01M6.5 17.5h.01M17.5 17.5h.01"/>
-                  <path d="M3 6.5h3.5M17.5 6.5H21M3 17.5h3.5M17.5 17.5H21"/>
-                  <path d="M6.5 3v3.5M6.5 17.5V21M17.5 3v3.5M17.5 17.5V21"/>
-                  <rect x="6.5" y="6.5" width="11" height="11" rx="2"/>
-                </svg>
+                <Dumbbell size={15} strokeWidth={2} />
                 View Exercises
               </button>
               <button className="pth-action-btn" onClick={() => onNavigate("appointments")}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2"/>
-                  <path d="M16 2v4M8 2v4M3 10h18"/>
-                </svg>
+                <Calendar size={15} strokeWidth={2} />
                 Book Appointment
               </button>
               <button className="pth-action-btn" onClick={() => onNavigate("sheet")}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                  <line x1="16" y1="13" x2="8" y2="13"/>
-                  <line x1="16" y1="17" x2="8" y2="17"/>
-                </svg>
+                <FileText size={15} strokeWidth={2} />
                 Patient Sheet
               </button>
             </div>

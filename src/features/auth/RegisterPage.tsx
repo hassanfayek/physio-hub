@@ -1,6 +1,7 @@
 // src/features/auth/RegisterPage.tsx
 import { useState, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { AlertCircle, User, Stethoscope, Eye, EyeOff, Check, X, ArrowRight, ArrowLeft } from "lucide-react";
 import {
   registerPatient,
   registerPhysio,
@@ -499,9 +500,7 @@ export default function RegisterPage() {
             {/* Error */}
             {error && (
               <div className="rp-error">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
+                <AlertCircle size={16} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
                 {error}
               </div>
             )}
@@ -522,8 +521,8 @@ export default function RegisterPage() {
                       onClick={() => { setRole(r); setError(null); }}
                     >
                       {r === "patient"
-                        ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                        ? <User size={15} strokeWidth={2} />
+                        : <Stethoscope size={15} strokeWidth={2} />
                       }
                       {r === "patient" ? "Patient" : "Physiotherapist"}
                     </button>
@@ -573,8 +572,8 @@ export default function RegisterPage() {
                       />
                       <button type="button" className="rp-pw-toggle" onClick={() => setShowPw(!showPw)}>
                         {showPw
-                          ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                          : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                          ? <EyeOff size={15} strokeWidth={2} />
+                          : <Eye size={15} strokeWidth={2} />
                         }
                       </button>
                     </div>
@@ -607,8 +606,8 @@ export default function RegisterPage() {
                     {confirmPw && (
                       <div className="rp-pw-match" style={{ color: currentPassword === confirmPw ? "#22c55e" : "#ef4444" }}>
                         {currentPassword === confirmPw
-                          ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Passwords match</>
-                          : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Passwords do not match</>
+                          ? <><Check size={13} strokeWidth={2.5} /> Passwords match</>
+                          : <><X size={13} strokeWidth={2.5} /> Passwords do not match</>
                         }
                       </div>
                     )}
@@ -617,7 +616,7 @@ export default function RegisterPage() {
                   <div className="rp-actions">
                     <button className="rp-submit" type="submit" disabled={!step1Valid}>
                       Continue
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                      <ArrowRight size={16} strokeWidth={2.5} />
                     </button>
                   </div>
                 </form>
@@ -632,8 +631,8 @@ export default function RegisterPage() {
 
                 <div className="rp-role-badge">
                   {role === "patient"
-                    ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Patient Account</>
-                    : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg> Physiotherapist Account</>
+                    ? <><User size={13} strokeWidth={2} /> Patient Account</>
+                    : <><Stethoscope size={13} strokeWidth={2} /> Physiotherapist Account</>
                   }
                 </div>
 
@@ -714,7 +713,7 @@ export default function RegisterPage() {
                               >
                                 <div className={`rp-spec-check ${isSelected ? "checked" : ""}`}>
                                   {isSelected && (
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                    <Check size={10} strokeWidth={3} color="white" />
                                   )}
                                 </div>
                                 {s}
@@ -728,7 +727,7 @@ export default function RegisterPage() {
 
                   <div className="rp-actions">
                     <button type="button" className="rp-back-btn" onClick={() => setStep(1)}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                      <ArrowLeft size={14} strokeWidth={2.5} />
                       Back
                     </button>
                     <button className="rp-submit" type="submit" disabled={!step2Valid || loading}>

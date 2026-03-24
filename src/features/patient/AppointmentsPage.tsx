@@ -29,6 +29,7 @@ import {
 import type { PatientProfile } from "../../services/authService";
 import { collection, query, where, onSnapshot as fsOnSnapshot } from "firebase/firestore";
 import { db } from "../../firebase";
+import { Check, Clock } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -483,7 +484,7 @@ export default function AppointmentsPage() {
 
       {booked && (
         <div className="ap-success-toast">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2E8BC0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <Check size={18} strokeWidth={2.5} color="#2E8BC0" />
           Appointment booked! It now appears in the clinic schedule.
         </div>
       )}
@@ -599,7 +600,7 @@ export default function AppointmentsPage() {
                   <div className="ap-appt-type">{a.sessionType}</div>
                   <div className="ap-appt-meta">
                     <span className="ap-appt-meta-item">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      <Clock size={12} strokeWidth={2} />
                       {fmtHour12(a.hour)}
                     </span>
                     <span>{a.physioName}</span>

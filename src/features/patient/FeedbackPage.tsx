@@ -6,6 +6,7 @@ import {
   addDoc, serverTimestamp, type Timestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { Check, ChevronDown } from "lucide-react";
 
 // ── Firestore types ───────────────────────────────────────────────────────────
 
@@ -739,9 +740,7 @@ export default function FeedbackPage() {
             disabled={!difficulty || !energy || rating === 0 || saving}
             onClick={handleSubmit}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
+            <Check size={16} strokeWidth={2.5} />
             {saving ? "Saving…" : "Submit Feedback"}
           </button>
         </div>
@@ -753,13 +752,10 @@ export default function FeedbackPage() {
       <div style={{ marginTop: 32 }}>
         <div className="fb-history-toggle" onClick={() => setShowHistory(!showHistory)}>
           <span className="fb-history-label">Previous Feedback ({feedbackList.length} session{feedbackList.length !== 1 ? "s" : ""})</span>
-          <svg
-            width="18" height="18" viewBox="0 0 24 24" fill="none"
-            stroke="#9a9590" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          <ChevronDown
+            size={18} strokeWidth={2} color="#9a9590"
             style={{ transform: showHistory ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
-          >
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
+          />
         </div>
 
         {showHistory && (

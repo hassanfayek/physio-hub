@@ -5,6 +5,7 @@
 // CSS prefix: el-  (exercise library)
 
 import React, { useState, useEffect, type FormEvent } from "react";
+import { X, Check, Plus, Pencil, Trash2, ExternalLink, UserPlus } from "lucide-react";
 import {
   subscribeToExerciseLibrary,
   createExercise,
@@ -148,9 +149,7 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
             <div className="el-modal-title">{mode === "add" ? "Add to Library" : form.name || "Edit Exercise"}</div>
           </div>
           <button className="el-close-btn" onClick={onClose} aria-label="Close">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
+            <X size={14} strokeWidth={2.5} />
           </button>
         </div>
 
@@ -218,7 +217,7 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
               fontSize: 13, color: "#1b4332",
               display: "flex", alignItems: "center", gap: 8,
             }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <Check size={13} strokeWidth={2.5} />
               <strong>{lastAdded}</strong> added — {addedCount} exercise{addedCount > 1 ? "s" : ""} this session
             </div>
           )}
@@ -306,9 +305,7 @@ function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps
             {exercise.category && <div className="el-modal-sub">{exercise.category}</div>}
           </div>
           <button className="el-close-btn" onClick={onClose} aria-label="Close">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
+            <X size={14} strokeWidth={2.5} />
           </button>
         </div>
 
@@ -346,9 +343,7 @@ function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps
                     <div className="el-patient-cond">{p.condition || "—"}</div>
                   </div>
                   {selected?.uid === p.uid && (
-                    <svg className="el-patient-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
+                    <Check className="el-patient-check" size={16} strokeWidth={2.5} />
                   )}
                 </div>
               ))}
@@ -393,7 +388,7 @@ function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps
               fontSize: 13, color: "#1b4332", marginBottom: 12,
               display: "flex", alignItems: "center", gap: 8,
             }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <Check size={13} strokeWidth={2.5} />
               Assigned to <strong>{lastAssigned}</strong> ({assignedCount} total this session)
             </div>
           )}
@@ -401,9 +396,7 @@ function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps
             {saving
               ? <><span className="el-spinner" /> Assigning…</>
               : <>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
+                  <Check size={13} strokeWidth={2.5} />
                   Assign to Patient
                 </>
             }
