@@ -38,13 +38,13 @@ interface TabDef {
   badge?: number;
 }
 
-function IconOverview()  { return <LayoutDashboard size={17} strokeWidth={1.8} />; }
-function IconPatients()  { return <Users size={17} strokeWidth={1.8} />; }
-function IconSchedule()  { return <Calendar size={17} strokeWidth={1.8} />; }
-function IconExercises() { return <Dumbbell size={17} strokeWidth={1.8} />; }
-function IconReports()   { return <BarChart2 size={17} strokeWidth={1.8} />; }
-function IconTeam()      { return <Users size={17} strokeWidth={1.8} />; }
-function IconAdd()       { return <Plus size={14} strokeWidth={2.5} />; }
+function IconOverview()  { return <LayoutDashboard size={17} strokeWidth={1.8} color="white" />; }
+function IconPatients()  { return <Users size={17} strokeWidth={1.8} color="white" />; }
+function IconSchedule()  { return <Calendar size={17} strokeWidth={1.8} color="white" />; }
+function IconExercises() { return <Dumbbell size={17} strokeWidth={1.8} color="white" />; }
+function IconReports()   { return <BarChart2 size={17} strokeWidth={1.8} color="white" />; }
+function IconTeam()      { return <Users size={17} strokeWidth={1.8} color="white" />; }
+function IconAdd()       { return <Plus size={14} strokeWidth={2.5} color="white" />; }
 
 // ─── Team tab (manager only) ─────────────────────────────────────────────────
 
@@ -930,7 +930,7 @@ export default function PhysioDashboard() {
               onClick={() => setSidebarOpen(true)}
               aria-label="Open menu"
             >
-              <Menu size={22} color="red"/>
+              <Menu size={22} strokeWidth={2} color="#5a5550" />
             </button>
           </div>
 
@@ -947,7 +947,7 @@ export default function PhysioDashboard() {
               </div>
             </div>
             <button className="phd-logout-btn" onClick={handleLogout}>
-              <LogOut size={13} strokeWidth={2} />
+              <LogOut size={13} strokeWidth={2} color="#9a9590" />
               Sign out
             </button>
           </div>
@@ -996,7 +996,7 @@ export default function PhysioDashboard() {
                   {tab.badge ? (
                     <span className="phd-nav-badge">{tab.badge}</span>
                   ) : (
-                    <span className="phd-nav-arrow"><ChevronRight size={14} strokeWidth={2} /></span>
+                    <span className="phd-nav-arrow"><ChevronRight size={14} strokeWidth={2} color="white" /></span>
                   )}
                 </div>
               ))}
@@ -1005,7 +1005,7 @@ export default function PhysioDashboard() {
             {/* Sign out */}
             <div className="phd-sidebar-signout">
               <button className="phd-sidebar-signout-btn" onClick={handleLogout}>
-                <LogOut size={16} strokeWidth={2} />
+                <LogOut size={16} strokeWidth={2} color="rgba(255,255,255,0.55)" />
                 Sign out
               </button>
             </div>

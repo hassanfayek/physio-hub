@@ -18,31 +18,31 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; desc: string }[] = 
     id: "home",
     label: "Home",
     desc: "Overview",
-    icon: <Home size={20} strokeWidth={1.8} />,
+    icon: <Home size={20} strokeWidth={1.8} color="white" />,
   },
   {
     id: "exercises",
     label: "Exercises",
     desc: "4 assigned",
-    icon: <Dumbbell size={20} strokeWidth={1.8} />,
+    icon: <Dumbbell size={20} strokeWidth={1.8} color="white" />,
   },
   {
     id: "appointments",
     label: "Appointments",
     desc: "2 upcoming",
-    icon: <CalendarDays size={20} strokeWidth={1.8} />,
+    icon: <CalendarDays size={20} strokeWidth={1.8} color="white" />,
   },
   {
     id: "sheet",
     label: "Patient Sheet",
     desc: "View records",
-    icon: <FileText size={20} strokeWidth={1.8} />,
+    icon: <FileText size={20} strokeWidth={1.8} color="white" />,
   },
   {
     id: "feedback",
     label: "Feedback",
     desc: "Rate session",
-    icon: <MessageSquare size={20} strokeWidth={1.8} />,
+    icon: <MessageSquare size={20} strokeWidth={1.8} color="white" />,
   },
 ];
 
@@ -393,7 +393,7 @@ export default function PatientDashboard() {
               onClick={() => setSidebarOpen(true)}
               aria-label="Open menu"
             >
-              <Menu size={20} strokeWidth={2} />
+              <Menu size={20} strokeWidth={2} color="#5a5550" />
             </button>
           </div>
 
@@ -437,7 +437,7 @@ export default function PatientDashboard() {
                     <div className="pd2-nav-desc">{tab.desc}</div>
                   </div>
                   <div className="pd2-nav-arrow">
-                    <ChevronRight size={14} strokeWidth={2} />
+                    <ChevronRight size={14} strokeWidth={2} color="white" />
                   </div>
                 </div>
               ))}
@@ -448,7 +448,7 @@ export default function PatientDashboard() {
             {/* Sign out */}
             <div className="pd2-sidebar-signout">
               <button className="pd2-sidebar-signout-btn" onClick={handleLogout}>
-                <LogOut size={16} strokeWidth={2} />
+                <LogOut size={16} strokeWidth={2} color="rgba(255,255,255,0.55)" />
                 Sign out
               </button>
             </div>
