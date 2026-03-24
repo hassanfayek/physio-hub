@@ -272,6 +272,12 @@ export function fmtHour(h: number): string {
   return `${String(h).padStart(2, "0")}:00`;
 }
 
+export function fmtHour12(h: number): string {
+  const period = h < 12 ? "AM" : "PM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:00 ${period}`;
+}
+
 // ─── Realtime: upcoming appointments for a patient ───────────────────────────
 // Queries appointments where patientId == uid and date >= today, sorted by
 // date then hour ascending. Uses onSnapshot for realtime updates.
