@@ -164,27 +164,26 @@ export function subscribeToAppointmentsByMonth(
   onError?:  (err: Error) => void
 ): () => void {
   const start = `${yearMonth}-01`;
-  const end   = `${yearMonth}-32`;   // no real date, just higher than any valid day
+  const end   = `${yearMonth}-32`;
 
-  let q = query(
+  // Query by date range only — filter physioId client-side to avoid composite index
+  const q = query(
     collection(db, "appointments"),
     where("date", ">=", start),
     where("date", "<=", end)
   );
 
-  if (physioId) {
-    q = query(
-      collection(db, "appointments"),
-      where("date",     ">=", start),
-      where("date",     "<=", end),
-      where("physioId", "==", physioId)
-    );
-  }
-
   return onSnapshot(
     q,
-    (snap) => onData(snap.docs.map((d) => docToAppointment(d.id, d.data()))),
-    (err)  => onError?.(err)
+    (snap) => {
+      let appts = snap.docs.map((d) => docToAppointment(d.id, d.data()));
+      if (physioId) appts = appts.filter((a) => a.physioId === physioId);
+      onData(appts);
+    },
+    (err) => {
+      console.error("subscribeToAppointmentsByMonth error:", err);
+      onError?.(err);
+    }
   );
 }
 
@@ -196,23 +195,24 @@ export function subscribeToAppointmentsByDay(
   onData:   (appts: Appointment[]) => void,
   onError?: (err: Error) => void
 ): () => void {
-  let q = query(
+  // Query by date only — filter physioId client-side to avoid composite index
+  const q = query(
     collection(db, "appointments"),
     where("date", "==", date)
   );
 
-  if (physioId) {
-    q = query(
-      collection(db, "appointments"),
-      where("date",     "==", date),
-      where("physioId", "==", physioId)
-    );
-  }
-
   return onSnapshot(
     q,
-    (snap) => onData(snap.docs.map((d) => docToAppointment(d.id, d.data()))),
-    (err)  => onError?.(err)
+    (snap) => {
+      let appts = snap.docs.map((d) => docToAppointment(d.id, d.data()));
+      if (physioId) appts = appts.filter((a) => a.physioId === physioId);
+      appts.sort((a, b) => a.hour - b.hour);
+      onData(appts);
+    },
+    (err) => {
+      console.error("subscribeToAppointmentsByDay error:", err);
+      onError?.(err);
+    }
   );
 }
 
@@ -226,25 +226,24 @@ export function subscribeToAppointmentsByWeek(
   onData:    (appts: Appointment[]) => void,
   onError?:  (err: Error) => void
 ): () => void {
-  let q = query(
+  // Query by date range only — filter physioId client-side to avoid composite index
+  const q = query(
     collection(db, "appointments"),
     where("date", ">=", weekStart),
     where("date", "<=", weekEnd)
   );
 
-  if (physioId) {
-    q = query(
-      collection(db, "appointments"),
-      where("date",     ">=", weekStart),
-      where("date",     "<=", weekEnd),
-      where("physioId", "==", physioId)
-    );
-  }
-
   return onSnapshot(
     q,
-    (snap) => onData(snap.docs.map((d) => docToAppointment(d.id, d.data()))),
-    (err)  => onError?.(err)
+    (snap) => {
+      let appts = snap.docs.map((d) => docToAppointment(d.id, d.data()));
+      if (physioId) appts = appts.filter((a) => a.physioId === physioId);
+      onData(appts);
+    },
+    (err) => {
+      console.error("subscribeToAppointmentsByWeek error:", err);
+      onError?.(err);
+    }
   );
 }
 
@@ -268,16 +267,9 @@ export function getWeekStart(d: Date): Date {
   return monday;
 }
 
-/** Format hour as "09:00" (24-hour) */
+/** Format hour as "09:00" */
 export function fmtHour(h: number): string {
   return `${String(h).padStart(2, "0")}:00`;
-}
-
-/** Format hour as "9:00 AM / 1:00 PM" (12-hour) */
-export function fmtHour12(h: number): string {
-  const period = h < 12 ? "AM" : "PM";
-  const h12    = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:00 ${period}`;
 }
 
 // ─── Realtime: upcoming appointments for a patient ───────────────────────────
