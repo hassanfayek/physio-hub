@@ -100,8 +100,8 @@ export default function MonthView({
         }
 
         .mv-cell {
-          background: #fff; min-height: 88px;
-          padding: 10px 10px 8px;
+          background: #fff; min-height: 64px;
+          padding: 8px 6px 6px;
           position: relative; cursor: pointer; transition: background 0.12s;
         }
         .mv-cell:hover { background: #fafaf8; }

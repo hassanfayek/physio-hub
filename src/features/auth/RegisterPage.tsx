@@ -448,11 +448,24 @@ export default function RegisterPage() {
           margin-bottom: 20px;
         }
 
+        .rp-input { min-height: 44px; }
+        .rp-submit { min-height: 52px; }
+        .rp-back-btn { min-height: 52px; }
+        .rp-role-tab { min-height: 44px; }
+        .rp-spec-item { min-height: 44px; }
+
         @media (max-width: 540px) {
           .rp-grid-2 { grid-template-columns: 1fr; }
           .rp-spec-grid { grid-template-columns: 1fr; }
-          .rp-card { padding: 24px 20px; }
-          .rp-wrap { padding: 24px 16px; }
+          .rp-card { padding: 20px 16px; border-radius: 16px; }
+          .rp-wrap { padding: 20px 14px; }
+          .rp-brand-row { margin-bottom: 20px; }
+          .rp-stepper { margin-bottom: 20px; }
+          .rp-card-title { font-size: 22px; }
+          .rp-card-sub { margin-bottom: 16px; }
+          .rp-input { font-size: 15px; }
+          .rp-actions { flex-direction: column; }
+          .rp-back-btn { justify-content: center; }
         }
       `}</style>
 

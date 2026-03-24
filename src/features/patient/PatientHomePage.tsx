@@ -119,7 +119,7 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
 
         .pth-root {
           font-family: 'Outfit', sans-serif;
-          display: flex; flex-direction: column; gap: 20px;
+          display: flex; flex-direction: column; gap: 14px;
         }
 
         /* ── Greeting ── */
@@ -127,11 +127,11 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
           animation: pthFadeUp 0.35s ease both;
         }
         .pth-greeting-sub {
-          font-size: 13px; color: #9a9590; margin-top: 3px;
+          font-size: 13px; color: #9a9590; margin-top: 2px;
         }
         .pth-greeting-name {
           font-family: 'Playfair Display', serif;
-          font-size: 28px; font-weight: 500; color: #1a1a1a;
+          font-size: 22px; font-weight: 500; color: #1a1a1a;
           letter-spacing: -0.02em; line-height: 1.2;
         }
 
@@ -139,9 +139,9 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
         .pth-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 14px;
+          gap: 10px;
         }
-        @media (max-width: 600px) {
+        @media (max-width: 480px) {
           .pth-grid { grid-template-columns: 1fr; }
         }
 
@@ -149,8 +149,8 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
         .pth-card {
           background: #fff;
           border: 1.5px solid #e5e0d8;
-          border-radius: 18px;
-          padding: 20px;
+          border-radius: 14px;
+          padding: 14px;
           transition: box-shadow 0.15s, border-color 0.15s;
         }
         .pth-card:hover {
@@ -173,7 +173,7 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
         .pth-card-label {
           font-size: 10px; font-weight: 700;
           text-transform: uppercase; letter-spacing: 0.1em;
-          color: #9a9590; margin-bottom: 10px;
+          color: #9a9590; margin-bottom: 8px;
         }
         .pth-card-appt .pth-card-label {
           color: rgba(255,255,255,0.6);
@@ -254,16 +254,16 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
         /* ── Quick actions — full width ── */
         .pth-card-actions { grid-column: 1 / -1; }
         .pth-actions-row {
-          display: flex; gap: 10px; flex-wrap: wrap;
+          display: flex; gap: 8px; flex-direction: column;
         }
         .pth-action-btn {
-          flex: 1; min-width: 120px;
+          width: 100%;
           display: flex; align-items: center; justify-content: center; gap: 7px;
-          padding: 11px 16px; border-radius: 12px;
+          padding: 13px 16px; border-radius: 12px;
           border: 1.5px solid #e5e0d8; background: #fafaf8;
           font-family: 'Outfit', sans-serif; font-size: 14px;
           font-weight: 500; color: #1a1a1a; cursor: pointer;
-          transition: all 0.15s;
+          transition: all 0.15s; min-height: 48px;
         }
         .pth-action-btn:hover {
           border-color: #2E8BC0; color: #2E8BC0; background: #EAF5FC;

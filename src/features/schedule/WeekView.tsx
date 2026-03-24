@@ -83,7 +83,7 @@ export default function WeekView({
       <style>{`
         .wv-root { font-family: 'Outfit', sans-serif; }
 
-        .wv-scroll { overflow-x: auto; padding-bottom: 8px; }
+        .wv-scroll { overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; }
 
         .wv-grid {
           display: grid;

@@ -255,6 +255,26 @@ export default function AppointmentModal({
           border-radius: 50%; animation: amSpin 0.7s linear infinite;
         }
         @keyframes amSpin { to { transform: rotate(360deg); } }
+
+        .am-select { min-height: 44px; }
+        .am-cancel { min-height: 48px; }
+        .am-submit { min-height: 48px; }
+
+        @media (max-width: 520px) {
+          .am-overlay { padding: 0; align-items: flex-end; }
+          .am-modal {
+            border-radius: 22px 22px 0 0; max-width: 100%;
+            max-height: 92vh; overflow-y: auto;
+          }
+          @keyframes amModalIn {
+            from { opacity:0; transform: translateY(100%); }
+            to   { opacity:1; transform: translateY(0); }
+          }
+          .am-header { padding: 20px 20px 0; }
+          .am-body { padding: 0 20px; }
+          .am-footer { padding: 16px 20px 24px; }
+          .am-select { font-size: 15px; }
+        }
       `}</style>
 
       <div className="am-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>

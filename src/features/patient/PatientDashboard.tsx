@@ -125,7 +125,7 @@ export default function PatientDashboard() {
           min-height: 100vh;
           background: #f5f3ef;
           display: grid;
-          grid-template-rows: 72px 1fr;
+          grid-template-rows: 56px 1fr;
           grid-template-columns: 1fr;
         }
 
@@ -134,7 +134,7 @@ export default function PatientDashboard() {
           display: grid;
           grid-template-columns: 1fr auto 1fr;
           align-items: center;
-          padding: 0 28px;
+          padding: 0 16px;
           background: #fff;
           border-bottom: 1px solid #e8e4de;
           position: sticky;
@@ -145,7 +145,7 @@ export default function PatientDashboard() {
         .pd2-topbar-left {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
         }
         .pd2-topbar-logo {
           display: flex;
@@ -156,12 +156,12 @@ export default function PatientDashboard() {
           display: flex;
           align-items: center;
           justify-content: flex-end;
-          gap: 10px;
+          gap: 8px;
         }
         .pd2-user-chip {
           display: flex;
           align-items: center;
-          padding: 8px 16px;
+          padding: 6px 12px;
           border-radius: 100px;
           background: #f5f3ef;
           border: 1px solid #e5e0d8;
@@ -170,16 +170,16 @@ export default function PatientDashboard() {
         }
         .pd2-user-chip:hover { background: #ede9e3; }
 
-        .pd2-user-name { font-size: 15px; font-weight: 500; color: #2E8BC0; }
+        .pd2-user-name { font-size: 13px; font-weight: 500; color: #2E8BC0; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         .pd2-logout {
           background: none;
           border: 1px solid #e5e0d8;
           color: #9a9590;
-          padding: 10px 18px;
+          padding: 8px 14px;
           border-radius: 8px;
-          font-size: 14px;
-          min-height: 48px;
+          font-size: 13px;
+          min-height: 44px;
           cursor: pointer;
           transition: all 0.15s;
         }
@@ -188,21 +188,21 @@ export default function PatientDashboard() {
         /* ── BODY LAYOUT ── */
         .pd2-body {
           display: grid;
-          grid-template-columns: 280px 1fr;
-          min-height: calc(100vh - 72px);
+          grid-template-columns: 260px 1fr;
+          min-height: calc(100vh - 56px);
         }
 
         /* ── SIDEBAR ── */
         .pd2-sidebar {
           background: #0C3C60;
           border-right: 1px solid #0a3254;
-          padding: 20px 14px;
+          padding: 16px 12px;
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          gap: 4px;
           position: sticky;
-          top: 72px;
-          height: calc(100vh - 72px);
+          top: 56px;
+          height: calc(100vh - 56px);
           overflow-y: auto;
         }
 
@@ -214,16 +214,16 @@ export default function PatientDashboard() {
           letter-spacing: 0.12em;
           color: rgba(255,255,255,0.35);
           font-weight: 700;
-          padding: 0 10px;
-          margin-bottom: 4px;
-          margin-top: 16px;
+          padding: 0 8px;
+          margin-bottom: 3px;
+          margin-top: 12px;
         }
-        .pd2-nav-label:first-child { margin-top: 4px; }
+        .pd2-nav-label:first-child { margin-top: 2px; }
         .pd2-nav-item {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 11px 10px;
+          padding: 10px 8px;
           border-radius: 10px;
           cursor: pointer;
           transition: all 0.14s;
@@ -324,23 +324,25 @@ export default function PatientDashboard() {
           align-items: center;
           gap: 6px;
           font-family: 'Outfit', sans-serif;
-          font-size: 15px;
+          font-size: 14px;
           font-weight: 500;
           color: #5a5550;
           background: none;
           border: none;
           cursor: pointer;
           padding: 8px 0;
-          margin-bottom: 20px;
+          margin-bottom: 14px;
+          min-height: 44px;
           transition: color 0.15s;
         }
         .pd2-back-btn:hover { color: #2E8BC0; }
 
         /* ── MAIN ── */
         .pd2-main {
-          padding: 32px 36px;
-          min-height: calc(100vh - 72px);
+          padding: 20px 18px;
+          min-height: calc(100vh - 56px);
           animation: fadeSlide 0.3s ease both;
+          overflow-x: hidden;
         }
         @keyframes fadeSlide {
           from { opacity: 0; transform: translateY(10px); }
@@ -351,8 +353,8 @@ export default function PatientDashboard() {
         .pd2-hamburger {
           display: none;
           align-items: center; justify-content: center;
-          width: 48px; height: 48px;
-          border: 1px solid #e5e0d8; border-radius: 10px;
+          width: 40px; height: 40px;
+          border: 1px solid #e5e0d8; border-radius: 8px;
           background: #f5f3ef; cursor: pointer;
           color: #5a5550; transition: background 0.15s;
           flex-shrink: 0;
@@ -393,7 +395,7 @@ export default function PatientDashboard() {
             position: fixed;
             top: 0; left: 0;
             height: 100vh;
-            width: 280px;
+            width: 260px;
             z-index: 100;
             transform: translateX(0);
             transition: none;
@@ -404,8 +406,9 @@ export default function PatientDashboard() {
             box-shadow: 4px 0 24px rgba(0,0,0,0.15);
           }
 
-          .pd2-main { padding: 24px 20px; }
+          .pd2-main { padding: 14px 14px; }
           .pd2-logout { display: none; }
+          .pd2-user-name { max-width: 90px; }
         }
       `}</style>
 
@@ -429,7 +432,7 @@ export default function PatientDashboard() {
 
           {/* Centre: logo — truly centred via grid */}
           <div className="pd2-topbar-logo">
-            <img src={logo} alt="Physio+ Hub" style={{ height: 52, width: "auto", objectFit: "contain", display: "block" }} />
+            <img src={logo} alt="Physio+ Hub" style={{ height: 40, width: "auto", objectFit: "contain", display: "block" }} />
           </div>
 
           {/* Right: user chip + sign out */}

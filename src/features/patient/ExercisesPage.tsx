@@ -202,20 +202,20 @@ export default function ExercisesPage() {
         .ep-root { font-family: 'Outfit', sans-serif; }
 
         /* Header */
-        .ep-header { margin-bottom: 24px; }
+        .ep-header { margin-bottom: 16px; }
         .ep-title {
           font-family: 'Playfair Display', serif;
-          font-size: 28px; font-weight: 500; color: #1a1a1a;
-          letter-spacing: -0.02em; margin-bottom: 4px;
+          font-size: 22px; font-weight: 500; color: #1a1a1a;
+          letter-spacing: -0.02em; margin-bottom: 3px;
         }
-        .ep-sub { font-size: 13.5px; color: #9a9590; }
+        .ep-sub { font-size: 13px; color: #9a9590; }
 
         /* Progress ring row */
         .ep-progress-row {
-          display: flex; align-items: center; gap: 20px;
+          display: flex; align-items: center; gap: 14px;
           background: #fff; border: 1px solid #e5e0d8;
-          border-radius: 16px; padding: 18px 22px;
-          margin-bottom: 20px;
+          border-radius: 14px; padding: 14px 16px;
+          margin-bottom: 14px;
         }
         .ep-ring-wrap { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
         .ep-ring-wrap svg { transform: rotate(-90deg); }
@@ -232,14 +232,15 @@ export default function ExercisesPage() {
         .ep-prog-tabs {
           display: flex; gap: 4px;
           background: #f5f3ef; border-radius: 12px; padding: 4px;
-          width: fit-content; margin-bottom: 20px;
+          width: 100%; margin-bottom: 14px;
           border: 1px solid #e5e0d8;
         }
         .ep-prog-tab {
-          padding: 8px 18px; border-radius: 9px; border: none;
+          flex: 1; padding: 10px 12px; border-radius: 9px; border: none;
           background: transparent; font-size: 13.5px; font-weight: 500;
           color: #9a9590; cursor: pointer; transition: all 0.15s;
-          font-family: 'Outfit', sans-serif; display: flex; align-items: center; gap: 5px;
+          font-family: 'Outfit', sans-serif; display: flex; align-items: center; justify-content: center; gap: 5px;
+          min-height: 44px;
         }
         .ep-prog-tab.active {
           background: #fff; color: #2E8BC0;
@@ -258,7 +259,7 @@ export default function ExercisesPage() {
 
         .ep-card {
           background: #fff; border: 1.5px solid #e5e0d8;
-          border-radius: 16px; overflow: hidden;
+          border-radius: 14px; overflow: hidden;
           transition: border-color 0.15s, box-shadow 0.15s;
         }
         .ep-card:hover { border-color: #B3DEF0; box-shadow: 0 2px 12px rgba(0,0,0,0.05); }
@@ -266,7 +267,7 @@ export default function ExercisesPage() {
 
         .ep-card-header {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 16px 18px; cursor: pointer; gap: 12px;
+          padding: 14px 16px; cursor: pointer; gap: 12px;
         }
         .ep-card-left  { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
         .ep-card-icon  {
@@ -284,11 +285,11 @@ export default function ExercisesPage() {
         }
 
         /* Expanded body */
-        .ep-card-body { padding: 0 18px 18px; border-top: 1px solid #f5f3ef; }
+        .ep-card-body { padding: 0 14px 14px; border-top: 1px solid #f5f3ef; }
 
         .ep-stats-grid {
           display: grid; grid-template-columns: repeat(3, 1fr);
-          gap: 10px; margin: 14px 0;
+          gap: 8px; margin: 12px 0;
         }
         .ep-stat-box {
           background: #f5f3ef; border-radius: 10px;
@@ -315,11 +316,11 @@ export default function ExercisesPage() {
 
         /* Checkbox / complete button */
         .ep-complete-btn {
-          width: 100%; padding: 11px;
+          width: 100%; padding: 13px;
           border-radius: 10px; border: 1.5px solid #e5e0d8;
           background: #fff; font-family: 'Outfit', sans-serif;
           font-size: 14px; font-weight: 500; color: #5a5550;
-          cursor: pointer; transition: all 0.15s;
+          cursor: pointer; transition: all 0.15s; min-height: 48px;
           display: flex; align-items: center; justify-content: center; gap: 7px;
         }
         .ep-complete-btn:hover:not(:disabled) { border-color: #5BC0BE; color: #2E8BC0; }

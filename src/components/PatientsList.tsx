@@ -31,7 +31,7 @@ function SkeletonRow() {
       <td><div className="pl-skel pl-skel-md" /></td>
       <td><div className="pl-skel pl-skel-sm" /></td>
       <td><div className="pl-skel pl-skel-chip" /></td>
-      <td><div className="pl-skel pl-skel-sm" /></td>
+      <td className="pl-col-added"><div className="pl-skel pl-skel-sm" /></td>
       <td><div className="pl-skel pl-skel-sm" /></td>
     </tr>
   );
@@ -161,16 +161,21 @@ export default function PatientsList({
         /* ── Toolbar ── */
         .pl-toolbar {
           display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-bottom: 12px;
+        }
+        .pl-toolbar-top {
+          display: flex;
           align-items: center;
-          gap: 12px;
-          margin-bottom: 16px;
+          gap: 8px;
           flex-wrap: wrap;
         }
         .pl-search-wrap {
           position: relative;
           flex: 1;
-          min-width: 200px;
-          max-width: 320px;
+          min-width: 0;
+          max-width: 100%;
         }
         .pl-search-icon {
           position: absolute; left: 12px; top: 50%;
@@ -197,24 +202,28 @@ export default function PatientsList({
 
         .pl-filter-tabs {
           display: flex;
-          gap: 4px;
+          gap: 3px;
           background: #f5f3ef;
           border-radius: 10px;
           padding: 3px;
           border: 1px solid #e5e0d8;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
         }
         .pl-filter-tab {
-          padding: 6px 12px;
+          padding: 7px 10px;
           border-radius: 8px;
           border: none;
           background: transparent;
           font-family: 'Outfit', sans-serif;
-          font-size: 12.5px;
+          font-size: 12px;
           font-weight: 500;
           color: #9a9590;
           cursor: pointer;
           transition: all 0.15s;
-          display: flex; align-items: center; gap: 5px;
+          display: flex; align-items: center; gap: 4px;
+          white-space: nowrap;
+          min-height: 36px;
         }
         .pl-filter-tab.active {
           background: #fff;
@@ -235,10 +244,10 @@ export default function PatientsList({
           color: #1b4332;
         }
 
-        .pl-toolbar-right { margin-left: auto; display: flex; gap: 8px; }
+        .pl-toolbar-right { display: flex; gap: 8px; }
 
         .pl-refresh-btn {
-          padding: 8px 14px;
+          padding: 9px 12px;
           border-radius: 10px;
           border: 1.5px solid #e5e0d8;
           background: #fff;
@@ -246,13 +255,14 @@ export default function PatientsList({
           font-size: 13px;
           color: #5a5550;
           cursor: pointer;
-          display: flex; align-items: center; gap: 6px;
+          display: flex; align-items: center; gap: 5px;
           transition: all 0.15s;
+          min-height: 44px;
         }
         .pl-refresh-btn:hover { background: #f5f3ef; border-color: #c0bbb4; }
 
         .pl-add-btn {
-          padding: 8px 16px;
+          padding: 9px 14px;
           border-radius: 10px;
           border: none;
           background: #2d6a4f;
@@ -263,11 +273,12 @@ export default function PatientsList({
           cursor: pointer;
           display: flex; align-items: center; gap: 7px;
           transition: all 0.2s;
+          min-height: 44px;
+          white-space: nowrap;
         }
         .pl-add-btn:hover {
           background: #1b4332;
           box-shadow: 0 4px 14px rgba(45,106,79,0.25);
-          transform: translateY(-1px);
         }
 
         /* ── Table card ── */
@@ -436,7 +447,7 @@ export default function PatientsList({
 
         /* Summary bar */
         .pl-summary {
-          padding: 10px 16px;
+          padding: 10px 14px;
           background: #fafaf8;
           border-top: 1px solid #f0ede8;
           font-size: 12px;
@@ -444,24 +455,49 @@ export default function PatientsList({
           display: flex;
           justify-content: space-between;
           align-items: center;
+          flex-wrap: wrap;
+          gap: 4px;
+        }
+
+        /* Mobile: hide secondary columns */
+        @media (max-width: 600px) {
+          .pl-col-added { display: none; }
+          .pl-table th, .pl-table td { padding: 10px 10px; }
+          .pl-condition { max-width: 120px; }
+          .pl-action-btn { padding: 6px 10px; font-size: 12px; }
         }
       `}</style>
 
       <div className="pl-root">
         {/* Toolbar */}
         <div className="pl-toolbar">
-          <div className="pl-search-wrap">
-            <svg className="pl-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input
-              className="pl-search"
-              placeholder="Search by name, email or condition…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="pl-toolbar-top">
+            <div className="pl-search-wrap">
+              <svg className="pl-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input
+                className="pl-search"
+                placeholder="Search patients…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="pl-toolbar-right">
+              <button className="pl-refresh-btn" onClick={onRefresh} title="Refresh list">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+                Refresh
+              </button>
+              <button className="pl-add-btn" onClick={onAddPatient}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add Patient
+              </button>
+            </div>
           </div>
-
           <div className="pl-filter-tabs">
             {(["all", "active", "on_hold", "discharged"] as const).map((s) => (
               <button
@@ -473,21 +509,6 @@ export default function PatientsList({
                 <span className="pl-filter-count">{statusCounts[s]}</span>
               </button>
             ))}
-          </div>
-
-          <div className="pl-toolbar-right">
-            <button className="pl-refresh-btn" onClick={onRefresh} title="Refresh list">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-              </svg>
-              Refresh
-            </button>
-            <button className="pl-add-btn" onClick={onAddPatient}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              Add Patient
-            </button>
           </div>
         </div>
 
@@ -522,7 +543,7 @@ export default function PatientsList({
                       Status <SortIcon active={sortKey === "status"} dir={sortDir} />
                     </div>
                   </th>
-                  <th onClick={() => handleSort("createdAt")}>
+                  <th className="pl-col-added" onClick={() => handleSort("createdAt")}>
                     <div className="pl-th-inner">
                       Added <SortIcon active={sortKey === "createdAt"} dir={sortDir} />
                     </div>
@@ -588,7 +609,7 @@ export default function PatientsList({
                             {statusMeta.label}
                           </span>
                         </td>
-                        <td style={{ color: "#9a9590", fontSize: 13 }}>
+                        <td className="pl-col-added" style={{ color: "#9a9590", fontSize: 13 }}>
                           {formatDate(patient.createdAt)}
                         </td>
                         <td>

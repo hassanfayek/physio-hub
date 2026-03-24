@@ -289,6 +289,27 @@ export default function AddPatientModal({
           animation: apmSpin 0.7s linear infinite;
         }
         @keyframes apmSpin { to { transform: rotate(360deg); } }
+
+        .apm-input { min-height: 44px; }
+        .apm-select { min-height: 44px; }
+        .apm-cancel { min-height: 48px; }
+        .apm-back { min-height: 48px; }
+        .apm-submit { min-height: 48px; }
+
+        @media (max-width: 520px) {
+          .apm-overlay { padding: 0; align-items: flex-end; }
+          .apm-modal { border-radius: 22px 22px 0 0; max-width: 100%; }
+          @keyframes apmModalIn {
+            from { opacity:0; transform: translateY(100%); }
+            to   { opacity:1; transform: translateY(0); }
+          }
+          .apm-header { padding: 20px 16px 0; }
+          .apm-progress { padding: 0 16px; }
+          .apm-body { padding: 0 16px; }
+          .apm-footer { padding: 16px 16px 24px; }
+          .apm-grid2 { grid-template-columns: 1fr; }
+          .apm-input, .apm-select { font-size: 15px; }
+        }
       `}</style>
 
       <div className="apm-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>

@@ -189,29 +189,29 @@ function TeamTab() {
   return (
     <>
       <style>{`
-        .tm-title { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 500; color: #1a1a1a; margin-bottom: 4px; }
-        .tm-sub   { font-size: 14px; color: #9a9590; margin-bottom: 24px; }
-        .tm-action-row { display: flex; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; }
+        .tm-title { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 500; color: #1a1a1a; margin-bottom: 3px; }
+        .tm-sub   { font-size: 13px; color: #9a9590; margin-bottom: 16px; }
+        .tm-action-row { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
         .tm-add-btn {
           display: inline-flex; align-items: center; gap: 8px;
-          padding: 11px 20px; border-radius: 11px; border: none;
+          padding: 11px 18px; border-radius: 11px; border: none;
           font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600;
-          cursor: pointer; transition: all 0.15s;
+          cursor: pointer; transition: all 0.15s; min-height: 44px;
         }
         .tm-add-btn.physio { background: #2E8BC0; color: #fff; }
         .tm-add-btn.physio:hover { background: #0C3C60; }
         .tm-add-btn.patient { background: #EAF5FC; color: #2E8BC0; border: 1.5px solid #B3DEF0; }
         .tm-add-btn.patient:hover { background: #D6EEF8; }
         .tm-success { background: #d8f3dc; border: 1px solid #b7e4c7; border-radius: 10px; padding: 12px 16px; font-size: 13.5px; color: #1b4332; margin-bottom: 16px; }
-        .tm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+        .tm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
         .tm-card {
-          background: #fff; border: 1.5px solid #e5e0d8; border-radius: 16px;
+          background: #fff; border: 1.5px solid #e5e0d8; border-radius: 14px;
           overflow: hidden; transition: border-color 0.15s; position: relative;
         }
         .tm-card:hover { border-color: #B3DEF0; }
         .tm-card-header {
-          display: flex; align-items: center; gap: 14px;
-          padding: 18px 20px; cursor: pointer; position: relative;
+          display: flex; align-items: center; gap: 12px;
+          padding: 14px 16px; cursor: pointer; position: relative;
         }
         .tm-card-chevron { color: #c0bbb4; transition: transform 0.2s; flex-shrink: 0; }
         .tm-card-chevron.open { transform: rotate(180deg); }
@@ -530,38 +530,41 @@ function OverviewTab({ physio, isManager }: { physio: PhysioProfile; isManager: 
   return (
     <>
       <style>{`
-        .ph-ov-header { margin-bottom: 28px; }
+        .ph-ov-header { margin-bottom: 18px; }
         .ph-ov-title {
           font-family: 'Playfair Display', serif;
-          font-size: 30px; font-weight: 500;
-          color: #1a1a1a; letter-spacing: -0.02em; margin-bottom: 4px;
+          font-size: 24px; font-weight: 500;
+          color: #1a1a1a; letter-spacing: -0.02em; margin-bottom: 3px;
         }
-        .ph-ov-sub { font-size: 14px; color: #9a9590; }
+        .ph-ov-sub { font-size: 13px; color: #9a9590; }
         .ph-ov-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-          gap: 14px; margin-bottom: 28px;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 10px; margin-bottom: 18px;
+        }
+        @media (min-width: 600px) {
+          .ph-ov-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
         }
         .ph-ov-stat {
           background: #fff; border: 1px solid #e5e0d8;
-          border-radius: 16px; padding: 22px;
+          border-radius: 14px; padding: 16px;
         }
         .ph-ov-stat.accent { border-top: 3px solid #2E8BC0; }
-        .ph-ov-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #c0bbb4; font-weight: 600; margin-bottom: 8px; }
+        .ph-ov-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #c0bbb4; font-weight: 600; margin-bottom: 6px; }
         .ph-ov-stat-val {
           font-family: 'Playfair Display', serif;
-          font-size: 36px; color: #1a1a1a; line-height: 1; margin-bottom: 4px;
+          font-size: 30px; color: #1a1a1a; line-height: 1; margin-bottom: 3px;
         }
-        .ph-ov-stat-val.loading { font-size: 28px; color: #c0bbb4; }
-        .ph-ov-stat-sub { font-size: 12px; color: #9a9590; }
+        .ph-ov-stat-val.loading { font-size: 24px; color: #c0bbb4; }
+        .ph-ov-stat-sub { font-size: 11px; color: #9a9590; }
         .ph-ov-card {
           background: #fff; border: 1px solid #e5e0d8;
-          border-radius: 16px; padding: 22px; margin-bottom: 16px;
+          border-radius: 14px; padding: 16px; margin-bottom: 12px;
         }
-        .ph-ov-card-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: #c0bbb4; font-weight: 600; margin-bottom: 16px; }
+        .ph-ov-card-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #c0bbb4; font-weight: 600; margin-bottom: 12px; }
         .ph-ov-empty {
-          text-align: center; padding: 32px; color: #c0bbb4;
-          font-size: 13.5px;
+          text-align: center; padding: 24px; color: #c0bbb4;
+          font-size: 13px;
         }
         @keyframes phShimmer { to { background-position: -200% 0; } }
       `}</style>
@@ -712,38 +715,36 @@ export default function PhysioDashboard() {
         .phd-root {
           min-height: 100vh; background: #f5f3ef;
           font-family: 'Outfit', sans-serif;
-        .phd-root {
-          min-height: 100vh; background: #f5f3ef;
-          font-family: 'Outfit', sans-serif;
-          display: grid; grid-template-rows: 72px 1fr;
+          display: grid; grid-template-rows: 56px 1fr;
         }
 
         .phd-topbar {
           display: grid;
           grid-template-columns: 1fr auto 1fr;
           align-items: center;
-          padding: 0 28px;
+          padding: 0 16px;
           background: #fff;
           border-bottom: 1px solid #e8e4de;
           position: sticky; top: 0; z-index: 100;
           box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+          height: 56px;
         }
-        .phd-topbar-left { display: flex; align-items: center; gap: 10px; }
+        .phd-topbar-left { display: flex; align-items: center; gap: 8px; }
         .phd-topbar-logo { display: flex; align-items: center; justify-content: center; }
-        .phd-topbar-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+        .phd-topbar-right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 
         .phd-user-chip {
           display: flex; align-items: center; gap: 9px;
-          padding: 6px 14px; border-radius: 100px;
+          padding: 6px 12px; border-radius: 100px;
           background: #f5f3ef; border: 1px solid #e5e0d8;
           cursor: pointer; transition: background 0.15s;
         }
         .phd-user-chip:hover { background: #ede9e3; }
 
-        .phd-user-name { font-size: 14px; font-weight: 500; color: #2E8BC0; }
+        .phd-user-name { font-size: 13px; font-weight: 500; color: #2E8BC0; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         .phd-logout-btn {
-          padding: 8px 16px; border-radius: 8px;
+          padding: 7px 14px; border-radius: 8px;
           border: 1.5px solid #e5e0d8; background: #fff;
           font-family: 'Outfit', sans-serif; font-size: 13px;
           color: #9a9590; cursor: pointer; min-height: 40px;
@@ -752,27 +753,27 @@ export default function PhysioDashboard() {
         .phd-logout-btn:hover { border-color: #c0bbb4; color: #5a5550; }
 
         .phd-body {
-          display: grid; grid-template-columns: 260px 1fr;
-          min-height: calc(100vh - 72px);
+          display: grid; grid-template-columns: 240px 1fr;
+          min-height: calc(100vh - 56px);
         }
 
         /* Dark sidebar — matches patient portal */
         .phd-sidebar {
           background: #0C3C60;
           border-right: 1px solid #0a3254;
-          padding: 20px 14px;
-          display: flex; flex-direction: column; gap: 6px;
-          position: sticky; top: 72px;
-          height: calc(100vh - 72px); overflow-y: auto;
+          padding: 16px 12px;
+          display: flex; flex-direction: column; gap: 4px;
+          position: sticky; top: 56px;
+          height: calc(100vh - 56px); overflow-y: auto;
         }
 
         /* Profile card inside dark sidebar */
         .phd-profile {
           background: rgba(46,139,192,0.25);
           border: 1px solid rgba(91,192,190,0.2);
-          border-radius: 14px; padding: 16px;
+          border-radius: 12px; padding: 12px;
           position: relative; overflow: hidden;
-          margin-bottom: 6px;
+          margin-bottom: 4px;
         }
         .phd-profile::before {
           content: ''; position: absolute; top: -20px; right: -20px;
@@ -831,7 +832,7 @@ export default function PhysioDashboard() {
         }
 
         .phd-main {
-          padding: 32px 36px; overflow-y: auto;
+          padding: 20px 18px; overflow-y: auto; overflow-x: hidden;
           animation: phdFadeIn 0.25s ease both;
         }
         @keyframes phdFadeIn {
@@ -843,7 +844,7 @@ export default function PhysioDashboard() {
         .phd-hamburger {
           display: none;
           align-items: center; justify-content: center;
-          width: 34px; height: 34px;
+          width: 40px; height: 40px;
           border: 1px solid #e5e0d8; border-radius: 8px;
           background: #f5f3ef; cursor: pointer;
           color: #5a5550; transition: background 0.15s;
@@ -861,6 +862,14 @@ export default function PhysioDashboard() {
         }
         .phd-overlay.open { display: block; }
         @keyframes phdOvIn { from { opacity: 0; } to { opacity: 1; } }
+
+        @media (min-width: 769px) {
+          .phd-sidebar {
+            display: flex !important;
+            transform: none !important;
+            position: sticky;
+          }
+        }
 
         @media (max-width: 768px) {
           .phd-hamburger { display: flex; }
@@ -885,10 +894,9 @@ export default function PhysioDashboard() {
             box-shadow: 4px 0 24px rgba(0,0,0,0.15);
           }
 
-          .phd-main { padding: 24px 20px; }
-
-          /* Shrink user chip on mobile */
-          .phd-user-name { display: none; }
+          .phd-main { padding: 14px 14px; }
+          .phd-logout-btn { display: none; }
+          .phd-user-name { max-width: 90px; }
         }
       `}</style>
 

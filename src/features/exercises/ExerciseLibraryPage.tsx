@@ -497,29 +497,33 @@ export default function ExerciseLibraryPage({
         }
         .el-title {
           font-family: 'Playfair Display', serif;
-          font-size: 28px; font-weight: 500; color: #1a1a1a;
-          letter-spacing: -0.02em; margin-bottom: 4px;
+          font-size: 22px; font-weight: 500; color: #1a1a1a;
+          letter-spacing: -0.02em; margin-bottom: 3px;
         }
-        .el-sub { font-size: 14px; color: #9a9590; }
+        .el-sub { font-size: 13px; color: #9a9590; }
 
         /* ── Toolbar ── */
         .el-toolbar {
-          display: flex; align-items: center; gap: 10px;
-          margin-bottom: 20px; flex-wrap: wrap;
+          display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+          margin-bottom: 14px;
+        }
+        .el-toolbar-row {
+          display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
         }
         .el-search {
           font-family: 'Outfit', sans-serif;
-          flex: 1; min-width: 200px; padding: 9px 14px; border-radius: 10px;
+          flex: 1; min-width: 0; padding: 10px 14px; border-radius: 10px;
           border: 1.5px solid #e5e0d8; background: #fff; font-size: 14px;
           color: #1a1a1a; outline: none; transition: border-color 0.15s;
+          min-height: 44px;
         }
         .el-search:focus { border-color: #2E8BC0; box-shadow: 0 0 0 3px rgba(46,139,192,0.08); }
         .el-cat-filter {
           font-family: 'Outfit', sans-serif;
-          padding: 9px 28px 9px 12px; border-radius: 10px;
+          padding: 10px 28px 10px 12px; border-radius: 10px;
           border: 1.5px solid #e5e0d8; background: #fff; font-size: 13.5px;
           color: #5a5550; outline: none; cursor: pointer; transition: border-color 0.15s;
-          appearance: none; -webkit-appearance: none;
+          appearance: none; -webkit-appearance: none; min-height: 44px;
           background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%232d6a4f' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
           background-repeat: no-repeat; background-position: right 10px center;
         }
@@ -528,25 +532,26 @@ export default function ExerciseLibraryPage({
         /* Add button */
         .el-add-btn {
           display: inline-flex; align-items: center; gap: 7px;
-          padding: 9px 18px; border-radius: 10px; border: none;
+          padding: 10px 16px; border-radius: 10px; border: none;
           background: #2E8BC0; color: #fff;
           font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 500;
           cursor: pointer; transition: background 0.2s; white-space: nowrap;
+          min-height: 44px;
         }
         .el-add-btn:hover { background: #0C3C60; }
 
         /* ── Count row ── */
         .el-count-row {
-          font-size: 12.5px; color: #9a9590; margin-bottom: 14px;
+          font-size: 12px; color: #9a9590; margin-bottom: 10px;
         }
 
         /* ── Exercise cards ── */
         .el-grid {
-          display: flex; flex-direction: column; gap: 10px;
+          display: flex; flex-direction: column; gap: 8px;
         }
         .el-card {
-          background: #fff; border: 1.5px solid #e5e0d8; border-radius: 16px;
-          padding: 18px 20px; display: flex; align-items: flex-start; gap: 16px;
+          background: #fff; border: 1.5px solid #e5e0d8; border-radius: 14px;
+          padding: 14px 14px; display: flex; align-items: flex-start; gap: 12px;
           transition: border-color 0.15s, box-shadow 0.15s;
         }
         .el-card:hover { border-color: #B3DEF0; box-shadow: 0 2px 12px rgba(46,139,192,0.07); }
@@ -827,20 +832,22 @@ export default function ExerciseLibraryPage({
 
         {/* Toolbar */}
         <div className="el-toolbar">
-          <input
-            className="el-search"
-            placeholder="Search exercises…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <select
-            className="el-cat-filter"
-            value={filterCat}
-            onChange={(e) => setFilterCat(e.target.value)}
-          >
-            <option value="">All Categories</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
+          <div className="el-toolbar-row">
+            <input
+              className="el-search"
+              placeholder="Search exercises…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <select
+              className="el-cat-filter"
+              value={filterCat}
+              onChange={(e) => setFilterCat(e.target.value)}
+            >
+              <option value="">All Categories</option>
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
         </div>
 
         {!loading && (

@@ -208,19 +208,19 @@ export default function SchedulePage({
         /* Page header */
         .sc-header {
           display: flex; align-items: flex-end; justify-content: space-between;
-          margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+          margin-bottom: 14px; flex-wrap: wrap; gap: 8px;
         }
         .sc-title {
           font-family: 'Playfair Display', serif;
-          font-size: 28px; font-weight: 500; color: #1a1a1a;
-          letter-spacing: -0.02em; margin-bottom: 4px;
+          font-size: 22px; font-weight: 500; color: #1a1a1a;
+          letter-spacing: -0.02em; margin-bottom: 3px;
         }
-        .sc-sub { font-size: 13.5px; color: #9a9590; }
+        .sc-sub { font-size: 13px; color: #9a9590; }
 
         /* Toolbar */
         .sc-toolbar {
-          display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-          margin-bottom: 20px;
+          display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+          margin-bottom: 14px;
         }
 
         /* View toggle */
@@ -229,32 +229,32 @@ export default function SchedulePage({
           background: #f5f3ef; border-radius: 10px; padding: 3px; gap: 2px;
         }
         .sc-view-btn {
-          padding: 7px 14px; border-radius: 8px; border: none;
+          padding: 8px 12px; border-radius: 8px; border: none;
           font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
           cursor: pointer; transition: all 0.15s; color: #9a9590; background: transparent;
-          display: flex; align-items: center; gap: 5px;
+          display: flex; align-items: center; gap: 4px; min-height: 40px;
         }
         .sc-view-btn.active { background: #fff; color: #2E8BC0; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
         .sc-view-btn:hover:not(.active) { color: #5a5550; }
 
         /* Navigation */
-        .sc-nav { display: flex; align-items: center; gap: 6px; }
+        .sc-nav { display: flex; align-items: center; gap: 4px; }
         .sc-nav-btn {
-          width: 32px; height: 32px; border-radius: 8px;
+          width: 36px; height: 36px; border-radius: 8px;
           border: 1.5px solid #e5e0d8; background: #fafaf8;
           display: flex; align-items: center; justify-content: center;
           cursor: pointer; color: #5a5550; transition: all 0.15s;
         }
         .sc-nav-btn:hover { background: #f0ede8; border-color: #c0bbb4; }
         .sc-nav-label {
-          font-size: 14.5px; font-weight: 600; color: #1a1a1a; min-width: 160px; text-align: center;
+          font-size: 13px; font-weight: 600; color: #1a1a1a; min-width: 120px; text-align: center;
         }
 
         .sc-today-btn {
-          padding: 7px 14px; border-radius: 8px;
+          padding: 8px 12px; border-radius: 8px;
           border: 1.5px solid #e5e0d8; background: #fafaf8;
           font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
-          color: #5a5550; cursor: pointer; transition: all 0.15s;
+          color: #5a5550; cursor: pointer; transition: all 0.15s; min-height: 40px;
         }
         .sc-today-btn:hover { background: #f0ede8; }
 
@@ -264,10 +264,10 @@ export default function SchedulePage({
         /* Settings panel */
         .sp-toggle {
           display: inline-flex; align-items: center; gap: 6px;
-          padding: 7px 14px; border-radius: 8px;
+          padding: 8px 12px; border-radius: 8px;
           border: 1.5px solid #e5e0d8; background: #fafaf8;
           font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
-          color: #5a5550; cursor: pointer; transition: all 0.15s;
+          color: #5a5550; cursor: pointer; transition: all 0.15s; min-height: 40px;
         }
         .sp-toggle:hover { background: #f0ede8; }
 

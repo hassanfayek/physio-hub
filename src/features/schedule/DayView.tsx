@@ -99,30 +99,33 @@ export default function DayView({
         }
         .dv-title {
           font-family: 'Playfair Display', serif;
-          font-size: 26px; font-weight: 500; color: #1a1a1a;
-          letter-spacing: -0.02em; margin-bottom: 4px;
+          font-size: 22px; font-weight: 500; color: #1a1a1a;
+          letter-spacing: -0.02em; margin-bottom: 3px;
         }
-        .dv-sub { font-size: 13.5px; color: #9a9590; }
+        .dv-sub { font-size: 13px; color: #9a9590; }
 
         .dv-back {
           display: inline-flex; align-items: center; gap: 6px;
-          padding: 8px 14px; border-radius: 10px;
+          padding: 9px 14px; border-radius: 10px;
           border: 1.5px solid #e5e0d8; background: #fafaf8;
-          font-family: 'Outfit', sans-serif; font-size: 13.5px; font-weight: 500;
-          color: #5a5550; cursor: pointer; transition: all 0.15s;
+          font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
+          color: #5a5550; cursor: pointer; transition: all 0.15s; min-height: 44px;
         }
         .dv-back:hover { background: #f0ede8; }
 
         .dv-stats {
-          display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;
+          display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px;
+        }
+        @media (min-width: 480px) {
+          .dv-stats { display: flex; gap: 10px; flex-wrap: wrap; }
         }
         .dv-stat {
           background: #fff; border: 1px solid #e5e0d8; border-radius: 12px;
-          padding: 14px 18px; min-width: 110px;
+          padding: 12px 14px; min-width: 0;
         }
         .dv-stat.accent { border-top: 3px solid #2E8BC0; }
-        .dv-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #c0bbb4; font-weight: 600; margin-bottom: 4px; }
-        .dv-stat-value { font-family: 'Playfair Display', serif; font-size: 28px; color: #1a1a1a; }
+        .dv-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #c0bbb4; font-weight: 600; margin-bottom: 3px; }
+        .dv-stat-value { font-family: 'Playfair Display', serif; font-size: 26px; color: #1a1a1a; }
 
         /* Timeline */
         .dv-timeline { display: flex; flex-direction: column; gap: 8px; }
@@ -136,7 +139,7 @@ export default function DayView({
 
         .dv-slot-header {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 12px 16px; cursor: pointer; user-select: none;
+          padding: 11px 12px; cursor: pointer; user-select: none;
           transition: background 0.12s;
         }
         .dv-slot-header:hover { background: #fafaf8; }

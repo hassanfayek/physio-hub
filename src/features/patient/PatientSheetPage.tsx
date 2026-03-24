@@ -856,26 +856,29 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
       <style>{`
         .ps-title {
           font-family: 'Playfair Display', serif;
-          font-size: 30px;
+          font-size: 22px;
           font-weight: 500;
           color: #1a1a1a;
           letter-spacing: -0.02em;
-          margin-bottom: 4px;
+          margin-bottom: 3px;
         }
-        .ps-sub { font-size: 14px; color: #9a9590; margin-bottom: 24px; }
+        .ps-sub { font-size: 13px; color: #9a9590; margin-bottom: 16px; }
 
         /* ── DIAGNOSIS ── */
         .ps-diag-grid {
           display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-          margin-bottom: 16px;
+          grid-template-columns: 1fr;
+          gap: 8px;
+          margin-bottom: 12px;
+        }
+        @media (min-width: 480px) {
+          .ps-diag-grid { grid-template-columns: 1fr 1fr; }
         }
         .ps-diag-card {
           background: #fff;
           border: 1px solid #e5e0d8;
-          border-radius: 14px;
-          padding: 18px 20px;
+          border-radius: 12px;
+          padding: 14px 16px;
         }
         .ps-diag-label {
           font-size: 10.5px;
@@ -927,9 +930,9 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         .ps-note-card {
           background: #fff;
           border: 1px solid #e5e0d8;
-          border-radius: 16px;
-          padding: 20px 22px;
-          margin-bottom: 12px;
+          border-radius: 14px;
+          padding: 14px 16px;
+          margin-bottom: 10px;
           position: relative;
         }
         .ps-note-card::before {
@@ -960,15 +963,15 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         /* ── DOCUMENTS ── */
         .ps-doc-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-          gap: 12px;
-          margin-bottom: 20px;
+          grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+          gap: 8px;
+          margin-bottom: 14px;
         }
         .ps-doc-card {
           background: #fff;
           border: 1px solid #e5e0d8;
-          border-radius: 14px;
-          padding: 18px;
+          border-radius: 12px;
+          padding: 14px;
           cursor: pointer;
           transition: all 0.2s;
         }
@@ -1004,7 +1007,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         .ps-upload-zone {
           border: 2px dashed #e5e0d8;
           border-radius: 14px;
-          padding: 28px;
+          padding: 20px;
           text-align: center;
           cursor: pointer;
           transition: all 0.2s;
@@ -1231,11 +1234,11 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
         .ps-patient-header {
           display: flex;
           align-items: center;
-          gap: 20px;
+          gap: 14px;
           background: #2E8BC0;
-          border-radius: 18px;
-          padding: 22px 24px;
-          margin-bottom: 24px;
+          border-radius: 16px;
+          padding: 16px 18px;
+          margin-bottom: 16px;
           position: relative;
           overflow: hidden;
         }
@@ -1272,7 +1275,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
 
         /* ── SECTION DROPDOWN ── */
         .ps-section-dropdown-wrap {
-          margin-bottom: 28px;
+          margin-bottom: 16px;
         }
         .ps-section-select {
           font-family: 'Outfit', sans-serif;
@@ -1817,7 +1820,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
 
           {/* EDIT MODE */}
           {extEditing && (
-            <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 16, padding: 24 }}>
+            <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 14, padding: 16 }}>
               <div className="ps-field-row-2">
                 <div className="ps-field-group">
                   <label className="ps-field-label">Date of Birth</label>
@@ -1985,7 +1988,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
 
           {/* EDIT MODE */}
           {diagEditing && (
-            <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 16, padding: 24 }}>
+            <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 14, padding: 16 }}>
               <div className="ps-field-group">
                 <label className="ps-field-label">Primary Diagnosis</label>
                 <input className="ps-field-input" value={diagDraft.primaryDiagnosis}
@@ -2412,7 +2415,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
 
           {/* EDIT MODE */}
           {asmEditing && (
-            <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 16, padding: 24 }}>
+            <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 14, padding: 16 }}>
               {/* Subjective */}
               <div className="ps-asm-section-title">Subjective (Patient History)</div>
               {([

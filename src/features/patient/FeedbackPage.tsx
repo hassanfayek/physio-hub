@@ -263,23 +263,23 @@ export default function FeedbackPage() {
       <style>{`
         .fb-title {
           font-family: 'Playfair Display', serif;
-          font-size: 30px;
+          font-size: 22px;
           font-weight: 500;
           color: #1a1a1a;
           letter-spacing: -0.02em;
-          margin-bottom: 4px;
+          margin-bottom: 3px;
         }
-        .fb-sub { font-size: 14px; color: #9a9590; margin-bottom: 28px; }
+        .fb-sub { font-size: 13px; color: #9a9590; margin-bottom: 16px; }
 
         .fb-session-banner {
           display: flex;
           align-items: center;
-          gap: 16px;
+          gap: 12px;
           background: linear-gradient(135deg, #f0f7f4, #e6f4ed);
           border: 1px solid #b7e4c7;
-          border-radius: 16px;
-          padding: 18px 22px;
-          margin-bottom: 24px;
+          border-radius: 14px;
+          padding: 14px 16px;
+          margin-bottom: 16px;
         }
         .fb-session-icon {
           width: 44px; height: 44px;
@@ -298,17 +298,17 @@ export default function FeedbackPage() {
         .fb-section {
           background: #fff;
           border: 1px solid #e5e0d8;
-          border-radius: 18px;
-          padding: 24px;
-          margin-bottom: 16px;
+          border-radius: 14px;
+          padding: 16px;
+          margin-bottom: 12px;
         }
         .fb-section-title {
-          font-size: 16px;
+          font-size: 15px;
           font-weight: 600;
           color: #1a1a1a;
-          margin-bottom: 4px;
+          margin-bottom: 3px;
         }
-        .fb-section-sub { font-size: 13px; color: #9a9590; margin-bottom: 20px; }
+        .fb-section-sub { font-size: 13px; color: #9a9590; margin-bottom: 14px; }
 
         /* Pain slider */
         .fb-pain-display {
@@ -364,11 +364,14 @@ export default function FeedbackPage() {
         /* Options grid */
         .fb-options-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-          gap: 10px;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 8px;
+        }
+        @media (min-width: 400px) {
+          .fb-options-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
         }
         .fb-option {
-          padding: 14px 10px;
+          padding: 14px 8px;
           border-radius: 12px;
           border: 1.5px solid #e5e0d8;
           background: #fff;
@@ -376,6 +379,8 @@ export default function FeedbackPage() {
           cursor: pointer;
           transition: all 0.15s;
           font-family: 'Outfit', sans-serif;
+          min-height: 80px;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
         .fb-option:hover { border-color: #b7e4c7; }
         .fb-option.selected {
@@ -434,13 +439,13 @@ export default function FeedbackPage() {
         /* Submit */
         .fb-submit-row {
           display: flex;
-          align-items: center;
-          gap: 16px;
+          flex-direction: column;
+          gap: 10px;
           margin-top: 4px;
         }
-        .fb-required-note { font-size: 12.5px; color: #c0bbb4; flex: 1; }
+        .fb-required-note { font-size: 12px; color: #c0bbb4; }
         .fb-submit-btn {
-          padding: 14px 36px;
+          width: 100%; padding: 15px 20px;
           border-radius: 12px;
           border: none;
           background: #2d6a4f;
@@ -450,10 +455,11 @@ export default function FeedbackPage() {
           cursor: pointer;
           transition: all 0.2s;
           font-family: 'Outfit', sans-serif;
-          display: flex; align-items: center; gap: 8px;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          min-height: 52px;
         }
-        .fb-submit-btn:hover { background: #1b4332; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(45,106,79,0.25); }
-        .fb-submit-btn:disabled { background: #e5e0d8; color: #c0bbb4; cursor: not-allowed; transform: none; box-shadow: none; }
+        .fb-submit-btn:hover { background: #1b4332; box-shadow: 0 4px 16px rgba(45,106,79,0.25); }
+        .fb-submit-btn:disabled { background: #e5e0d8; color: #c0bbb4; cursor: not-allowed; box-shadow: none; }
 
         /* History */
         .fb-history-toggle {

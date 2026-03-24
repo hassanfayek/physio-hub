@@ -311,7 +311,7 @@ export default function ExerciseProgram({
         }
         .ep-add-ex-btn {
           display: inline-flex; align-items: center; gap: 6px;
-          padding: 7px 14px; border-radius: 9px;
+          padding: 7px 14px; border-radius: 9px; min-height: 44px;
           border: 1.5px solid #B3DEF0; background: #EAF5FC;
           font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
           color: #2E8BC0; cursor: pointer; transition: all 0.15s; white-space: nowrap;
@@ -404,6 +404,7 @@ export default function ExerciseProgram({
           display: flex; flex-direction: column; gap: 8px;
         }
         .ep-edit-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        @media (max-width: 480px) { .ep-edit-row { grid-template-columns: 1fr 1fr; } }
         .ep-edit-field { display: flex; flex-direction: column; gap: 3px; }
         .ep-edit-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #9a9590; }
         .ep-edit-input {
@@ -572,7 +573,7 @@ export default function ExerciseProgram({
           padding: 12px 20px 18px; flex-shrink: 0; border-top: 1px solid #f0ede8;
         }
         .ep-btn-cancel {
-          padding: 9px 20px; border-radius: 10px;
+          padding: 9px 20px; border-radius: 10px; min-height: 44px;
           border: 1.5px solid #e5e0d8; background: #fff;
           font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 500;
           color: #5a5550; cursor: pointer; transition: background 0.15s;
@@ -602,6 +603,29 @@ export default function ExerciseProgram({
         @keyframes epToastIn {
           from { opacity:0; transform: translateX(-50%) translateY(12px); }
           to   { opacity:1; transform: translateX(-50%) translateY(0); }
+        }
+
+        .ep-picker-search { min-height: 44px; }
+        .ep-picker-add-btn { min-height: 40px; }
+        .ep-edit-save { min-height: 40px; }
+        .ep-edit-cancel { min-height: 40px; }
+
+        @media (max-width: 520px) {
+          .ep-overlay { padding: 0; align-items: flex-end; }
+          .ep-picker-modal {
+            border-radius: 22px 22px 0 0; max-width: 100%;
+            max-height: 90vh;
+          }
+          @keyframes epModalIn {
+            from { opacity:0; transform: translateY(100%); }
+            to   { opacity:1; transform: translateY(0); }
+          }
+          .ep-picker-hd { padding: 16px 16px 0; }
+          .ep-prog-toggle-wrap { padding: 10px 16px 0; }
+          .ep-picker-search-wrap { padding: 10px 16px 8px; }
+          .ep-picker-list { padding: 6px 16px; }
+          .ep-picker-ft { padding: 12px 16px 20px; }
+          .ep-picker-search { font-size: 15px; }
         }
       `}</style>
 

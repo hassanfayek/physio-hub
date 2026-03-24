@@ -270,29 +270,29 @@ export default function AppointmentsPage() {
       <style>{`
         .ap-title {
           font-family: 'Playfair Display', serif;
-          font-size: 30px; font-weight: 500; color: #1a1a1a;
-          letter-spacing: -0.02em; margin-bottom: 4px;
+          font-size: 22px; font-weight: 500; color: #1a1a1a;
+          letter-spacing: -0.02em; margin-bottom: 3px;
         }
-        .ap-sub { font-size: 14px; color: #9a9590; margin-bottom: 28px; }
+        .ap-sub { font-size: 13px; color: #9a9590; margin-bottom: 16px; }
 
         .ap-book-card {
           background: #fff; border: 1px solid #e5e0d8;
-          border-radius: 20px; padding: 24px; margin-bottom: 24px;
+          border-radius: 16px; padding: 16px; margin-bottom: 16px;
           box-shadow: 0 2px 12px rgba(0,0,0,0.04);
         }
         .ap-section-title {
-          font-size: 13px; font-weight: 600; text-transform: uppercase;
-          letter-spacing: 0.1em; color: #9a9590; margin-bottom: 16px;
+          font-size: 11px; font-weight: 600; text-transform: uppercase;
+          letter-spacing: 0.1em; color: #9a9590; margin-bottom: 12px;
         }
 
         .ap-day-row {
           display: grid; grid-template-columns: repeat(5, 1fr);
-          gap: 8px; margin-bottom: 20px;
+          gap: 6px; margin-bottom: 14px;
         }
         .ap-day-btn {
-          padding: 10px 6px; border-radius: 12px; border: 1px solid #e5e0d8;
+          padding: 10px 4px; border-radius: 10px; border: 1px solid #e5e0d8;
           background: #fff; text-align: center; cursor: pointer;
-          transition: all 0.15s; font-family: 'Outfit', sans-serif;
+          transition: all 0.15s; font-family: 'Outfit', sans-serif; min-height: 54px;
         }
         .ap-day-btn:hover { border-color: #B3DEF0; }
         .ap-day-btn.selected { background: #2E8BC0; border-color: #2E8BC0; color: #fff; }
@@ -301,14 +301,15 @@ export default function AppointmentsPage() {
         .ap-day-btn.selected .ap-day-date { color: rgba(255,255,255,0.7); }
 
         .ap-slots-grid {
-          display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-          gap: 8px; margin-bottom: 20px;
+          display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+          gap: 6px; margin-bottom: 14px;
         }
         .ap-slot {
-          padding: 10px; border-radius: 10px; border: 1px solid #e5e0d8;
-          text-align: center; font-size: 13.5px; font-weight: 500;
-          cursor: pointer; transition: all 0.15s;
+          padding: 11px 6px; border-radius: 10px; border: 1px solid #e5e0d8;
+          text-align: center; font-size: 13px; font-weight: 500;
+          cursor: pointer; transition: all 0.15s; min-height: 44px;
           font-family: 'Outfit', sans-serif; color: #1a1a1a; background: #fff;
+          display: flex; align-items: center; justify-content: center;
         }
         .ap-slot:hover:not(.unavailable) { border-color: #5BC0BE; color: #2E8BC0; }
         .ap-slot.selected   { background: #2E8BC0; border-color: #2E8BC0; color: #fff; }
@@ -316,65 +317,67 @@ export default function AppointmentsPage() {
 
         .ap-book-btn {
           display: flex; align-items: center; justify-content: center; gap: 8px;
-          width: 100%; padding: 13px; border-radius: 12px; border: none;
+          width: 100%; padding: 15px; border-radius: 12px; border: none;
           background: #2E8BC0; color: #fff; font-size: 15px; font-weight: 500;
           cursor: pointer; transition: all 0.2s; font-family: 'Outfit', sans-serif;
+          min-height: 52px;
         }
         .ap-book-btn:hover    { background: #0C3C60; }
         .ap-book-btn:disabled { background: #e5e0d8; color: #c0bbb4; cursor: not-allowed; }
 
         .ap-success-toast {
           background: #D6EEF8; border: 1px solid #B3DEF0; color: #0C3C60;
-          border-radius: 12px; padding: 14px 18px; font-size: 14px; font-weight: 500;
+          border-radius: 12px; padding: 14px 16px; font-size: 14px; font-weight: 500;
           display: flex; align-items: center; gap: 10px;
-          margin-bottom: 16px; animation: slideIn 0.3s ease;
+          margin-bottom: 14px; animation: slideIn 0.3s ease;
         }
         @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 
         .ap-book-error {
           background: #fff5f3; border: 1px solid #fecaca;
           border-radius: 10px; padding: 12px 14px;
-          font-size: 13.5px; color: #b91c1c; margin-bottom: 14px;
+          font-size: 13px; color: #b91c1c; margin-bottom: 12px;
         }
 
         .ap-select {
-          width: 100%; padding: 10px 12px; border-radius: 10px;
+          width: 100%; padding: 12px 12px; border-radius: 10px;
           border: 1.5px solid #e5e0d8; background: #fafaf8;
-          font-family: 'Outfit', sans-serif; font-size: 14px; color: #1a1a1a;
-          margin-bottom: 16px; outline: none; cursor: pointer; transition: border-color 0.15s;
+          font-family: 'Outfit', sans-serif; font-size: 15px; color: #1a1a1a;
+          margin-bottom: 14px; outline: none; cursor: pointer; transition: border-color 0.15s;
+          min-height: 48px;
         }
         .ap-select:focus { border-color: #2E8BC0; background: #fff; }
 
-        .ap-upcoming-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
+        .ap-upcoming-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
         .ap-appt-card {
-          display: flex; align-items: flex-start; gap: 16px;
-          padding: 18px 20px; background: #fff; border: 1px solid #e5e0d8;
-          border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: box-shadow 0.2s;
+          display: flex; align-items: flex-start; gap: 12px;
+          padding: 14px 14px; background: #fff; border: 1px solid #e5e0d8;
+          border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: box-shadow 0.2s;
         }
         .ap-appt-card:hover    { box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
         .ap-appt-card.cancelled { opacity: 0.5; }
 
         .ap-date-badge {
-          width: 56px; height: 60px; border-radius: 12px;
+          width: 48px; height: 54px; border-radius: 10px;
           background: linear-gradient(145deg,#f0f7f4,#e0f0ea);
           border: 1px solid #B3DEF0;
           display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0;
         }
-        .ap-date-day   { font-size: 22px; font-weight: 700; color: #2E8BC0; font-family: 'Playfair Display', serif; line-height: 1; }
-        .ap-date-month { font-size: 11px; text-transform: uppercase; color: #5BC0BE; letter-spacing: 0.05em; }
+        .ap-date-day   { font-size: 20px; font-weight: 700; color: #2E8BC0; font-family: 'Playfair Display', serif; line-height: 1; }
+        .ap-date-month { font-size: 10px; text-transform: uppercase; color: #5BC0BE; letter-spacing: 0.05em; }
 
-        .ap-appt-info { flex: 1; }
-        .ap-appt-type { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px; }
-        .ap-appt-meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: #9a9590; margin-bottom: 6px; }
+        .ap-appt-info { flex: 1; min-width: 0; }
+        .ap-appt-type { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 3px; }
+        .ap-appt-meta { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; color: #9a9590; margin-bottom: 6px; }
         .ap-appt-meta-item { display: flex; align-items: center; gap: 4px; }
 
-        .ap-appt-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
-        .ap-status-chip  { font-size: 11.5px; font-weight: 500; padding: 3px 10px; border-radius: 100px; }
-        .ap-action-row   { display: flex; gap: 6px; }
+        .ap-appt-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+        .ap-status-chip  { font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 100px; }
+        .ap-action-row   { display: flex; gap: 5px; }
         .ap-action-btn {
-          padding: 5px 12px; border-radius: 8px; border: 1px solid #e5e0d8;
+          padding: 7px 12px; border-radius: 8px; border: 1px solid #e5e0d8;
           background: #fff; font-size: 12px; color: #5a5550; cursor: pointer;
-          transition: all 0.15s; font-family: 'Outfit', sans-serif;
+          transition: all 0.15s; font-family: 'Outfit', sans-serif; min-height: 36px;
         }
         .ap-action-btn:hover         { border-color: #c0bbb4; }
         .ap-action-btn.danger        { color: #e07a5f; }
@@ -383,43 +386,49 @@ export default function AppointmentsPage() {
         /* Booking confirmation modal */
         .ap-confirm-overlay {
           position: fixed; inset: 0; background: rgba(0,0,0,0.35);
-          display: flex; align-items: center; justify-content: center;
+          display: flex; align-items: flex-end; justify-content: center;
           z-index: 300; backdrop-filter: blur(3px);
           animation: modalIn 0.2s ease;
         }
+        @media (min-width: 480px) {
+          .ap-confirm-overlay { align-items: center; }
+        }
         .ap-confirm-modal {
-          background: #fff; border-radius: 22px; padding: 32px 28px;
-          width: min(400px, 92vw); box-shadow: 0 24px 80px rgba(0,0,0,0.18);
+          background: #fff; border-radius: 22px 22px 0 0; padding: 28px 20px;
+          width: 100%; max-width: 440px; box-shadow: 0 24px 80px rgba(0,0,0,0.18);
           text-align: center; animation: modalIn 0.25s cubic-bezier(0.16,1,0.3,1);
         }
+        @media (min-width: 480px) {
+          .ap-confirm-modal { border-radius: 22px; padding: 28px 24px; width: min(400px, 92vw); }
+        }
         .ap-confirm-icon {
-          width: 72px; height: 72px; border-radius: 50%;
+          width: 60px; height: 60px; border-radius: 50%;
           background: linear-gradient(135deg, #D6EEF8, #EAF5FC);
           border: 2px solid #B3DEF0;
           display: flex; align-items: center; justify-content: center;
-          margin: 0 auto 20px; font-size: 28px;
+          margin: 0 auto 16px; font-size: 24px;
         }
         .ap-confirm-title {
           font-family: 'Playfair Display', serif;
-          font-size: 24px; font-weight: 500; color: #1a1a1a;
-          margin-bottom: 8px;
+          font-size: 22px; font-weight: 500; color: #1a1a1a;
+          margin-bottom: 6px;
         }
         .ap-confirm-sub {
-          font-size: 14px; color: #5a5550; line-height: 1.6; margin-bottom: 20px;
+          font-size: 13px; color: #5a5550; line-height: 1.6; margin-bottom: 16px;
         }
         .ap-confirm-detail-row {
           display: flex; align-items: center; gap: 10px;
           background: #f5f3ef; border-radius: 10px; padding: 10px 14px;
           margin-bottom: 8px; text-align: left;
         }
-        .ap-confirm-detail-label { font-size: 11.5px; color: #9a9590; flex-shrink: 0; width: 72px; }
+        .ap-confirm-detail-label { font-size: 11px; color: #9a9590; flex-shrink: 0; width: 64px; }
         .ap-confirm-detail-val   { font-size: 14px; font-weight: 500; color: #1a1a1a; }
         .ap-confirm-close {
-          margin-top: 20px; width: 100%; padding: 12px;
+          margin-top: 16px; width: 100%; padding: 14px;
           border-radius: 12px; border: none;
           background: #2E8BC0; color: #fff;
           font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 500;
-          cursor: pointer; transition: background 0.15s;
+          cursor: pointer; transition: background 0.15s; min-height: 52px;
         }
         .ap-confirm-close:hover { background: #0C3C60; }
 

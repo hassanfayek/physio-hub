@@ -275,47 +275,47 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
 
         /* Header */
         .pt-header {
-          display: flex; align-items: flex-end; justify-content: space-between;
-          margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+          display: flex; align-items: flex-start; justify-content: space-between;
+          margin-bottom: 14px; flex-wrap: wrap; gap: 10px;
         }
         .pt-title {
           font-family: 'Playfair Display', serif;
-          font-size: 28px; font-weight: 500; color: #1a1a1a;
-          letter-spacing: -0.02em; margin-bottom: 4px;
+          font-size: 22px; font-weight: 500; color: #1a1a1a;
+          letter-spacing: -0.02em; margin-bottom: 3px;
         }
-        .pt-sub { font-size: 13.5px; color: #9a9590; }
+        .pt-sub { font-size: 13px; color: #9a9590; }
 
-        .pt-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .pt-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
         .pt-manager-badge {
           display: inline-flex; align-items: center; gap: 6px;
           background: #ede9fe; border: 1px solid #c4b5fd;
           color: #5b21b6; border-radius: 100px;
-          font-size: 12px; font-weight: 600; padding: 5px 12px;
+          font-size: 12px; font-weight: 600; padding: 5px 10px;
         }
 
         /* Action buttons */
         .pt-btn-primary {
           display: inline-flex; align-items: center; gap: 7px;
-          padding: 8px 16px; border-radius: 10px; border: none;
+          padding: 10px 16px; border-radius: 10px; border: none;
           background: #2d6a4f; color: #fff;
           font-family: 'Outfit', sans-serif; font-size: 13.5px; font-weight: 500;
-          cursor: pointer; transition: all 0.15s; white-space: nowrap;
+          cursor: pointer; transition: all 0.15s; white-space: nowrap; min-height: 44px;
         }
         .pt-btn-primary:hover { background: #1b4332; box-shadow: 0 4px 12px rgba(45,106,79,0.2); }
 
         .pt-btn-secondary {
           display: inline-flex; align-items: center; gap: 7px;
-          padding: 8px 16px; border-radius: 10px;
+          padding: 10px 16px; border-radius: 10px;
           border: 1.5px solid #c4b5fd; background: #faf5ff; color: #5b21b6;
           font-family: 'Outfit', sans-serif; font-size: 13.5px; font-weight: 500;
-          cursor: pointer; transition: all 0.15s; white-space: nowrap;
+          cursor: pointer; transition: all 0.15s; white-space: nowrap; min-height: 44px;
         }
         .pt-btn-secondary:hover { background: #ede9fe; border-color: #a78bfa; }
 
         /* Search bar */
         .pt-search-wrap {
-          position: relative; margin-bottom: 20px;
+          position: relative; margin-bottom: 14px;
         }
         .pt-search-icon {
           position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
@@ -340,18 +340,21 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
 
         /* Stats */
         .pt-stats {
-          display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-          gap: 12px; margin-bottom: 24px;
+          display: grid; grid-template-columns: repeat(2, 1fr);
+          gap: 8px; margin-bottom: 14px;
+        }
+        @media (min-width: 480px) {
+          .pt-stats { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
         }
         .pt-stat {
           background: #fff; border: 1px solid #e5e0d8;
-          border-radius: 14px; padding: 16px 18px;
+          border-radius: 12px; padding: 12px 14px;
           box-shadow: 0 1px 6px rgba(0,0,0,0.03);
         }
         .pt-stat.accent { border-top: 3px solid #2d6a4f; }
-        .pt-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #c0bbb4; font-weight: 600; margin-bottom: 6px; }
-        .pt-stat-value { font-family: 'Playfair Display', serif; font-size: 30px; color: #1a1a1a; line-height: 1; margin-bottom: 2px; }
-        .pt-stat-sub { font-size: 11.5px; color: #9a9590; }
+        .pt-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #c0bbb4; font-weight: 600; margin-bottom: 4px; }
+        .pt-stat-value { font-family: 'Playfair Display', serif; font-size: 26px; color: #1a1a1a; line-height: 1; margin-bottom: 2px; }
+        .pt-stat-sub { font-size: 11px; color: #9a9590; }
 
         /* Error banner */
         .pt-error-banner {
@@ -364,14 +367,15 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
         /* Table */
         .pt-assign-table-wrap {
           background: #fff; border: 1px solid #e5e0d8;
-          border-radius: 16px; overflow: hidden;
+          border-radius: 14px; overflow-x: auto;
           box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+          -webkit-overflow-scrolling: touch;
         }
-        .pt-assign-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+        .pt-assign-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .pt-assign-table thead th {
           background: #fafaf8; border-bottom: 1px solid #e5e0d8;
-          padding: 11px 16px; text-align: left;
-          font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+          padding: 10px 12px; text-align: left;
+          font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
           color: #c0bbb4; font-weight: 600; white-space: nowrap;
         }
         .pt-assign-table tbody tr {
@@ -379,7 +383,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
         }
         .pt-assign-table tbody tr:last-child { border-bottom: none; }
         .pt-assign-table tbody tr:hover       { background: #fafaf8; }
-        .pt-assign-table td { padding: 12px 16px; vertical-align: middle; }
+        .pt-assign-table td { padding: 10px 12px; vertical-align: middle; }
 
         .pt-patient-cell { display: flex; align-items: center; gap: 10px; }
         .pt-cell-avatar {
@@ -473,47 +477,54 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
         /* Add Patient Modal */
         .pt-modal-overlay {
           position: fixed; inset: 0; background: rgba(0,0,0,0.4);
-          display: flex; align-items: center; justify-content: center;
+          display: flex; align-items: flex-end; justify-content: center;
           z-index: 300; backdrop-filter: blur(3px);
         }
+        @media (min-width: 480px) {
+          .pt-modal-overlay { align-items: center; }
+        }
         .pt-modal {
-          background: #fff; border-radius: 20px; padding: 28px;
-          width: min(460px, 94vw); max-height: 90vh; overflow-y: auto;
+          background: #fff; border-radius: 20px 20px 0 0; padding: 24px;
+          width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto;
           box-shadow: 0 24px 80px rgba(0,0,0,0.18);
           animation: ptModalIn 0.22s cubic-bezier(0.16,1,0.3,1) both;
         }
+        @media (min-width: 480px) {
+          .pt-modal { border-radius: 20px; width: min(460px, 94vw); }
+        }
         @keyframes ptModalIn { from { opacity:0; transform:scale(0.95) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
-        .pt-modal-title { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 500; color: #1a1a1a; margin-bottom: 4px; }
-        .pt-modal-sub   { font-size: 13px; color: #9a9590; margin-bottom: 20px; }
-        .pt-modal-field { margin-bottom: 14px; }
-        .pt-modal-label { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #9a9590; margin-bottom: 5px; display: block; }
+        .pt-modal-title { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 500; color: #1a1a1a; margin-bottom: 3px; }
+        .pt-modal-sub   { font-size: 13px; color: #9a9590; margin-bottom: 16px; }
+        .pt-modal-field { margin-bottom: 12px; }
+        .pt-modal-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #9a9590; margin-bottom: 4px; display: block; }
         .pt-modal-input {
-          width: 100%; padding: 10px 13px; border-radius: 9px;
+          width: 100%; padding: 12px 13px; border-radius: 9px;
           border: 1.5px solid #e5e0d8; background: #fafaf8;
-          font-family: 'Outfit', sans-serif; font-size: 14px; color: #1a1a1a; outline: none;
-          transition: border-color 0.15s;
+          font-family: 'Outfit', sans-serif; font-size: 15px; color: #1a1a1a; outline: none;
+          transition: border-color 0.15s; min-height: 48px;
         }
         .pt-modal-input:focus { border-color: #2d6a4f; background: #fff; }
-        .pt-modal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .pt-modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .pt-modal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .pt-modal-actions { display: flex; gap: 10px; margin-top: 16px; }
         .pt-modal-save {
-          flex: 1; padding: 11px; border-radius: 10px; border: none;
+          flex: 1; padding: 13px; border-radius: 10px; border: none;
           background: #2d6a4f; color: #fff; font-family: 'Outfit', sans-serif;
           font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s;
+          min-height: 50px;
         }
         .pt-modal-save:hover:not(:disabled) { background: #1b4332; }
         .pt-modal-save:disabled { opacity: 0.6; cursor: not-allowed; }
         .pt-modal-cancel {
-          padding: 11px 20px; border-radius: 10px;
+          padding: 13px 18px; border-radius: 10px;
           border: 1.5px solid #e5e0d8; background: #fff;
           font-family: 'Outfit', sans-serif; font-size: 14px; color: #5a5550;
-          cursor: pointer;
+          cursor: pointer; min-height: 50px;
         }
         .pt-modal-error { font-size: 13px; color: #b91c1c; margin-top: 10px; }
 
         /* Toast */
         .pt-toast {
-          position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+          position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
           background: #1b4332; color: #fff; padding: 13px 22px; border-radius: 12px;
           font-size: 14px; font-weight: 500; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
           z-index: 2000; white-space: nowrap;

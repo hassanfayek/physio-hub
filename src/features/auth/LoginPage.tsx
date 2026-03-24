@@ -619,7 +619,15 @@ export default function LoginPage() {
         @media (max-width: 860px) {
           .lp-wrap { grid-template-columns: 1fr; }
           .lp-left { display: none; }
-          .lp-right { padding: 40px 28px; }
+          .lp-right { padding: 32px 20px; align-items: flex-start; padding-top: 40px; }
+        }
+        @media (max-width: 480px) {
+          .lp-right { padding: 24px 16px; }
+          .lp-form-box { max-width: 100%; }
+          .lp-form-heading { font-size: 30px; }
+          .lp-submit { min-height: 52px; font-size: 15px; }
+          .lp-role-tab { padding: 12px 8px; font-size: 13px; }
+          .lp-input { padding: 14px 16px; font-size: 15px; }
         }
       `}</style>
 
