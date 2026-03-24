@@ -5,7 +5,7 @@
 // CSS prefix: el-  (exercise library)
 
 import React, { useState, useEffect, type FormEvent } from "react";
-import { X, Check, Plus, Pencil, Trash2, ExternalLink, UserPlus } from "lucide-react";
+import { X, Check } from "lucide-react";
 import {
   subscribeToExerciseLibrary,
   createExercise,
