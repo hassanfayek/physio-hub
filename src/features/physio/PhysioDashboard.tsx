@@ -26,6 +26,7 @@ import { secondaryAuth } from "../../firebase";
 import logo from "../../assets/physio-logo.svg";
 import { subscribeToPhysiotherapists, type Physiotherapist } from "../../services/patientService";
 
+
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
 type Tab = "overview" | "patients" | "team" | "schedule" | "exercises" | "reports";
@@ -929,7 +930,7 @@ export default function PhysioDashboard() {
               onClick={() => setSidebarOpen(true)}
               aria-label="Open menu"
             >
-              <Menu size={22} strokeWidth={2} />
+              <Menu size={22} color="red"/>
             </button>
           </div>
 
