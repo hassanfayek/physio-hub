@@ -19,9 +19,10 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PatientsTabProps {
-  physioId:      string;
-  isManager?:    boolean;
-  isSenior?:     boolean;
+  physioId:       string;
+  isManager?:     boolean;
+  isSenior?:      boolean;
+  isSecretary?:   boolean;
   /** Called when the user clicks a patient name to view their sheet. */
   onViewPatient?: (patientId: string) => void;
 }
@@ -149,7 +150,7 @@ function StaffAssignmentPanel({ patient, physios }: { patient: Patient; physios:
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function PatientsTab({ physioId, isManager = false, isSenior = false, onViewPatient }: PatientsTabProps) {
+export default function PatientsTab({ physioId, isManager = false, isSenior = false, isSecretary = false, onViewPatient }: PatientsTabProps) {
   const [patients,       setPatients]       = useState<Patient[]>([]);
   const [physios,        setPhysios]        = useState<Physiotherapist[]>([]);
   const [loading,        setLoading]        = useState(true);
@@ -175,7 +176,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
     setLoading(true);
     setError(null);
 
-    const unsubscribe = isManager
+    const unsubscribe = (isManager || isSecretary)
       ? subscribeToAllPatients(
           (data) => { setPatients(data); setLoading(false); },
           (err)  => { setError(err.message ?? "Failed to load patients."); setLoading(false); }
@@ -187,7 +188,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
         );
 
     return () => unsubscribe();
-  }, [physioId, isManager]);
+  }, [physioId, isManager, isSecretary]);
 
   // ── Physiotherapists subscription ─────────────────────────────────────────
   useEffect(() => {
@@ -536,19 +537,19 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
         {/* Header */}
         <div className="pt-header">
           <div>
-            <div className="pt-title">{isManager ? "All Patients" : "My Patients"}</div>
+            <div className="pt-title">{(isManager || isSecretary) ? "All Patients" : "My Patients"}</div>
             <div className="pt-sub">
               {loading
                 ? "Loading patient records…"
-                : `${patients.length} patient${patients.length !== 1 ? "s" : ""}${isManager ? " across the clinic" : " under your care"}`}
+                : `${patients.length} patient${patients.length !== 1 ? "s" : ""}${(isManager || isSecretary) ? " across the clinic" : " under your care"}`}
             </div>
           </div>
 
           <div className="pt-header-actions">
-            {isManager && (
+            {(isManager || isSecretary) && (
               <div className="pt-manager-badge">
                 <Check size={12} strokeWidth={2.5} />
-                Clinic Manager View
+                {isSecretary ? "Secretary View" : "Clinic Manager View"}
               </div>
             )}
 
@@ -570,7 +571,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
               { label: "Active",     value: patients.filter((p) => p.status === "active").length,     sub: "in rehabilitation", accent: false },
               { label: "On Hold",    value: patients.filter((p) => p.status === "on_hold").length,    sub: "paused",            accent: false },
               { label: "Discharged", value: patients.filter((p) => p.status === "discharged").length, sub: "completed",         accent: false },
-              ...(isManager
+              ...((isManager || isSecretary)
                 ? [{ label: "Unassigned", value: patients.filter((p) => !p.physioId).length, sub: "need assignment", accent: false }]
                 : []
               ),
@@ -622,7 +623,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
                 <th>Condition</th>
                 <th>Status</th>
                 <th>Team</th>
-                {isManager && <th>Assign Staff</th>}
+                {(isManager || isSecretary) && <th>Assign Staff</th>}
                 {isManager && <th></th>}
               </tr>
             </thead>
@@ -634,19 +635,19 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
                       <td><div className="pt-skel pt-skel-sm" /></td>
                       <td><div className="pt-skel pt-skel-sm" /></td>
                       <td><div className="pt-skel pt-skel-lg" /></td>
-                      {isManager && <td><div className="pt-skel pt-skel-sel" /></td>}
+                      {(isManager || isSecretary) && <td><div className="pt-skel pt-skel-sel" /></td>}
                       {isManager && <td><div className="pt-skel pt-skel-sm" /></td>}
                     </tr>
                   ))
                 : filteredPatients.length === 0
                   ? (
                     <tr>
-                      <td colSpan={isManager ? 6 : 4}>
+                      <td colSpan={(isManager || isSecretary) ? 6 : 4}>
                         <div className="pt-empty">
                           <div className="pt-empty-icon">{searchQuery ? "🔍" : "🏥"}</div>
                           {searchQuery
                             ? `No patients match "${searchQuery}"`
-                            : isManager
+                            : (isManager || isSecretary)
                               ? "No patients found in the system."
                               : "No patients assigned to you yet."
                           }
@@ -709,7 +710,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
                               )}
                             </div>
                           </td>
-                          {isManager && (
+                          {(isManager || isSecretary) && (
                             <td>
                               <StaffAssignmentPanel patient={patient} physios={physios} />
                             </td>

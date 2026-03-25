@@ -56,7 +56,7 @@ import { getFirestore } from "firebase/firestore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type UserRole = "patient" | "physiotherapist" | "clinic_manager";
+export type UserRole = "patient" | "physiotherapist" | "clinic_manager" | "secretary";
 
 export interface UserProfile {
   uid:         string;
@@ -86,6 +86,21 @@ export interface PhysioProfile extends UserProfile {
   specializations: string[];
   clinicName:      string;
   phone:           string;
+}
+
+export interface SecretaryProfile extends UserProfile {
+  role:      "secretary";
+  firstName: string;
+  lastName:  string;
+  phone:     string;
+}
+
+export interface RegisterSecretaryData {
+  email:     string;
+  password:  string;
+  firstName: string;
+  lastName:  string;
+  phone:     string;
 }
 
 export interface RegisterPatientData {
@@ -269,7 +284,7 @@ export async function registerPhysio(
 export async function login(
   email: string,
   password: string
-): Promise<PatientProfile | PhysioProfile> {
+): Promise<PatientProfile | PhysioProfile | SecretaryProfile> {
   const credential = await signInWithEmailAndPassword(auth, email, password);
   const profile    = await loadUserProfile(credential.user);
 
@@ -297,7 +312,7 @@ export async function sendPasswordReset(email: string): Promise<void> {
 
 export async function loadUserProfile(
   user: User
-): Promise<PatientProfile | PhysioProfile | null> {
+): Promise<PatientProfile | PhysioProfile | SecretaryProfile | null> {
   const userSnap = await getDoc(doc(db, "users", user.uid));
 
   if (!userSnap.exists()) return null;
@@ -349,7 +364,72 @@ export async function loadUserProfile(
     } as PhysioProfile;
   }
 
+  if (role === "secretary") {
+    const secSnap = await getDoc(doc(db, "secretaries", user.uid));
+    if (!secSnap.exists()) return null;
+    const s = secSnap.data() as DocumentData;
+
+    return {
+      ...base,
+      role:      "secretary",
+      firstName: s.firstName,
+      lastName:  s.lastName,
+      phone:     s.phone ?? "",
+    } as SecretaryProfile;
+  }
+
   return null;
+}
+
+// ─── Register secretary (manager-initiated) ───────────────────────────────────
+
+export async function registerSecretary(
+  data: RegisterSecretaryData
+): Promise<SecretaryProfile> {
+  const credential = await createUserWithEmailAndPassword(
+    secondaryAuth,
+    data.email,
+    data.password
+  );
+
+  const { user } = credential;
+  const displayName = `${data.firstName} ${data.lastName}`;
+
+  await updateProfile(user, { displayName });
+
+  const secondaryApp = secondaryAuth.app;
+  const secondaryDb  = getFirestore(secondaryApp);
+  const now = serverTimestamp();
+
+  await setDoc(doc(secondaryDb, "users", user.uid), {
+    email:       data.email,
+    role:        "secretary" as UserRole,
+    displayName,
+    createdAt:   now,
+    updatedAt:   now,
+  });
+
+  await setDoc(doc(secondaryDb, "secretaries", user.uid), {
+    firstName: data.firstName,
+    lastName:  data.lastName,
+    phone:     data.phone,
+    email:     data.email,
+    createdAt: now,
+  });
+
+  await secondaryAuth.signOut();
+
+  return {
+    uid:         user.uid,
+    email:       data.email,
+    role:        "secretary",
+    displayName,
+    firstName:   data.firstName,
+    lastName:    data.lastName,
+    phone:       data.phone,
+    createdAt:   null,
+    updatedAt:   null,
+  };
 }
 
 // ─── Update user profile ──────────────────────────────────────────────────────

@@ -15,9 +15,10 @@ import {
   logout as firebaseLogout,
   type PatientProfile,
   type PhysioProfile,
+  type SecretaryProfile,
 } from "../services/authService";
 
-type Profile = PatientProfile | PhysioProfile | null;
+type Profile = PatientProfile | PhysioProfile | SecretaryProfile | null;
 
 interface AuthContextValue {
   user:    Profile;

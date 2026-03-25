@@ -25,6 +25,8 @@ import {
 import { secondaryAuth } from "../../firebase";
 import logo from "../../assets/physio-logo.svg";
 import { subscribeToPhysiotherapists, type Physiotherapist } from "../../services/patientService";
+import { registerSecretary } from "../../services/authService";
+import { subscribeToSecretaries, deleteSecretary, type Secretary } from "../../services/secretaryService";
 
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
@@ -76,8 +78,20 @@ function TeamTab() {
   const [saveError,      setSaveError]      = React.useState<string | null>(null);
   const [saveSuccess,    setSaveSuccess]    = React.useState<string | null>(null);
 
+  // ── Secretary state ──────────────────────────────────────────────────────
+  const [secretaries,       setSecretaries]       = React.useState<Secretary[]>([]);
+  const [showAddSecretary,  setShowAddSecretary]  = React.useState(false);
+  const [secretaryForm,     setSecretaryForm]     = React.useState({ firstName: "", lastName: "", email: "", password: "", phone: "" });
+  const [secretarySaving,   setSecretarySaving]   = React.useState(false);
+  const [secretaryError,    setSecretaryError]    = React.useState<string | null>(null);
+  const [deletingSecUid,    setDeletingSecUid]    = React.useState<string | null>(null);
+
   React.useEffect(() => {
     return subscribeToPhysiotherapists(setPhysios, () => {});
+  }, []);
+
+  React.useEffect(() => {
+    return subscribeToSecretaries(setSecretaries, () => {});
   }, []);
 
   const handleDeletePhysio = async (uid: string, name: string) => {
@@ -187,6 +201,42 @@ function TeamTab() {
     setSaving(false);
   };
 
+
+  const handleAddSecretary = async () => {
+    if (!secretaryForm.email || !secretaryForm.password || !secretaryForm.firstName || !secretaryForm.lastName) {
+      setSecretaryError("First name, last name, email and password are required."); return;
+    }
+    setSecretarySaving(true); setSecretaryError(null);
+    try {
+      await registerSecretary({
+        email:     secretaryForm.email,
+        password:  secretaryForm.password,
+        firstName: secretaryForm.firstName,
+        lastName:  secretaryForm.lastName,
+        phone:     secretaryForm.phone,
+      });
+      setSaveSuccess(`${secretaryForm.firstName} ${secretaryForm.lastName} added as secretary.`);
+      setSecretaryForm({ firstName: "", lastName: "", email: "", password: "", phone: "" });
+      setShowAddSecretary(false);
+      setTimeout(() => setSaveSuccess(null), 4000);
+    } catch (err: unknown) {
+      const msg = (err as { message?: string }).message ?? "";
+      setSecretaryError(
+        msg.includes("email-already-in-use")
+          ? "This email is already registered."
+          : msg || "Failed to add secretary."
+      );
+    }
+    setSecretarySaving(false);
+  };
+
+  const handleDeleteSecretary = async (uid: string, name: string) => {
+    if (!window.confirm(`Remove ${name} from secretaries? This will permanently delete their account.`)) return;
+    setDeletingSecUid(uid);
+    const { error } = await deleteSecretary(uid);
+    if (error) alert(error);
+    setDeletingSecUid(null);
+  };
 
   return (
     <>
@@ -309,13 +359,16 @@ function TeamTab() {
       `}</style>
 
       <div className="tm-title">Team</div>
-      <div className="tm-sub">Manage your physiotherapy team. Add or remove physiotherapist accounts.</div>
+      <div className="tm-sub">Manage your physiotherapy team and secretaries.</div>
 
       {saveSuccess && <div className="tm-success">✓ {saveSuccess}</div>}
 
       <div className="tm-action-row">
         <button className="tm-add-btn physio" onClick={() => { setShowAddPhysio(true); setSaveError(null); }}>
           <IconAdd /> Add Physiotherapist
+        </button>
+        <button className="tm-add-btn patient" onClick={() => { setShowAddSecretary(true); setSecretaryError(null); }}>
+          <IconAdd /> Add Secretary
         </button>
       </div>
 
@@ -391,6 +444,66 @@ function TeamTab() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Secretaries section ── */}
+      <div className="tm-section-label" style={{ color: "#9a9590", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: 12, marginTop: 24 }}>
+        Secretaries ({secretaries.length})
+      </div>
+      {secretaries.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "24px 0", color: "#9a9590", fontSize: 14, marginBottom: 16 }}>No secretaries added yet.</div>
+      ) : (
+        <div className="tm-grid" style={{ marginBottom: 16 }}>
+          {secretaries.map((s) => (
+            <div key={s.uid} className="tm-card">
+              <div className="tm-card-header" style={{ cursor: "default" }}>
+                <div className="tm-avatar" style={{ background: "linear-gradient(135deg, #9b59b6, #8e44ad)" }}>
+                  {s.firstName[0]}{s.lastName[0]}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div className="tm-name">{s.firstName} {s.lastName}</div>
+                  <div className="tm-spec">{s.email}</div>
+                  <div style={{ marginTop: 4 }}>
+                    <span className="tm-badge" style={{ background: "#f3e8ff", color: "#7c3aed" }}>Secretary</span>
+                  </div>
+                </div>
+                <button
+                  className="tm-del-btn"
+                  style={{ position: "static", marginLeft: 4 }}
+                  disabled={deletingSecUid === s.uid}
+                  onClick={() => handleDeleteSecretary(s.uid, `${s.firstName} ${s.lastName}`)}
+                  title="Remove secretary"
+                >
+                  {deletingSecUid === s.uid ? "…" : "✕"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add Secretary Modal */}
+      {showAddSecretary && (
+        <div className="tm-modal-overlay" onClick={() => !secretarySaving && setShowAddSecretary(false)}>
+          <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="tm-modal-title">Add Secretary</div>
+            <div className="tm-modal-sub">Create a new secretary account. They will use this email and password to log in.</div>
+            <div className="tm-field-row">
+              <div className="tm-field"><label className="tm-label">First Name</label><input className="tm-input" value={secretaryForm.firstName} onChange={(e) => setSecretaryForm({ ...secretaryForm, firstName: e.target.value })} placeholder="Sarah" /></div>
+              <div className="tm-field"><label className="tm-label">Last Name</label><input className="tm-input" value={secretaryForm.lastName} onChange={(e) => setSecretaryForm({ ...secretaryForm, lastName: e.target.value })} placeholder="Ali" /></div>
+            </div>
+            <div className="tm-field"><label className="tm-label">Email Address</label><input className="tm-input" type="email" value={secretaryForm.email} onChange={(e) => setSecretaryForm({ ...secretaryForm, email: e.target.value })} placeholder="secretary@clinic.com" /></div>
+            <div className="tm-field"><label className="tm-label">Password</label><input className="tm-input" type="password" value={secretaryForm.password} onChange={(e) => setSecretaryForm({ ...secretaryForm, password: e.target.value })} placeholder="Min. 6 characters" /></div>
+            <div className="tm-field"><label className="tm-label">Phone (optional)</label><input className="tm-input" value={secretaryForm.phone} onChange={(e) => setSecretaryForm({ ...secretaryForm, phone: e.target.value })} placeholder="+20 100 000 0000" /></div>
+            {secretaryError && <div className="tm-modal-error">{secretaryError}</div>}
+            <div className="tm-modal-actions">
+              <button className="tm-modal-cancel" onClick={() => setShowAddSecretary(false)}>Cancel</button>
+              <button className="tm-modal-save" disabled={secretarySaving} onClick={handleAddSecretary}>
+                {secretarySaving ? "Creating account…" : "Create Account"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -493,7 +606,7 @@ function TeamTab() {
 
 // ─── Overview tab ─────────────────────────────────────────────────────────────
 
-function OverviewTab({ physio, isManager }: { physio: PhysioProfile; isManager: boolean }) {
+function OverviewTab({ physio, isManager, isSecretary = false }: { physio: PhysioProfile; isManager: boolean; isSecretary?: boolean }) {
   const hour     = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
@@ -505,22 +618,22 @@ function OverviewTab({ physio, isManager }: { physio: PhysioProfile; isManager: 
 
   useEffect(() => {
     const unsubscribe = subscribeToDashboardStats(
-      isManager ? "__all__" : physio.uid,
+      (isManager || isSecretary) ? "__all__" : physio.uid,
       (data) => { setStats(data); setStatsLoading(false); },
       ()     => setStatsLoading(false)
     );
     return () => unsubscribe();
-  }, [physio.uid, isManager]);
+  }, [physio.uid, isManager, isSecretary]);
 
   useEffect(() => {
     setApptLoading(true);
     const unsubscribe = subscribeTodayAppointments(
-      isManager ? "__all__" : physio.uid,
+      (isManager || isSecretary) ? "__all__" : physio.uid,
       (data) => { setTodayAppts(data); setApptLoading(false); },
       ()     => setApptLoading(false)
     );
     return () => unsubscribe();
-  }, [physio.uid, isManager]);
+  }, [physio.uid, isManager, isSecretary]);
 
   return (
     <>
@@ -568,6 +681,7 @@ function OverviewTab({ physio, isManager }: { physio: PhysioProfile; isManager: 
         <div className="ph-ov-title">
           {greeting}, {isManager ? "Manager" : physio.firstName} 👋
         </div>
+
         <div className="ph-ov-sub">
           {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         </div>
@@ -621,7 +735,7 @@ function OverviewTab({ physio, isManager }: { physio: PhysioProfile; isManager: 
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>{a.patientName}</div>
                   <div style={{ fontSize: 12, color: "#9a9590" }}>
-                    {a.sessionType}{isManager && a.physioName ? ` · ${a.physioName}` : ""}
+                    {a.sessionType}{(isManager || isSecretary) && a.physioName ? ` · ${a.physioName}` : ""}
                   </div>
                 </div>
                 <span style={{
@@ -661,9 +775,10 @@ export default function PhysioDashboard() {
   const [sidebarOpen,      setSidebarOpen]      = useState(false);
   const [viewingPatientId, setViewingPatientId] = useState<string | null>(null);
 
-  // ── Resolve clinic manager role + senior status ──────────────────────────
-  const [isManager, setIsManager] = useState(false);
-  const [isSenior,  setIsSenior]  = useState(false);
+  // ── Resolve role flags ───────────────────────────────────────────────────
+  const [isManager,   setIsManager]   = useState(false);
+  const [isSenior,    setIsSenior]    = useState(false);
+  const [isSecretary, setIsSecretary] = useState(false);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -671,18 +786,21 @@ export default function PhysioDashboard() {
       if (snap.exists()) {
         const role = snap.data().role as string | undefined;
         setIsManager(role === "manager" || role === "clinic_manager");
+        setIsSecretary(role === "secretary");
       }
     });
-    // Read rank from physiotherapists collection
-    getDoc(doc(db, "physiotherapists", user.uid)).then((snap) => {
-      if (snap.exists()) {
-        const rank = snap.data().rank as string | undefined;
-        setIsSenior(rank === "senior");
-      }
-    });
-  }, [user?.uid]);
+    // Read rank from physiotherapists collection (skip for secretary)
+    if (user.role !== "secretary") {
+      getDoc(doc(db, "physiotherapists", user.uid)).then((snap) => {
+        if (snap.exists()) {
+          const rank = snap.data().rank as string | undefined;
+          setIsSenior(rank === "senior");
+        }
+      });
+    }
+  }, [user?.uid, user?.role]);
 
-  const physio = user as PhysioProfile | null;
+  const physio = user as unknown as PhysioProfile | null;
   if (!physio) return null;
 
   const TABS: TabDef[] = [
@@ -690,8 +808,8 @@ export default function PhysioDashboard() {
     { id: "patients",  label: "Patients",         icon: <IconPatients /> },
     ...(isManager ? [{ id: "team" as Tab, label: "Team",    icon: <IconTeam /> }] : []),
     { id: "schedule",  label: "Schedule",         icon: <IconSchedule /> },
-    { id: "exercises", label: "Exercise Library", icon: <IconExercises /> },
-    { id: "reports",   label: "Reports",          icon: <IconReports /> },
+    ...(!isSecretary ? [{ id: "exercises" as Tab, label: "Exercise Library", icon: <IconExercises /> }] : []),
+    ...(!isSecretary ? [{ id: "reports"   as Tab, label: "Reports",          icon: <IconReports /> }]   : []),
   ];
 
   const handleLogout = async () => {
@@ -943,7 +1061,7 @@ export default function PhysioDashboard() {
           <div className="phd-topbar-right">
             <div className="phd-user-chip">
               <div className="phd-user-name">
-                {isManager ? physio.firstName : `Dr. ${physio.lastName}`}
+                {isManager ? physio.firstName : isSecretary ? physio.firstName : `Dr. ${physio.lastName}`}
               </div>
             </div>
             <button className="phd-logout-btn" onClick={handleLogout}>
@@ -968,12 +1086,12 @@ export default function PhysioDashboard() {
                 {physio.firstName[0]}{physio.lastName[0]}
               </div>
               <div className="phd-p-name">
-                {isManager ? physio.firstName : `Dr. ${physio.firstName}`} {physio.lastName}
+                {isSecretary ? physio.firstName : isManager ? physio.firstName : `Dr. ${physio.firstName}`} {physio.lastName}
               </div>
               <div className="phd-p-role">
-                {isManager ? "Clinic Manager" : (physio.specializations?.[0] ?? "Physiotherapist")}
+                {isSecretary ? "Secretary" : isManager ? "Clinic Manager" : (physio.specializations?.[0] ?? "Physiotherapist")}
               </div>
-              {[
+              {!isSecretary && [
                 ["Clinic",  physio.clinicName    || "—"],
                 ["License", physio.licenseNumber || "—"],
               ].map(([k, v]) => (
@@ -1039,12 +1157,13 @@ export default function PhysioDashboard() {
               </>
             ) : (
               <>
-                {activeTab === "overview"  && <OverviewTab physio={physio} isManager={isManager} />}
+                {activeTab === "overview"  && <OverviewTab physio={physio} isManager={isManager} isSecretary={isSecretary} />}
                 {activeTab === "patients"  && (
                   <PatientsTab
                     physioId={physio.uid}
                     isManager={isManager}
                     isSenior={isSenior}
+                    isSecretary={isSecretary}
                     onViewPatient={(id) => setViewingPatientId(id)}
                   />
                 )}
@@ -1054,10 +1173,11 @@ export default function PhysioDashboard() {
                     firstName={physio.firstName}
                     lastName={physio.lastName}
                     isManager={isManager}
+                    isSecretary={isSecretary}
                   />
                 )}
                 {activeTab === "team"      && isManager && <TeamTab />}
-                {activeTab === "exercises" && (
+                {activeTab === "exercises" && !isSecretary && (
                   <ExerciseLibraryPage
                     physioId={physio.uid}
                     firstName={physio.firstName}
@@ -1066,7 +1186,7 @@ export default function PhysioDashboard() {
                     isSenior={isSenior}
                   />
                 )}
-                {activeTab === "reports"   && <ComingSoon label="Reports" />}
+                {activeTab === "reports"   && !isSecretary && <ComingSoon label="Reports" />}
               </>
             )}
           </main>

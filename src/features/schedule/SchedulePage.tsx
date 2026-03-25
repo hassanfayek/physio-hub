@@ -23,10 +23,11 @@ import DayView   from "./DayView";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SchedulePageProps {
-  physioId:   string;
-  firstName:  string;
-  lastName:   string;
-  isManager:  boolean;
+  physioId:    string;
+  firstName:   string;
+  lastName:    string;
+  isManager:   boolean;
+  isSecretary?: boolean;
 }
 
 type ViewMode = "month" | "week" | "day";
@@ -121,6 +122,7 @@ export default function SchedulePage({
   firstName,
   lastName,
   isManager,
+  isSecretary = false,
 }: SchedulePageProps) {
   // ── State ─────────────────────────────────────────────────────────────────
   const today     = new Date();
@@ -140,11 +142,11 @@ export default function SchedulePage({
   }, []);
 
   useEffect(() => {
-    const unsub = isManager
+    const unsub = (isManager || isSecretary)
       ? subscribeToAllPatients(setPatients)
       : subscribeToPatients(physioId, setPatients);
     return () => unsub();
-  }, [physioId, isManager]);
+  }, [physioId, isManager, isSecretary]);
 
   useEffect(() => {
     return subscribeToPhysiotherapists(setPhysios);
@@ -334,12 +336,12 @@ export default function SchedulePage({
           <div>
             <div className="sc-title">Schedule</div>
             <div className="sc-sub">
-              {isManager ? "Clinic-wide schedule" : "Your appointment schedule"}
+              {(isManager || isSecretary) ? "Clinic-wide schedule" : "Your appointment schedule"}
             </div>
           </div>
         </div>
 
-        {/* Settings panel — manager only */}
+        {/* Settings panel — manager only (not secretary) */}
         {isManager && (
           <SettingsPanel settings={settings} onSaved={setSettings} />
         )}
@@ -412,7 +414,7 @@ export default function SchedulePage({
               year={cursor.getFullYear()}
               month={cursor.getMonth() + 1}
               settings={settings}
-              physioId={isManager ? null : physioId}
+              physioId={(isManager || isSecretary) ? null : physioId}
               onDayClick={openDay}
             />
           )}
@@ -424,7 +426,7 @@ export default function SchedulePage({
               patients={patients}
               physios={physios}
               currentPhysio={currentPhysio}
-              isManager={isManager}
+              isManager={isManager || isSecretary}
               onDayClick={openDay}
             />
           )}
@@ -436,7 +438,7 @@ export default function SchedulePage({
               patients={patients}
               physios={physios}
               currentPhysio={currentPhysio}
-              isManager={isManager}
+              isManager={isManager || isSecretary}
               onBack={() => setView("week")}
             />
           )}

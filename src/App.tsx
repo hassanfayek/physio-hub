@@ -112,7 +112,7 @@ function LoadingScreen() {
 // Optionally enforces a required role — sends wrong-role users to their portal.
 
 // Roles that can access the /physio portal
-const PHYSIO_PORTAL_ROLES = new Set(["physiotherapist", "clinic_manager"]);
+const PHYSIO_PORTAL_ROLES = new Set(["physiotherapist", "clinic_manager", "secretary"]);
 
 function ProtectedRoute({
   children,

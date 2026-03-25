@@ -26,7 +26,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const profile = await login(email, password);
-      const isPhysioRole = profile.role === "physiotherapist" || profile.role === "clinic_manager";
+      const isPhysioRole = profile.role === "physiotherapist" || profile.role === "clinic_manager" || profile.role === "secretary";
       const tabMismatch  =
         (role === "patient"         && profile.role !== "patient") ||
         (role === "physiotherapist" && !isPhysioRole);
