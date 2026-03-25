@@ -2876,7 +2876,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
           )}
         </>
       )}
-      {/* ── JOINT ASSESSMENT ── */}
+      {/* ── BODY PROFILE ── */}
       {activeSection === "joint-assessment" && role !== "patient" && (
         <JointAssessmentSheet
           patientId={patientId}
