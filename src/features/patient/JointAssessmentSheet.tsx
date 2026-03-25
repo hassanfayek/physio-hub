@@ -1,7 +1,7 @@
 // FILE: src/features/patient/JointAssessmentSheet.tsx
 // Sports & Athletic Joint Assessment — printable A4 sheet
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
 import { Printer, Save, ChevronDown, ChevronUp } from "lucide-react";
@@ -289,7 +289,6 @@ const JOINT_ORDER = [
 ];
 
 const OXFORD_GRADES = ["0","1","2","3","4","5"];
-const TEST_RESULTS   = ["","positive","negative","unable"];
 const END_FEELS      = ["","firm","soft","hard","empty","springy"];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
