@@ -200,16 +200,21 @@ export function subscribeToAppointmentsByDay(
   onData:   (appts: Appointment[]) => void,
   onError?: (err: Error) => void
 ): () => void {
-  // Query by date only — filter physioId client-side to avoid composite index
+  // Range query to match documents stored with ISO datetime strings (e.g. "2026-03-15T..."),
+  // consistent with subscribeToAppointmentsByMonth. Client-side filter to exact date after normalization.
+  const [y, mo, d] = date.split("-").map(Number);
+  const nextDateStr = toDateStr(new Date(y, mo - 1, d + 1));
   const q = query(
     collection(db, "appointments"),
-    where("date", "==", date)
+    where("date", ">=", date),
+    where("date", "<",  nextDateStr)
   );
 
   return onSnapshot(
     q,
     (snap) => {
-      let appts = snap.docs.map((d) => docToAppointment(d.id, d.data()));
+      let appts = snap.docs.map((doc) => docToAppointment(doc.id, doc.data()));
+      appts = appts.filter((a) => a.date === date); // exact match after normalization
       if (physioId) appts = appts.filter((a) => a.physioId === physioId);
       appts.sort((a, b) => a.hour - b.hour);
       onData(appts);
