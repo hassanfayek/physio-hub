@@ -611,7 +611,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
     { id: "session-feedback",  label: "Session Feedback", managerOnly: true },
     { id: "session-history",   label: "Session History" },
     { id: "exercises",         label: "Exercises" },
-    { id: "joint-assessment",  label: "Joint Assessment", physioOnly: true },
+    { id: "joint-assessment",  label: "Body Profile",     physioOnly: true },
   ];
   // Filter sections by role:
   //   physioOnly  → hidden from patients
