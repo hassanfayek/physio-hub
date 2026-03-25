@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isManager()    { return isAuth() && role() == 'clinic_manager';   }
+    function isPhysio()     { return isAuth() && role() == 'physiotherapist';  }
+    function isSecretary()  { return isAuth() && role() == 'secretary';        }
+    function isStaff()      { return isManager() || isPhysio() || isSecretary(); }
+
+    // ── Users ─────────────────────────────────────────────────────────────────
+    // Each user can read/update their own profile; manager can read all.
+    match /users/{uid} {
+      allow read:  if isAuth() && (request.auth.uid == uid || isManager());
+      allow write: if isAuth() && (request.auth.uid == uid || isManager());
+    }
+
+    // ── Physiotherapists ──────────────────────────────────────────────────────
+    match /physiotherapists/{uid} {
+      allow read:  if isStaff();
+      allow write: if isManager() || (isPhysio() && request.auth.uid == uid);
+    }
+
+    // ── Secretaries ───────────────────────────────────────────────────────────
+    match /secretaries/{uid} {
+      allow read:  if isStaff();
+      allow write: if isManager();
+    }
+
+    // ── Patients ──────────────────────────────────────────────────────────────
+    match /patients/{patientId} {
+      allow read:  if isAuth();
+      allow write: if isStaff();
+    }
+
+    // ── Patient sub-collections ───────────────────────────────────────────────
+    match /patientProfiles/{patientId} {
+      allow read:  if isAuth();
+      allow write: if isStaff();
+    }
+
+    match /patientAssessments/{patientId} {
+      allow read:  if isStaff();
+      allow write: if isManager() || isPhysio();
+    }
+
+    match /patientDiagnosis/{patientId} {
+      allow read:  if isStaff();
+      allow write: if isManager() || isPhysio();
+    }
+
+    match /patientSessions/{docId} {
+      allow read:  if isStaff();
+      allow write: if isManager() || isPhysio();
+    }
+
+    match /patientDocuments/{docId} {
+      allow read:  if isStaff();
+      allow write: if isStaff();
+    }
+
+    match /patientExercises/{docId} {
+      allow read:  if isStaff();
+      allow write: if isManager() || isPhysio();
+    }
+
+    match /assignedExercises/{docId} {
+      allow read:  if isStaff();
+      allow write: if isManager() || isPhysio();
+    }
+
+    match /sessionFeedback/{docId} {
+      allow read:  if isStaff();
+      allow write: if isStaff();
+    }
+
+    // ── Body Profile (Joint Assessment) ───────────────────────────────────────
+    // Clinic manager: full access.
+    // Physiotherapist: full access (senior assignment enforced in app layer).
+    match /jointAssessments/{patientId} {
+      allow read:  if isStaff();
+      allow write: if isManager() || isPhysio();
+    }
+
+    // ── Appointments ─────────────────────────────────────────────────────────
+    match /appointments/{appointmentId} {
+      allow read:  if isStaff();
+      allow write: if isStaff();
+    }
+
+    // ── Exercise Library ─────────────────────────────────────────────────────
+    match /exerciseLibrary/{exerciseId} {
+      allow read:  if isStaff();
+      allow write: if isManager() || isPhysio();
+    }
+
+    // ── Clinic Settings ──────────────────────────────────────────────────────
+    match /clinicSettings/{docId} {
+      allow read:  if isStaff();
+      allow write: if isManager();
+    }
+
+    // ── Schedule ─────────────────────────────────────────────────────────────
+    match /schedule/{docId} {
+      allow read:  if isStaff();
+      allow write: if isManager();
+    }
+
+  }
+}
