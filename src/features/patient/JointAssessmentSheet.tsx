@@ -373,7 +373,7 @@ function ROMTable({
       ...data,
       rom: {
         ...data.rom,
-        [motId]: { active: "", passive: "", endFeel: "", pain: "", ...data.rom[motId], [field]: val },
+        [motId]: { ...{ active: "", passive: "", endFeel: "", pain: "" }, ...data.rom[motId], [field]: val },
       },
     };
     onChange(jointKey, updated);
@@ -450,7 +450,7 @@ function MuscleTable({
       ...data,
       muscles: {
         ...data.muscles,
-        [mid]: { grade: "", force: "", ...data.muscles[mid], [field]: val },
+        [mid]: { ...{ grade: "", force: "" }, ...data.muscles[mid], [field]: val },
       },
     };
     onChange(jointKey, updated);
@@ -522,7 +522,7 @@ function SpecialTestsGrid({
       ...data,
       tests: {
         ...data.tests,
-        [tid]: { result: "", notes: "", ...data.tests[tid], [field]: val },
+        [tid]: { ...{ result: "", notes: "" }, ...data.tests[tid], [field]: val },
       },
     };
     onChange(jointKey, updated);
@@ -581,9 +581,6 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
   const [saved,     setSaved]    = useState(false);
   const [loading,   setLoading]  = useState(true);
   const [expanded,  setExpanded] = useState<Record<string, boolean>>({});
-
-  // Active joint for editing (only one expanded at a time on mobile)
-  const [activeJoint, setActiveJoint] = useState<string | null>(null);
 
   // Load from Firestore
   useEffect(() => {
@@ -1201,16 +1198,16 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
               <div className="jas-info-label">{label}</div>
               {editing ? (
                 type === "select" ? (
-                  <select className="jas-info-select" value={(d as Record<string,string>)[field]} onChange={(e) => setInfo(field as keyof AssessmentDoc, e.target.value)}>
+                  <select className="jas-info-select" value={(d as unknown as Record<string,string>)[field]} onChange={(e) => setInfo(field as keyof AssessmentDoc, e.target.value)}>
                     <option value="right">Right</option>
                     <option value="left">Left</option>
                   </select>
                 ) : (
-                  <input className="jas-info-input" type={type} value={(d as Record<string,string>)[field]} onChange={(e) => setInfo(field as keyof AssessmentDoc, e.target.value)} placeholder="—" />
+                  <input className="jas-info-input" type={type} value={(d as unknown as Record<string,string>)[field]} onChange={(e) => setInfo(field as keyof AssessmentDoc, e.target.value)} placeholder="—" />
                 )
               ) : (
-                <div className={`jas-info-val ${!(d as Record<string,string>)[field] ? "jas-info-empty" : ""}`}>
-                  {(d as Record<string,string>)[field] || "—"}
+                <div className={`jas-info-val ${!(d as unknown as Record<string,string>)[field] ? "jas-info-empty" : ""}`}>
+                  {(d as unknown as Record<string,string>)[field] || "—"}
                 </div>
               )}
             </div>
@@ -1333,8 +1330,8 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
                         <div key={field} className="jas-meta-card">
                           <div className="jas-meta-label">{ml}</div>
                           {editing
-                            ? <input className="jas-meta-input" value={(jData as Record<string,string>)[field]} placeholder="—" onChange={(e) => updateJointData(key, { ...jData, [field]: e.target.value })} />
-                            : <div className={`jas-meta-val ${!(jData as Record<string,string>)[field] ? "jas-notes-empty" : ""}`}>{(jData as Record<string,string>)[field] || "—"}</div>}
+                            ? <input className="jas-meta-input" value={(jData as unknown as Record<string,string>)[field]} placeholder="—" onChange={(e) => updateJointData(key, { ...jData, [field]: e.target.value })} />
+                            : <div className={`jas-meta-val ${!(jData as unknown as Record<string,string>)[field] ? "jas-notes-empty" : ""}`}>{(jData as unknown as Record<string,string>)[field] || "—"}</div>}
                         </div>
                       ))}
                     </div>
