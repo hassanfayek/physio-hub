@@ -8,16 +8,18 @@ import { Printer, Save, ChevronDown, ChevronUp } from "lucide-react";
 
 // ─── Joint Configuration ──────────────────────────────────────────────────────
 
-interface MotionDef { id: string; label: string; normal: string; }
-interface MuscleDef { id: string; label: string; }
-interface TestDef   { id: string; label: string; }
+interface MotionDef  { id: string; label: string; normal: string; }
+interface MuscleDef  { id: string; label: string; }
+interface TestDef    { id: string; label: string; }
+interface BalanceDef { id: string; label: string; unit: string; }
 
 interface JointDef {
   label:         string;
-  bilateral:     boolean;   // has left/right variants
+  bilateral:     boolean;
   motions:       MotionDef[];
   muscles:       MuscleDef[];
   specialTests:  TestDef[];
+  balanceTests:  BalanceDef[];
 }
 
 const JOINTS: Record<string, JointDef> = {
@@ -45,6 +47,11 @@ const JOINTS: Record<string, JointDef> = {
       { id: "ultt_rad",    label: "ULTT – Radial N."       },
       { id: "ultt_uln",    label: "ULTT – Ulnar N."        },
     ],
+    balanceTests: [
+      { id: "jps_flex",   label: "JPS – Flex / Ext",       unit: "° error"    },
+      { id: "jps_rot",    label: "JPS – Rotation",          unit: "° error"    },
+      { id: "gaze_stab",  label: "Gaze Stability Test",     unit: "pass / fail"},
+    ],
   },
   thoracic: {
     label: "Thoracic Spine", bilateral: false,
@@ -66,6 +73,11 @@ const JOINTS: Record<string, JointDef> = {
       { id: "rib_spring",   label: "Rib Spring Test"         },
       { id: "thoracic_ext", label: "Thoracic Extension Test" },
       { id: "first_rib",    label: "First Rib Mobility"      },
+    ],
+    balanceTests: [
+      { id: "romberg",       label: "Romberg Test",           unit: "sec"        },
+      { id: "tandem_stance", label: "Tandem Stance",          unit: "sec"        },
+      { id: "postural_sway", label: "Postural Sway Assess.",  unit: "pass / fail"},
     ],
   },
   lumbar: {
@@ -95,6 +107,12 @@ const JOINTS: Record<string, JointDef> = {
       { id: "spring",       label: "Spring Test"                   },
       { id: "si_faber",     label: "FABER (SI)"                    },
       { id: "si_compress",  label: "Sacral Compression"            },
+    ],
+    balanceTests: [
+      { id: "romberg",    label: "Romberg Test",           unit: "sec"    },
+      { id: "single_leg", label: "Single Leg Stance",      unit: "sec"    },
+      { id: "tandem",     label: "Tandem Walk (10 m)",      unit: "errors" },
+      { id: "star_ant",   label: "SEBT Anterior Reach",    unit: "cm"     },
     ],
   },
   shoulder: {
@@ -133,6 +151,11 @@ const JOINTS: Record<string, JointDef> = {
       { id: "drop_arm",     label: "Drop Arm Test"         },
       { id: "cross_body",   label: "Cross-Body Add. (AC)"  },
     ],
+    balanceTests: [
+      { id: "ckcuest",      label: "CKCUEST (contacts/15 s)", unit: "count"      },
+      { id: "shoulder_jps", label: "Shoulder JPS",            unit: "° error"    },
+      { id: "wall_pushup",  label: "Wall Pushup Stability",   unit: "pass / fail"},
+    ],
   },
   elbow: {
     label: "Elbow", bilateral: true,
@@ -159,6 +182,10 @@ const JOINTS: Record<string, JointDef> = {
       { id: "valgus",     label: "Valgus Stress (UCL)"                },
       { id: "varus",      label: "Varus Stress (LCL)"                 },
       { id: "elbow_flex", label: "Elbow Flexion Test (Cubital Tunnel)" },
+    ],
+    balanceTests: [
+      { id: "elbow_jps", label: "Elbow JPS",                unit: "° error" },
+      { id: "uq_ybt",    label: "UQ Y-Balance (reach)",     unit: "cm"      },
     ],
   },
   wrist: {
@@ -187,6 +214,10 @@ const JOINTS: Record<string, JointDef> = {
       { id: "tinel",       label: "Tinel's at Wrist"             },
       { id: "watson",      label: "Watson Scaphoid Test"         },
       { id: "piano_keys",  label: "Piano Keys Test (DRUJ)"       },
+    ],
+    balanceTests: [
+      { id: "wrist_jps",     label: "Wrist JPS",                unit: "° error"    },
+      { id: "dynamic_grip",  label: "Dynamic Grip Stability",   unit: "pass / fail"},
     ],
   },
   hip: {
@@ -220,6 +251,14 @@ const JOINTS: Record<string, JointDef> = {
       { id: "log_roll",      label: "Log Roll Test"          },
       { id: "hip_quad",      label: "Hip Quadrant Test"      },
     ],
+    balanceTests: [
+      { id: "sls_flat",          label: "SLS – Flat Surface",         unit: "sec"        },
+      { id: "sls_foam",          label: "SLS – Foam",                 unit: "sec"        },
+      { id: "ybt_ant",           label: "Y-Balance Anterior",         unit: "cm"         },
+      { id: "ybt_pm",            label: "Y-Balance Posteromedial",    unit: "cm"         },
+      { id: "ybt_pl",            label: "Y-Balance Posterolateral",   unit: "cm"         },
+      { id: "trendelenburg_bal", label: "Trendelenburg Balance Hold", unit: "pass / fail"},
+    ],
   },
   knee: {
     label: "Knee", bilateral: true,
@@ -247,6 +286,15 @@ const JOINTS: Record<string, JointDef> = {
       { id: "pivot_shift", label: "Pivot Shift Test"         },
       { id: "pat_grind",   label: "Patellar Grind Test"      },
       { id: "dial",        label: "Dial Test (PLC)"          },
+    ],
+    balanceTests: [
+      { id: "sls_flat",   label: "SLS – Flat Surface",       unit: "sec"        },
+      { id: "sls_foam",   label: "SLS – Foam",               unit: "sec"        },
+      { id: "sls_squat",  label: "Single Leg Squat",         unit: "pass / fail"},
+      { id: "ybt_ant",    label: "Y-Balance Anterior",       unit: "cm"         },
+      { id: "ybt_pm",     label: "Y-Balance Posteromedial",  unit: "cm"         },
+      { id: "ybt_pl",     label: "Y-Balance Posterolateral", unit: "cm"         },
+      { id: "hop_index",  label: "Hop Symmetry Index",       unit: "%"          },
     ],
   },
   ankle: {
@@ -279,6 +327,16 @@ const JOINTS: Record<string, JointDef> = {
       { id: "windlass",    label: "Windlass Test (Plantar fascia)"},
       { id: "too_many",    label: "Too Many Toes Sign"           },
     ],
+    balanceTests: [
+      { id: "sls_eo",      label: "SLS Eyes Open – Flat",        unit: "sec" },
+      { id: "sls_ec",      label: "SLS Eyes Closed – Flat",      unit: "sec" },
+      { id: "sls_foam_eo", label: "SLS Eyes Open – Foam",        unit: "sec" },
+      { id: "sls_foam_ec", label: "SLS Eyes Closed – Foam",      unit: "sec" },
+      { id: "ybt_ant",     label: "Y-Balance Anterior",          unit: "cm"  },
+      { id: "ybt_pm",      label: "Y-Balance Posteromedial",     unit: "cm"  },
+      { id: "ybt_pl",      label: "Y-Balance Posterolateral",    unit: "cm"  },
+      { id: "sebt_comp",   label: "SEBT Composite Score",        unit: "%"   },
+    ],
   },
 };
 
@@ -295,7 +353,8 @@ const END_FEELS      = ["","firm","soft","hard","empty","springy"];
 
 interface ROMEntry { active: string; passive: string; endFeel: string; pain: string; }
 interface MuscleEntry { grade: string; force: string; }
-interface TestEntry  { result: string; notes: string; }
+interface TestEntry    { result: string; notes: string; }
+interface BalanceEntry { value: string; result: string; notes: string; }
 
 interface JointData {
   pain:    string;
@@ -304,6 +363,7 @@ interface JointData {
   rom:     Record<string, ROMEntry>;
   muscles: Record<string, MuscleEntry>;
   tests:   Record<string, TestEntry>;
+  balance: Record<string, BalanceEntry>;
 }
 
 interface AssessmentDoc {
@@ -318,7 +378,7 @@ interface AssessmentDoc {
 }
 
 function emptyJoint(): JointData {
-  return { pain: "", swelling: "", notes: "", rom: {}, muscles: {}, tests: {} };
+  return { pain: "", swelling: "", notes: "", rom: {}, muscles: {}, tests: {}, balance: {} };
 }
 
 function emptyDoc(): AssessmentDoc {
@@ -570,6 +630,79 @@ function SpecialTestsGrid({
   );
 }
 
+function BalanceTable({
+  jointId, jointKey, data, canEdit, onChange,
+}: {
+  jointId: string; jointKey: string; data: JointData; canEdit: boolean;
+  onChange: (jk: string, data: JointData) => void;
+}) {
+  const tests = JOINTS[jointId].balanceTests;
+  const RESULTS = ["", "normal", "abnormal", "borderline"] as const;
+  const set = (tid: string, field: keyof BalanceEntry, val: string) => {
+    const updated: JointData = {
+      ...data,
+      balance: {
+        ...data.balance,
+        [tid]: { ...{ value: "", result: "", notes: "" }, ...data.balance[tid], [field]: val },
+      },
+    };
+    onChange(jointKey, updated);
+  };
+
+  const resultColor = (r: string) => {
+    if (r === "normal")     return "jas-bal-normal";
+    if (r === "abnormal")   return "jas-bal-abnormal";
+    if (r === "borderline") return "jas-bal-borderline";
+    return "";
+  };
+
+  return (
+    <div className="jas-table-wrap">
+      <table className="jas-table">
+        <thead>
+          <tr>
+            <th className="jas-th-bal-test">Test</th>
+            <th className="jas-th-bal-unit">Unit</th>
+            <th className="jas-th-bal-val">Value</th>
+            <th className="jas-th-bal-res">Result</th>
+            <th className="jas-th-bal-notes">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tests.map((t) => {
+            const be = data.balance[t.id] ?? { value: "", result: "", notes: "" };
+            return (
+              <tr key={t.id}>
+                <td className="jas-td-motion">{t.label}</td>
+                <td className="jas-td-norm">{t.unit}</td>
+                <td>
+                  {canEdit
+                    ? <input className="jas-cell-input" value={be.value} onChange={(e) => set(t.id, "value", e.target.value)} placeholder="—" />
+                    : <span className="jas-cell-val">{be.value || "—"}</span>}
+                </td>
+                <td>
+                  {canEdit
+                    ? (
+                      <select className="jas-cell-select-sm" value={be.result} onChange={(e) => set(t.id, "result", e.target.value)}>
+                        {RESULTS.map((r) => <option key={r} value={r}>{r || "—"}</option>)}
+                      </select>
+                    )
+                    : <span className={`jas-bal-chip ${resultColor(be.result)}`}>{be.result || "—"}</span>}
+                </td>
+                <td>
+                  {canEdit
+                    ? <input className="jas-cell-input" value={be.notes} onChange={(e) => set(t.id, "notes", e.target.value)} placeholder="Notes…" />
+                    : <span className="jas-cell-val" style={{ color: "#9a9590", fontSize: 12 }}>{be.notes}</span>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function JointAssessmentSheet({ patientId, patientName = "Patient", canEdit }: Props) {
@@ -578,6 +711,7 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
   const [editing,   setEditing]  = useState(false);
   const [saving,    setSaving]   = useState(false);
   const [saved,     setSaved]    = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [loading,   setLoading]  = useState(true);
   const [expanded,  setExpanded] = useState<Record<string, boolean>>({});
 
@@ -597,15 +731,21 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
 
   const handleSave = async () => {
     setSaving(true);
-    await setDoc(doc(db, "jointAssessments", patientId), {
-      ...draft,
-      updatedAt: serverTimestamp(),
-    });
-    setDocData(draft);
-    setSaving(false);
-    setSaved(true);
-    setEditing(false);
-    setTimeout(() => setSaved(false), 3000);
+    setSaveError(null);
+    try {
+      await setDoc(doc(db, "jointAssessments", patientId), {
+        ...draft,
+        updatedAt: serverTimestamp(),
+      });
+      setDocData(draft);
+      setEditing(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      setSaveError("Save failed — check your connection or Firestore permissions.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancel = () => { setDraft(doc_data); setEditing(false); };
@@ -944,6 +1084,21 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
         .jas-res-na  { background: #f1f5f9; color: #64748b; }
         .jas-test-notes-read { font-size: 11.5px; color: #9a9590; margin-top: 2px; }
 
+        /* ── Balance Table ── */
+        .jas-th-bal-test  { width: 28%; }
+        .jas-th-bal-unit  { width: 14%; }
+        .jas-th-bal-val   { width: 14%; }
+        .jas-th-bal-res   { width: 16%; }
+        .jas-th-bal-notes { width: 28%; }
+        .jas-bal-chip {
+          display: inline-block; font-size: 11px; font-weight: 600;
+          padding: 2px 9px; border-radius: 100px; white-space: nowrap;
+          background: #f5f3ef; color: #9a9590;
+        }
+        .jas-bal-normal     { background: #d1fae5; color: #065f46; }
+        .jas-bal-abnormal   { background: #fee2e2; color: #b91c1c; }
+        .jas-bal-borderline { background: #fef3c7; color: #92400e; }
+
         /* ── Joint notes ── */
         .jas-notes-input {
           width: 100%; border: 1.5px solid #e5e0d8; border-radius: 9px;
@@ -1146,15 +1301,15 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
             </div>
           </div>
           <div className="jas-print-doc-title">
-            Sports & Athletic<br />Joint Assessment Sheet
+            Sports & Athletic<br />Body Profile Sheet
           </div>
         </div>
 
         {/* ── Toolbar ── */}
         <div className="jas-toolbar jas-no-print">
           <div>
-            <div className="jas-toolbar-title">Joint Assessment</div>
-            <div className="jas-toolbar-sub">Sports & Athletic — ROM, Muscle Power, Special Tests</div>
+            <div className="jas-toolbar-title">Body Profile</div>
+            <div className="jas-toolbar-sub">Sports & Athletic — ROM, Muscle Power, Special Tests, Balance</div>
           </div>
           <div className="jas-toolbar-right">
             {saved && (
@@ -1171,6 +1326,11 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
             )}
             {editing && (
               <>
+                {saveError && (
+                  <span style={{ fontSize: 12, color: "#b91c1c", background: "#fee2e2", padding: "5px 10px", borderRadius: 7, maxWidth: 260 }}>
+                    {saveError}
+                  </span>
+                )}
                 <button className="jas-btn jas-btn-cancel" onClick={handleCancel}>Cancel</button>
                 <button className="jas-btn jas-btn-save" disabled={saving} onClick={handleSave}>
                   <Save size={13} strokeWidth={2} />
@@ -1296,7 +1456,7 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
                     <div>
                       <div className="jas-joint-title">{label}</div>
                       <div className="jas-joint-subtitle">
-                        {jDef.motions.length} motions · {jDef.muscles.length} muscles · {jDef.specialTests.length} special tests
+                        {jDef.motions.length} motions · {jDef.muscles.length} muscles · {jDef.specialTests.length} special tests · {jDef.balanceTests.length} balance
                       </div>
                     </div>
                   </div>
@@ -1354,6 +1514,14 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
                     {/* Special Tests */}
                     <div className="jas-subsection"><div className="jas-subsection-dot"/>Special Tests</div>
                     <SpecialTestsGrid
+                      jointId={jointId} jointKey={key}
+                      data={jData} canEdit={editing}
+                      onChange={updateJointData}
+                    />
+
+                    {/* Balance */}
+                    <div className="jas-subsection"><div className="jas-subsection-dot" style={{ background: "#059669" }}/>Balance & Proprioception</div>
+                    <BalanceTable
                       jointId={jointId} jointKey={key}
                       data={jData} canEdit={editing}
                       onChange={updateJointData}
