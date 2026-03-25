@@ -64,7 +64,7 @@ function SettingsPanel({ settings, onSaved }: SettingsPanelProps) {
   if (!open) {
     return (
       <button className="sp-toggle" onClick={() => setOpen(true)}>
-        <Settings size={14} strokeWidth={2} color="#5a5550" />
+        <Settings size={14} strokeWidth={2} />
         {saved ? "Saved!" : "Clinic Settings"}
       </button>
     );
@@ -349,9 +349,9 @@ export default function SchedulePage({
           {/* View toggle */}
           <div className="sc-view-group">
             {([
-              { id: "month", label: "Month", icon: <Calendar size={13} strokeWidth={2} color="#2E8BC0" /> },
-              { id: "week",  label: "Week",  icon: <Calendar size={13} strokeWidth={2} color="#2E8BC0" /> },
-              { id: "day",   label: "Day",   icon: <Clock size={13} strokeWidth={2} color="#2E8BC0" /> },
+              { id: "month", label: "Month", icon: <Calendar size={13} strokeWidth={2} /> },
+              { id: "week",  label: "Week",  icon: <Calendar size={13} strokeWidth={2} /> },
+              { id: "day",   label: "Day",   icon: <Clock size={13} strokeWidth={2} /> },
             ] as { id: ViewMode; label: string; icon: React.ReactNode }[]).map((v) => (
               <button
                 key={v.id}
@@ -380,7 +380,7 @@ export default function SchedulePage({
                 }
               }}
             >
-              <ChevronLeft size={14} strokeWidth={2.5} color="#5a5550" />
+              <ChevronLeft size={14} strokeWidth={2.5} />
             </button>
             <span className="sc-nav-label">{headerLabel}</span>
             <button
@@ -395,12 +395,12 @@ export default function SchedulePage({
                 }
               }}
             >
-              <ChevronRight size={14} strokeWidth={2.5} color="#5a5550" />
+              <ChevronRight size={14} strokeWidth={2.5} />
             </button>
           </div>
 
           <button className="sc-today-btn" onClick={goToday}>
-            <Info size={13} strokeWidth={2} color="#5a5550" style={{ display: "inline-block", verticalAlign: "middle", marginRight: 5 }} />
+            <Info size={13} strokeWidth={2} style={{ display: "inline-block", verticalAlign: "middle", marginRight: 5 }} />
             Today
           </button>
         </div>

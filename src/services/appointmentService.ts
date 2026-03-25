@@ -70,13 +70,18 @@ function parseError(err: unknown): string {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function docToAppointment(id: string, data: Record<string, unknown>): Appointment {
+  // Normalise date to plain "YYYY-MM-DD" – strip any time/timezone suffix that may
+  // have been written by a different code path (e.g. ISO datetime strings).
+  const rawDate = typeof data.date === "string" ? data.date : "";
+  const normDate = rawDate.length >= 10 ? rawDate.slice(0, 10) : rawDate;
+
   return {
     id,
     patientId:   (data.patientId   as string) ?? "",
     patientName: (data.patientName as string) ?? "",
     physioId:    (data.physioId    as string) ?? "",
     physioName:  (data.physioName  as string) ?? "",
-    date:        (data.date        as string) ?? "",
+    date:        normDate,
     hour:        (data.hour        as number) ?? 0,
     sessionType: (data.sessionType as string) ?? "",
     status:      ((data.status as string) === "completed" ? "completed"
