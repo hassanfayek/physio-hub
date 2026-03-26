@@ -25,7 +25,7 @@ import type { PatientProfile } from "../../services/authService";
 import { Dumbbell, Home, ChevronRight, Calendar, FileText } from "lucide-react";
 import {
   collection, doc, query, where, orderBy, limit,
-  onSnapshot, setDoc, serverTimestamp, getDoc,
+  onSnapshot, setDoc, serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 
