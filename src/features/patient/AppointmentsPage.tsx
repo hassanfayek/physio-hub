@@ -85,7 +85,7 @@ export default function AppointmentsPage() {
 
   // ── Data state ────────────────────────────────────────────────────────────
   const [physios,        setPhysios]        = useState<Physiotherapist[]>([]);
-  const [clinicSettings, setClinicSettings] = useState<ClinicSettings>({ maxPatientsPerHour: 4, openingHour: 9, closingHour: 21 });
+  const [clinicSettings, setClinicSettings] = useState<ClinicSettings>({ maxPatientsPerHour: 4, openingHour: 12, closingHour: 24 });
   const [patientDoc,     setPatientDoc]     = useState<Patient | null>(null);
 
   // Derive the subtitle name:

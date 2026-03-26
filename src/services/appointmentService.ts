@@ -53,8 +53,8 @@ export interface CreateAppointmentPayload {
 
 export const DEFAULT_SETTINGS: ClinicSettings = {
   maxPatientsPerHour: 4,
-  openingHour:        9,
-  closingHour:        21,
+  openingHour:        12,
+  closingHour:        24,
 };
 
 // ─── Error parser ─────────────────────────────────────────────────────────────

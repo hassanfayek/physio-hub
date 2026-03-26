@@ -15,6 +15,7 @@ service cloud.firestore {
     function isManager()    { return isAuth() && role() == 'clinic_manager';   }
     function isPhysio()     { return isAuth() && role() == 'physiotherapist';  }
     function isSecretary()  { return isAuth() && role() == 'secretary';        }
+    function isPatient()    { return isAuth() && role() == 'patient';          }
     function isStaff()      { return isManager() || isPhysio() || isSecretary(); }
 
     // ── Users ─────────────────────────────────────────────────────────────────
@@ -93,8 +94,9 @@ service cloud.firestore {
 
     // ── Appointments ─────────────────────────────────────────────────────────
     match /appointments/{appointmentId} {
-      allow read:  if isStaff();
-      allow write: if isStaff();
+      allow read:          if isStaff() || isPatient();
+      allow create:        if isStaff() || (isPatient() && request.resource.data.patientId == request.auth.uid);
+      allow update, delete: if isStaff();
     }
 
     // ── Exercise Library ─────────────────────────────────────────────────────
@@ -105,7 +107,7 @@ service cloud.firestore {
 
     // ── Clinic Settings ──────────────────────────────────────────────────────
     match /clinicSettings/{docId} {
-      allow read:  if isStaff();
+      allow read:  if isStaff() || isPatient();
       allow write: if isManager();
     }
 
