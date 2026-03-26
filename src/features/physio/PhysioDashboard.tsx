@@ -1083,6 +1083,7 @@ export default function PhysioDashboard() {
           <div className="phd-topbar-left">
             <button
               className="phd-hamburger"
+              style={{ background: "#f5f3ef", border: "1px solid #e5e0d8", color: "#5a5550" }}
               onClick={() => setSidebarOpen(true)}
               aria-label="Open menu"
             >

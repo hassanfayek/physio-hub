@@ -390,6 +390,7 @@ export default function PatientDashboard() {
           <div className="pd2-topbar-left">
             <button
               className="pd2-hamburger"
+              style={{ background: "#f5f3ef", border: "1px solid #e5e0d8", color: "#5a5550" }}
               onClick={() => setSidebarOpen(true)}
               aria-label="Open menu"
             >

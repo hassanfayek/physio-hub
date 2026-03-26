@@ -64,8 +64,8 @@ function SettingsPanel({ settings, onSaved }: SettingsPanelProps) {
 
   if (!open) {
     return (
-      <button className="sp-toggle" onClick={() => setOpen(true)}>
-        <Settings size={14} strokeWidth={2} />
+      <button className="sp-toggle" style={{ background: "#fafaf8", border: "1.5px solid #e5e0d8", color: "#5a5550" }} onClick={() => setOpen(true)}>
+        <Settings size={14} strokeWidth={2} color="#5a5550" />
         {saved ? "Saved!" : "Clinic Settings"}
       </button>
     );
@@ -351,10 +351,10 @@ export default function SchedulePage({
           {/* View toggle */}
           <div className="sc-view-group">
             {([
-              { id: "month", label: "Month", icon: <Calendar size={13} strokeWidth={2} /> },
-              { id: "week",  label: "Week",  icon: <Calendar size={13} strokeWidth={2} /> },
-              { id: "day",   label: "Day",   icon: <Clock size={13} strokeWidth={2} /> },
-            ] as { id: ViewMode; label: string; icon: React.ReactNode }[]).map((v) => (
+              { id: "month", label: "Month", icon: (active: boolean) => <Calendar size={13} strokeWidth={2} color={active ? "#2E8BC0" : "#9a9590"} /> },
+              { id: "week",  label: "Week",  icon: (active: boolean) => <Calendar size={13} strokeWidth={2} color={active ? "#2E8BC0" : "#9a9590"} /> },
+              { id: "day",   label: "Day",   icon: (active: boolean) => <Clock    size={13} strokeWidth={2} color={active ? "#2E8BC0" : "#9a9590"} /> },
+            ] as { id: ViewMode; label: string; icon: (active: boolean) => React.ReactNode }[]).map((v) => (
               <button
                 key={v.id}
                 className={`sc-view-btn ${view === v.id ? "active" : ""}`}
@@ -363,7 +363,7 @@ export default function SchedulePage({
                   if (v.id === "day" && !dayDate) setDayDate(toDateStr(new Date()));
                 }}
               >
-                {v.icon} {v.label}
+                {v.icon(view === v.id)} {v.label}
               </button>
             ))}
           </div>
@@ -372,6 +372,7 @@ export default function SchedulePage({
           <div className="sc-nav">
             <button
               className="sc-nav-btn"
+              style={{ background: "#fafaf8", border: "1.5px solid #e5e0d8", color: "#5a5550" }}
               onClick={() => {
                 if (view === "month") moveMonth(-1);
                 else if (view === "week") moveWeek(-1);
@@ -382,11 +383,12 @@ export default function SchedulePage({
                 }
               }}
             >
-              <ChevronLeft size={14} strokeWidth={2.5} />
+              <ChevronLeft size={16} strokeWidth={2.5} color="#5a5550" />
             </button>
             <span className="sc-nav-label">{headerLabel}</span>
             <button
               className="sc-nav-btn"
+              style={{ background: "#fafaf8", border: "1.5px solid #e5e0d8", color: "#5a5550" }}
               onClick={() => {
                 if (view === "month") moveMonth(1);
                 else if (view === "week") moveWeek(1);
@@ -397,12 +399,12 @@ export default function SchedulePage({
                 }
               }}
             >
-              <ChevronRight size={14} strokeWidth={2.5} />
+              <ChevronRight size={16} strokeWidth={2.5} color="#5a5550" />
             </button>
           </div>
 
-          <button className="sc-today-btn" onClick={goToday}>
-            <Info size={13} strokeWidth={2} style={{ display: "inline-block", verticalAlign: "middle", marginRight: 5 }} />
+          <button className="sc-today-btn" style={{ background: "#fafaf8", border: "1.5px solid #e5e0d8", color: "#5a5550" }} onClick={goToday}>
+            <Info size={13} strokeWidth={2} color="#5a5550" style={{ display: "inline-block", verticalAlign: "middle", marginRight: 5 }} />
             Today
           </button>
         </div>
