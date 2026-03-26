@@ -245,7 +245,7 @@ export default function ExerciseProgram({
     if (!canComplete_) return;
     const currentCompleted = rec.completed ?? false;
     setTogglingId(rec.id);
-    await toggleExerciseCompletion(rec.id, !currentCompleted);
+    await toggleExerciseCompletion(rec.id, !currentCompleted, rec.patientId);
     setTogglingId(null);
   };
 

@@ -119,5 +119,21 @@ service cloud.firestore {
       allow write: if isManager();
     }
 
+    // ── Daily Check-ins ───────────────────────────────────────────────────────
+    // Doc ID: {patientId}_{YYYY-MM-DD}
+    match /dailyCheckIns/{docId} {
+      allow read:          if isStaff() || isPatient();
+      allow create, update: if isPatient() && request.resource.data.patientId == request.auth.uid;
+      allow delete:        if isManager();
+    }
+
+    // ── Exercise Streak Log ───────────────────────────────────────────────────
+    // Doc ID: {patientId}_{YYYY-MM-DD} — written when patient completes any exercise
+    match /exerciseStreakLog/{docId} {
+      allow read:          if isStaff() || isPatient();
+      allow create, update: if isPatient() && request.resource.data.patientId == request.auth.uid;
+      allow delete:        if isManager();
+    }
+
   }
 }

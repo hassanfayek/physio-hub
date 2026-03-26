@@ -24,7 +24,8 @@ import {
 import type { PatientProfile } from "../../services/authService";
 import { Dumbbell, Home, ChevronRight, Calendar, FileText } from "lucide-react";
 import {
-  collection, query, where, orderBy, limit, onSnapshot,
+  collection, doc, query, where, orderBy, limit,
+  onSnapshot, setDoc, serverTimestamp, getDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 
@@ -194,6 +195,64 @@ function PainChart({ data }: { data: PainEntry[] }) {
   );
 }
 
+// ─── Check-in types & helpers ────────────────────────────────────────────────
+
+interface CheckIn {
+  mood:  number;   // 1–5
+  date:  string;   // YYYY-MM-DD
+}
+
+const MOODS = [
+  { value: 1, emoji: "😫", label: "Struggling" },
+  { value: 2, emoji: "😟", label: "Rough"      },
+  { value: 3, emoji: "😐", label: "Okay"       },
+  { value: 4, emoji: "😊", label: "Good"       },
+  { value: 5, emoji: "😄", label: "Great"      },
+];
+
+function moodLabel(v: number) { return MOODS.find((m) => m.value === v)?.label ?? ""; }
+function moodEmoji(v: number) { return MOODS.find((m) => m.value === v)?.emoji ?? "😐"; }
+
+// ─── Streak calculation ───────────────────────────────────────────────────────
+
+function isoDate(offsetDays = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() - offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
+function calcStreak(logDates: string[]): { current: number; best: number; last7: boolean[] } {
+  const dateSet = new Set(logDates);
+
+  // Last 7 days (oldest → newest)
+  const last7: boolean[] = [];
+  for (let i = 6; i >= 0; i--) last7.push(dateSet.has(isoDate(i)));
+
+  // Current streak: consecutive days back from today
+  let current = 0;
+  for (let i = 0; i < 365; i++) {
+    if (dateSet.has(isoDate(i))) current++;
+    else break;
+  }
+
+  // Best streak over all logged dates
+  const sorted = [...logDates].sort();
+  let best = current, run = 0, prev = "";
+  for (const d of sorted) {
+    if (prev) {
+      const next = new Date(prev + "T00:00:00");
+      next.setDate(next.getDate() + 1);
+      run = next.toISOString().slice(0, 10) === d ? run + 1 : 1;
+    } else {
+      run = 1;
+    }
+    if (run > best) best = run;
+    prev = d;
+  }
+
+  return { current, best, last7 };
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const MONTH_NAMES = [
@@ -236,9 +295,15 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [exercises,    setExercises]    = useState<PatientExercise[]>([]);
   const [feedback,     setFeedback]     = useState<PainEntry[]>([]);
+  const [checkIn,      setCheckIn]      = useState<CheckIn | null>(null);
+  const [streakDates,  setStreakDates]  = useState<string[]>([]);
+  const [checkInMood,  setCheckInMood]  = useState<number | null>(null);
+  const [savingCheckIn,setSavingCheckIn]= useState(false);
   const [apptLoading,  setApptLoading]  = useState(true);
   const [exLoading,    setExLoading]    = useState(true);
   const [fbLoading,    setFbLoading]    = useState(true);
+  const [checkInLoading, setCheckInLoading] = useState(true);
+  const [streakLoading,  setStreakLoading]  = useState(true);
 
   // ── Realtime: upcoming appointments ─────────────────────────────────────
   useEffect(() => {
@@ -285,6 +350,62 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
       () => setFbLoading(false)
     );
   }, [patient?.uid]);
+
+  // ── Today's check-in ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!patient?.uid) return;
+    const today  = isoDate();
+    const docRef = doc(db, "dailyCheckIns", `${patient.uid}_${today}`);
+    return onSnapshot(
+      docRef,
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data();
+          setCheckIn({ mood: d.mood as number, date: d.date as string });
+        } else {
+          setCheckIn(null);
+        }
+        setCheckInLoading(false);
+      },
+      () => setCheckInLoading(false)
+    );
+  }, [patient?.uid]);
+
+  // ── Exercise streak log ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!patient?.uid) return;
+    const thirtyDaysAgo = isoDate(30);
+    const q = query(
+      collection(db, "exerciseStreakLog"),
+      where("patientId", "==", patient.uid),
+      where("date", ">=", thirtyDaysAgo),
+      orderBy("date", "asc")
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        setStreakDates(snap.docs.map((d) => d.data().date as string));
+        setStreakLoading(false);
+      },
+      () => setStreakLoading(false)
+    );
+  }, [patient?.uid]);
+
+  // ── Submit check-in ───────────────────────────────────────────────────────
+  const handleCheckIn = async () => {
+    if (!patient?.uid || checkInMood === null) return;
+    setSavingCheckIn(true);
+    const today  = isoDate();
+    const docRef = doc(db, "dailyCheckIns", `${patient.uid}_${today}`);
+    await setDoc(docRef, {
+      patientId: patient.uid,
+      date:      today,
+      mood:      checkInMood,
+      createdAt: serverTimestamp(),
+    });
+    setSavingCheckIn(false);
+    setCheckInMood(null);
+  };
 
   // ── Derived values ────────────────────────────────────────────────────────
   const nextAppt      = appointments[0] ?? null;
@@ -473,12 +594,66 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
           display: flex; align-items: center; justify-content: space-between;
           margin-bottom: 4px;
         }
-        .pth-pain-title {
-          font-size: 15px; font-weight: 600; color: #1a1a1a;
+        .pth-pain-title { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+        .pth-pain-sub   { font-size: 12px; color: #9a9590; margin-bottom: 12px; }
+
+        /* ── Daily check-in card ── */
+        .pth-checkin-moods {
+          display: flex; gap: 6px; justify-content: space-between; margin: 10px 0;
         }
-        .pth-pain-sub {
-          font-size: 12px; color: #9a9590; margin-bottom: 12px;
+        .pth-mood-btn {
+          flex: 1; display: flex; flex-direction: column; align-items: center;
+          gap: 4px; padding: 8px 4px; border-radius: 10px;
+          border: 1.5px solid #e5e0d8; background: #fafaf8;
+          cursor: pointer; transition: all 0.15s; font-family: 'Outfit', sans-serif;
+          min-height: 56px;
         }
+        .pth-mood-btn:hover  { border-color: #2E8BC0; background: #EAF5FC; }
+        .pth-mood-btn.sel    { border-color: #2E8BC0; background: #EAF5FC; box-shadow: 0 0 0 3px rgba(46,139,192,0.12); }
+        .pth-mood-emoji      { font-size: 20px; line-height: 1; }
+        .pth-mood-label      { font-size: 9.5px; font-weight: 500; color: #5a5550; }
+        .pth-checkin-submit  {
+          width: 100%; padding: 10px; border-radius: 10px; border: none;
+          background: #2E8BC0; color: #fff; font-family: 'Outfit', sans-serif;
+          font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s;
+          margin-top: 4px;
+        }
+        .pth-checkin-submit:hover:not(:disabled) { background: #0C3C60; }
+        .pth-checkin-submit:disabled             { opacity: 0.45; cursor: not-allowed; }
+        .pth-checkin-done {
+          display: flex; align-items: center; gap: 10px;
+          padding: 10px 12px; border-radius: 10px;
+          background: #f0fdf4; border: 1.5px solid #bbf7d0;
+          margin-top: 8px;
+        }
+        .pth-checkin-done-emoji { font-size: 26px; }
+        .pth-checkin-done-text  { font-size: 13px; color: #166534; font-weight: 500; }
+        .pth-checkin-done-sub   { font-size: 12px; color: #4ade80; margin-top: 1px; }
+
+        /* ── Streak card ── */
+        .pth-streak-num {
+          font-family: 'Playfair Display', serif;
+          font-size: 42px; font-weight: 600; color: #f97316;
+          line-height: 1; margin-bottom: 2px;
+        }
+        .pth-streak-label { font-size: 13px; color: #9a9590; margin-bottom: 14px; }
+        .pth-streak-dots  { display: flex; gap: 5px; margin-bottom: 10px; }
+        .pth-streak-dot   {
+          flex: 1; height: 8px; border-radius: 100px;
+          transition: background 0.2s;
+        }
+        .pth-streak-dot.on  { background: #f97316; }
+        .pth-streak-dot.off { background: #f0ede8; }
+        .pth-streak-days {
+          display: flex; gap: 5px; margin-bottom: 6px;
+        }
+        .pth-streak-day-label {
+          flex: 1; text-align: center; font-size: 9px; color: #b0aca6;
+        }
+        .pth-streak-best {
+          font-size: 12px; color: #9a9590; margin-top: 4px;
+        }
+        .pth-streak-best strong { color: #f97316; }
       `}</style>
 
       <div className="pth-root">
@@ -611,6 +786,110 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
                 <>You completed <strong>{completionPct}%</strong> of your exercises this week.</>
               )}
             </div>
+          </div>
+
+          {/* ── Daily Check-in ── */}
+          <div className="pth-card" style={{ gridColumn: "1 / -1" }}>
+            <div className="pth-card-label">Daily Check-in</div>
+            {checkInLoading ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <Skel h={13} w="50%" />
+                <Skel h={56} w="100%" />
+              </div>
+            ) : checkIn ? (
+              /* Already checked in today */
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a", marginBottom: 2 }}>
+                  Today's check-in complete
+                </div>
+                <div className="pth-checkin-done">
+                  <div className="pth-checkin-done-emoji">{moodEmoji(checkIn.mood)}</div>
+                  <div>
+                    <div className="pth-checkin-done-text">Feeling {moodLabel(checkIn.mood)}</div>
+                    <div className="pth-checkin-done-sub">Check back in tomorrow!</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Check-in form */
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a", marginBottom: 2 }}>
+                  How are you feeling today?
+                </div>
+                <div style={{ fontSize: 12, color: "#9a9590", marginBottom: 2 }}>
+                  Tap to record your daily wellbeing
+                </div>
+                <div className="pth-checkin-moods">
+                  {MOODS.map((m) => (
+                    <button
+                      key={m.value}
+                      className={`pth-mood-btn${checkInMood === m.value ? " sel" : ""}`}
+                      onClick={() => setCheckInMood(m.value)}
+                    >
+                      <span className="pth-mood-emoji">{m.emoji}</span>
+                      <span className="pth-mood-label">{m.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="pth-checkin-submit"
+                  disabled={checkInMood === null || savingCheckIn}
+                  onClick={handleCheckIn}
+                >
+                  {savingCheckIn ? "Saving…" : "Submit Check-in"}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ── Exercise Streak ── */}
+          <div className="pth-card" style={{ gridColumn: "1 / -1" }}>
+            <div className="pth-card-label">Exercise Streak</div>
+            {streakLoading ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <Skel h={42} w="30%" />
+                <Skel h={8}  w="100%" />
+              </div>
+            ) : (() => {
+              const { current, best, last7 } = calcStreak(streakDates);
+              const DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+              // Align last7 to Mon–Sun (last7[0] = 6 days ago)
+              const todayDow = new Date().getDay(); // 0=Sun
+              const labels   = Array.from({ length: 7 }, (_, i) => {
+                const dow = (todayDow - 6 + i + 7) % 7; // day-of-week for that slot
+                return DAY_LABELS[dow === 0 ? 6 : dow - 1]; // convert Sun=0 → index 6
+              });
+              return (
+                <div>
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginBottom: 4 }}>
+                    <div className="pth-streak-num">
+                      {current > 0 ? "🔥" : "💪"} {current}
+                    </div>
+                  </div>
+                  <div className="pth-streak-label">
+                    {current === 0
+                      ? "Complete exercises to start your streak!"
+                      : current === 1
+                        ? "1 day streak — keep going!"
+                        : `${current} day streak — amazing!`}
+                  </div>
+                  {/* Day dots */}
+                  <div className="pth-streak-days">
+                    {labels.map((l) => (
+                      <div key={l} className="pth-streak-day-label">{l}</div>
+                    ))}
+                  </div>
+                  <div className="pth-streak-dots">
+                    {last7.map((on, i) => (
+                      <div key={i} className={`pth-streak-dot ${on ? "on" : "off"}`} />
+                    ))}
+                  </div>
+                  <div className="pth-streak-best">
+                    Best streak: <strong>{best} day{best !== 1 ? "s" : ""}</strong>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* ── Pain Level Chart ── */}

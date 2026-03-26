@@ -187,7 +187,7 @@ export default function ExercisesPage() {
   const handleToggle = async (rec: PatientExercise) => {
     const currentCompleted = rec.completed ?? false;
     setTogglingId(rec.id);
-    await toggleExerciseCompletion(rec.id, !currentCompleted);
+    await toggleExerciseCompletion(rec.id, !currentCompleted, rec.patientId);
     setTogglingId(null);
   };
 

@@ -9,6 +9,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  setDoc,
   query,
   where,
   orderBy,
@@ -258,8 +259,9 @@ export function subscribeToPatientExercises(
 // ─── Patient Exercises: toggle completion ─────────────────────────────────────
 
 export async function toggleExerciseCompletion(
-  recordId:    string,
-  completed:   boolean
+  recordId:   string,
+  completed:  boolean,
+  patientId?: string
 ): Promise<{ error?: string }> {
   try {
     const safeCompleted = completed ?? false;
@@ -267,6 +269,15 @@ export async function toggleExerciseCompletion(
       completed:    safeCompleted,
       completedAt:  safeCompleted ? serverTimestamp() : null,
     });
+    // Log the day when marking complete (idempotent — same doc ID per patient/day)
+    if (safeCompleted && patientId) {
+      const today = new Date().toISOString().slice(0, 10);
+      await setDoc(
+        doc(db, "exerciseStreakLog", `${patientId}_${today}`),
+        { patientId, date: today, loggedAt: serverTimestamp() },
+        { merge: true }
+      );
+    }
     return {};
   } catch (err) {
     return { error: parseError(err) };
