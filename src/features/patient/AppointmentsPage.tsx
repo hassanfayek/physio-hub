@@ -191,7 +191,19 @@ export default function AppointmentsPage() {
     );
   }, [patient?.uid]);
 
-  const nextAppt = upcoming[0] ?? null;
+  // ── Live clock — re-filters upcoming list every minute ───────────────────
+  const [currentHour, setCurrentHour] = useState(new Date().getHours());
+  useEffect(() => {
+    const id = setInterval(() => setCurrentHour(new Date().getHours()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const todayStr    = toDateStr(new Date());
+  const upcomingNow = upcoming.filter(
+    (a) => a.date !== todayStr || a.hour >= currentHour
+  );
+
+  const nextAppt = upcomingNow[0] ?? null;
 
   // ── Build slots from clinic hours ─────────────────────────────────────────
   const slots: { hour: number; label: string; available: boolean }[] = [];
@@ -585,10 +597,10 @@ export default function AppointmentsPage() {
           [1, 2].map((n) => (
             <div key={n} style={{ height: 80, borderRadius: 16, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "apShimmer 1.4s ease infinite" }} />
           ))
-        ) : upcoming.length === 0 ? (
+        ) : upcomingNow.length === 0 ? (
           <div style={{ textAlign: "center", padding: "40px 0", color: "#9a9590", fontSize: 14 }}>No upcoming appointments scheduled.</div>
         ) : (
-          upcoming.map((a) => {
+          upcomingNow.map((a) => {
             const { day, month } = parseDateBadge(a.date);
             return (
               <div key={a.id} className="ap-appt-card">

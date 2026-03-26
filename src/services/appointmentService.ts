@@ -201,22 +201,25 @@ export function subscribeToAppointmentsByMonth(
 // ─── Realtime: appointments by day ───────────────────────────────────────────
 
 export function subscribeToAppointmentsByDay(
-  start:    Date,              // beginning of day (00:00:00)
-  end:      Date,              // end of day (23:59:59)
-  physioId: string | undefined, // undefined = all (manager/secretary)
+  date:     string,                    // "YYYY-MM-DD"
+  physioId: string | null | undefined, // null/undefined = all (manager/secretary)
   onData:   (appts: Appointment[]) => void,
   onError?: (err: Error) => void
 ): () => void {
+  const [y, mo, d] = date.split("-").map(Number);
+  const nextDateStr = toDateStr(new Date(y, mo - 1, d + 1));
+
   const q = query(
     collection(db, "appointments"),
-    where("date", ">=", start),
-    where("date", "<=", end)
+    where("date", ">=", date),
+    where("date", "<",  nextDateStr)
   );
 
   return onSnapshot(
     q,
     (snap) => {
       let appts = snap.docs.map((doc) => docToAppointment(doc.id, doc.data()));
+      appts = appts.filter((a) => a.date === date); // exact match after normalization
       if (physioId) appts = appts.filter((a) => a.physioId === physioId);
       appts.sort((a, b) => a.hour - b.hour);
       onData(appts);
@@ -312,7 +315,6 @@ export function subscribeToPatientAppointments(
     (snap) => {
       const appts = snap.docs
         .map((d) => docToAppointment(d.id, d.data()))
-        // client-side sort: date asc, then hour asc
         .sort((a, b) => {
           if (a.date !== b.date) return a.date.localeCompare(b.date);
           return a.hour - b.hour;

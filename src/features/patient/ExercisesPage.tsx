@@ -164,13 +164,21 @@ export default function ExercisesPage() {
       (data) => {
         setExercises(data);
         setLoading(false);
+        setError(null);
         // Reset completed exercises once per session (not on every snapshot)
         if (!resetDoneRef.current && data.length > 0) {
           resetDoneRef.current = true;
-          resetDailyHomeExercises(data);
+          resetDailyHomeExercises(data).catch(() => {/* silent — reset is best-effort */});
         }
       },
-      (err)  => { setError(err.message ?? "Failed to load exercises."); setLoading(false); }
+      (err) => {
+        // Only surface the error if no exercises loaded yet (cached data is usable)
+        setLoading(false);
+        setExercises((prev) => {
+          if (prev.length === 0) setError(err.message ?? "Failed to load exercises.");
+          return prev;
+        });
+      }
     );
     return () => unsub();
   }, [patient?.uid]);
