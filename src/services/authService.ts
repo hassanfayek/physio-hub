@@ -310,10 +310,34 @@ export async function sendPasswordReset(email: string): Promise<void> {
 // ─── Load full user profile ───────────────────────────────────────────────────
 // Reads /users/{uid} for the role, then fetches the role-specific collection.
 
+/** Retry a Firestore getDoc up to `attempts` times when the client is offline. */
+async function getDocWithRetry(
+  ref: Parameters<typeof getDoc>[0],
+  attempts = 4,
+  delayMs  = 1500
+): ReturnType<typeof getDoc> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await getDoc(ref);
+    } catch (err) {
+      const code = (err as { code?: string }).code ?? "";
+      const isOffline = code === "unavailable" || code === "failed-precondition" ||
+        (err instanceof Error && err.message.toLowerCase().includes("offline"));
+      if (isOffline && i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      } else {
+        throw err;
+      }
+    }
+  }
+  // unreachable but satisfies TypeScript
+  return getDoc(ref);
+}
+
 export async function loadUserProfile(
   user: User
 ): Promise<PatientProfile | PhysioProfile | SecretaryProfile | null> {
-  const userSnap = await getDoc(doc(db, "users", user.uid));
+  const userSnap = await getDocWithRetry(doc(db, "users", user.uid));
 
   if (!userSnap.exists()) return null;
 
@@ -330,7 +354,7 @@ export async function loadUserProfile(
   };
 
   if (role === "patient") {
-    const patSnap = await getDoc(doc(db, "patients", user.uid));
+    const patSnap = await getDocWithRetry(doc(db, "patients", user.uid));
     if (!patSnap.exists()) return null;
     const p = patSnap.data() as DocumentData;
 
@@ -348,7 +372,7 @@ export async function loadUserProfile(
   }
 
   if (role === "physiotherapist" || role === "clinic_manager") {
-    const phSnap = await getDoc(doc(db, "physiotherapists", user.uid));
+    const phSnap = await getDocWithRetry(doc(db, "physiotherapists", user.uid));
     if (!phSnap.exists()) return null;
     const p = phSnap.data() as DocumentData;
 
@@ -365,7 +389,7 @@ export async function loadUserProfile(
   }
 
   if (role === "secretary") {
-    const secSnap = await getDoc(doc(db, "secretaries", user.uid));
+    const secSnap = await getDocWithRetry(doc(db, "secretaries", user.uid));
     if (!secSnap.exists()) return null;
     const s = secSnap.data() as DocumentData;
 
