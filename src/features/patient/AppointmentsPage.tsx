@@ -14,7 +14,7 @@ import {
   subscribeToPatientAllAppointments,
   bookPatientAppointment,
   cancelPatientAppointment,
-  getClinicSettings,
+  subscribeToClinicSettings,
   fmtHour12,
   toDateStr,
   type Appointment as FSAppt,
@@ -125,8 +125,8 @@ export default function AppointmentsPage() {
   const [cancelling,        setCancelling]        = useState(false);
   const [cancelError,       setCancelError]       = useState<string | null>(null);
 
-  // ── Load clinic settings once ─────────────────────────────────────────────
-  useEffect(() => { getClinicSettings().then(setClinicSettings); }, []);
+  // ── Load clinic settings (realtime) ──────────────────────────────────────
+  useEffect(() => subscribeToClinicSettings(setClinicSettings), []);
 
   // ── Load patient Firestore doc (for seniorEditorName + physioId) ──────────
   useEffect(() => {
