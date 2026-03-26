@@ -70,8 +70,9 @@ service cloud.firestore {
     }
 
     match /patientExercises/{docId} {
-      allow read:  if isStaff() || (isPatient() && resource.data.patientId == request.auth.uid);
-      allow write: if isManager() || isPhysio();
+      allow read:          if isStaff() || (isPatient() && resource.data.patientId == request.auth.uid);
+      allow create, delete: if isManager() || isPhysio();
+      allow update:        if isManager() || isPhysio() || (isPatient() && resource.data.patientId == request.auth.uid);
     }
 
     match /assignedExercises/{docId} {
