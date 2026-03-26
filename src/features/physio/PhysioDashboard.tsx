@@ -16,7 +16,6 @@ import {
 } from "../../services/dashboardService";
 import {
   subscribeToAppointmentsByDay,
-  toDateStr,
   fmtHour12,
   type Appointment,
 } from "../../services/appointmentService";
@@ -647,10 +646,12 @@ function OverviewTab({ physio, isManager, isSecretary = false, onViewPatient }: 
 
   useEffect(() => {
     setApptLoading(true);
-    const today = toDateStr(new Date());
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end   = new Date(); end.setHours(23, 59, 59, 999);
     const unsubscribe = subscribeToAppointmentsByDay(
-      today,
-      (isManager || isSecretary) ? null : physio.uid,
+      start,
+      end,
+      (isManager || isSecretary) ? undefined : physio.uid,
       (data) => { setTodayAppts(data); setApptLoading(false); },
       ()     => setApptLoading(false)
     );

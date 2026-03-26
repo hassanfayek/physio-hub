@@ -46,9 +46,13 @@ export default function DayView({
   // Realtime subscription for this day
   useEffect(() => {
     setLoading(true);
+    const [y, mo, d] = date.split("-").map(Number);
+    const start = new Date(y, mo - 1, d, 0, 0, 0, 0);
+    const end   = new Date(y, mo - 1, d, 23, 59, 59, 999);
     const unsub = subscribeToAppointmentsByDay(
-      date,
-      isManager ? null : currentPhysio.uid,
+      start,
+      end,
+      isManager ? undefined : currentPhysio.uid,
       (data) => { setAppointments(data); setLoading(false); },
       ()     => setLoading(false)
     );

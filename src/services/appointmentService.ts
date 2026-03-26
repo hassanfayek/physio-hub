@@ -70,9 +70,14 @@ function parseError(err: unknown): string {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function docToAppointment(id: string, data: Record<string, unknown>): Appointment {
-  // Normalise date to plain "YYYY-MM-DD" – strip any time/timezone suffix that may
-  // have been written by a different code path (e.g. ISO datetime strings).
-  const rawDate = typeof data.date === "string" ? data.date : "";
+  // Normalise date to plain "YYYY-MM-DD" – handles both string and Firestore Timestamp.
+  let rawDate = "";
+  if (typeof data.date === "string") {
+    rawDate = data.date;
+  } else if (data.date && typeof (data.date as { toDate?: unknown }).toDate === "function") {
+    const d = (data.date as { toDate: () => Date }).toDate();
+    rawDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
   const normDate = rawDate.length >= 10 ? rawDate.slice(0, 10) : rawDate;
 
   return {
@@ -196,26 +201,22 @@ export function subscribeToAppointmentsByMonth(
 // ─── Realtime: appointments by day ───────────────────────────────────────────
 
 export function subscribeToAppointmentsByDay(
-  date:     string,          // "YYYY-MM-DD"
-  physioId: string | null,   // null = all (manager)
+  start:    Date,              // beginning of day (00:00:00)
+  end:      Date,              // end of day (23:59:59)
+  physioId: string | undefined, // undefined = all (manager/secretary)
   onData:   (appts: Appointment[]) => void,
   onError?: (err: Error) => void
 ): () => void {
-  // Range query to match documents stored with ISO datetime strings (e.g. "2026-03-15T..."),
-  // consistent with subscribeToAppointmentsByMonth. Client-side filter to exact date after normalization.
-  const [y, mo, d] = date.split("-").map(Number);
-  const nextDateStr = toDateStr(new Date(y, mo - 1, d + 1));
   const q = query(
     collection(db, "appointments"),
-    where("date", ">=", date),
-    where("date", "<",  nextDateStr)
+    where("date", ">=", start),
+    where("date", "<=", end)
   );
 
   return onSnapshot(
     q,
     (snap) => {
       let appts = snap.docs.map((doc) => docToAppointment(doc.id, doc.data()));
-      appts = appts.filter((a) => a.date === date); // exact match after normalization
       if (physioId) appts = appts.filter((a) => a.physioId === physioId);
       appts.sort((a, b) => a.hour - b.hour);
       onData(appts);
