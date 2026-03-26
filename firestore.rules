@@ -60,29 +60,29 @@ service cloud.firestore {
     }
 
     match /patientSessions/{docId} {
-      allow read:  if isStaff() || (isPatient() && resource.data.patientId == request.auth.uid);
+      allow read:  if isStaff() || isPatient();
       allow write: if isManager() || isPhysio();
     }
 
     match /patientDocuments/{docId} {
-      allow read:  if isStaff() || (isPatient() && resource.data.patientId == request.auth.uid);
+      allow read:  if isStaff() || isPatient();
       allow write: if isStaff();
     }
 
     match /patientExercises/{docId} {
-      allow read:          if isStaff() || (isPatient() && resource.data.patientId == request.auth.uid);
+      allow read:          if isStaff() || isPatient();
       allow create, delete: if isManager() || isPhysio();
-      allow update:        if isManager() || isPhysio() || (isPatient() && resource.data.patientId == request.auth.uid);
+      allow update:        if isManager() || isPhysio() || isPatient();
     }
 
     match /assignedExercises/{docId} {
-      allow read:  if isStaff() || (isPatient() && resource.data.patientId == request.auth.uid);
+      allow read:  if isStaff() || isPatient();
       allow write: if isManager() || isPhysio();
     }
 
     match /sessionFeedback/{docId} {
-      allow read:   if isStaff() || (isPatient() && resource.data.patientId == request.auth.uid);
-      allow create: if isStaff() || (isPatient() && request.resource.data.patientId == request.auth.uid);
+      allow read:          if isStaff() || isPatient();
+      allow create:        if isStaff() || (isPatient() && request.resource.data.patientId == request.auth.uid);
       allow update, delete: if isStaff();
     }
 
