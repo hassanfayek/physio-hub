@@ -23,11 +23,175 @@ import {
 } from "../../services/exerciseService";
 import type { PatientProfile } from "../../services/authService";
 import { Dumbbell, Home, ChevronRight, Calendar, FileText } from "lucide-react";
+import {
+  collection, query, where, orderBy, limit, onSnapshot,
+} from "firebase/firestore";
+import { db } from "../../firebase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PatientHomePageProps {
   onNavigate: (tab: string) => void;
+}
+
+interface PainEntry {
+  date:  string;   // YYYY-MM-DD
+  pain:  number;   // 0–10
+}
+
+// ─── Pain chart (pure SVG, no library) ───────────────────────────────────────
+
+const PAIN_COLORS_SCALE = [
+  "#22c55e","#4ade80","#86efac","#fde047","#facc15",
+  "#fb923c","#f97316","#ef4444","#dc2626","#b91c1c","#7f1d1d",
+];
+const SHORT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function painColor(v: number): string {
+  const i = Math.max(0, Math.min(10, Math.round(v)));
+  return PAIN_COLORS_SCALE[i] ?? "#ef4444";
+}
+
+function PainChart({ data }: { data: PainEntry[] }) {
+  if (data.length === 0) {
+    return (
+      <div style={{ textAlign: "center", color: "#9a9590", padding: "20px 0", fontSize: 13 }}>
+        No session feedback recorded yet.<br />
+        <span style={{ fontSize: 12 }}>Submit feedback after your sessions to track progress.</span>
+      </div>
+    );
+  }
+
+  const W = 300, H = 100;
+  const padL = 22, padR = 8, padT = 10, padB = 26;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const n     = data.length;
+
+  const pts = data.map((d, i) => ({
+    x:    padL + (n > 1 ? (i / (n - 1)) * plotW : plotW / 2),
+    y:    padT + plotH - (d.pain / 10) * plotH,
+    pain: d.pain,
+    date: d.date,
+  }));
+
+  const linePts  = pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const areaPath = n > 1
+    ? `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)} ` +
+      pts.slice(1).map((p) => `L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ") +
+      ` L${pts[n-1].x.toFixed(1)},${(padT+plotH).toFixed(1)} L${pts[0].x.toFixed(1)},${(padT+plotH).toFixed(1)} Z`
+    : "";
+
+  const latestPain = data[n - 1]?.pain ?? 0;
+
+  return (
+    <div>
+      {/* Latest pain level pill */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <div style={{
+          display: "inline-flex", alignItems: "center", gap: 6,
+          padding: "4px 10px", borderRadius: 100,
+          background: painColor(latestPain) + "22",
+          border: `1px solid ${painColor(latestPain)}55`,
+        }}>
+          <div style={{
+            width: 8, height: 8, borderRadius: "50%",
+            background: painColor(latestPain),
+          }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: painColor(latestPain) }}>
+            Latest: {latestPain}/10
+          </span>
+        </div>
+        <span style={{ fontSize: 12, color: "#9a9590" }}>
+          {n} session{n !== 1 ? "s" : ""} recorded
+        </span>
+      </div>
+
+      {/* SVG chart */}
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}
+        aria-label="Pain level over time"
+      >
+        <defs>
+          <linearGradient id="pthPainGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#ef4444" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#22c55e" stopOpacity="0.03" />
+          </linearGradient>
+        </defs>
+
+        {/* Y-axis grid + labels */}
+        {[0, 5, 10].map((v) => {
+          const gy = padT + plotH - (v / 10) * plotH;
+          return (
+            <g key={v}>
+              <line
+                x1={padL} y1={gy} x2={W - padR} y2={gy}
+                stroke="#f0ede8" strokeWidth="1"
+              />
+              <text
+                x={padL - 5} y={gy + 3.5}
+                textAnchor="end" fontSize="8" fill="#b0aca6"
+              >{v}</text>
+            </g>
+          );
+        })}
+
+        {/* Area fill */}
+        {n > 1 && (
+          <path d={areaPath} fill="url(#pthPainGrad)" />
+        )}
+
+        {/* Line */}
+        {n > 1 && (
+          <polyline
+            points={linePts}
+            fill="none"
+            stroke="#2E8BC0"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+
+        {/* Dots + X labels */}
+        {pts.map((p, i) => {
+          const [, m, d] = p.date.split("-");
+          const label = `${parseInt(d, 10)} ${SHORT_MONTHS[parseInt(m, 10) - 1] ?? ""}`;
+          const showLabel = n <= 6 || i === 0 || i === n - 1 || i % Math.ceil(n / 5) === 0;
+          return (
+            <g key={i}>
+              {/* Shadow halo */}
+              <circle cx={p.x} cy={p.y} r="5.5" fill={painColor(p.pain)} opacity="0.15" />
+              {/* Dot */}
+              <circle
+                cx={p.x} cy={p.y} r="3.8"
+                fill={painColor(p.pain)}
+                stroke="#fff" strokeWidth="1.5"
+              />
+              {/* X-axis date label */}
+              {showLabel && (
+                <text
+                  x={p.x} y={padT + plotH + 16}
+                  textAnchor="middle" fontSize="7.5" fill="#b0aca6"
+                >{label}</text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
+        {[{ label: "Low (0–3)", color: "#22c55e" }, { label: "Moderate (4–6)", color: "#fb923c" }, { label: "High (7–10)", color: "#ef4444" }].map((l) => (
+          <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#9a9590" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: l.color }} />
+            {l.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -71,8 +235,10 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [exercises,    setExercises]    = useState<PatientExercise[]>([]);
+  const [feedback,     setFeedback]     = useState<PainEntry[]>([]);
   const [apptLoading,  setApptLoading]  = useState(true);
   const [exLoading,    setExLoading]    = useState(true);
+  const [fbLoading,    setFbLoading]    = useState(true);
 
   // ── Realtime: upcoming appointments ─────────────────────────────────────
   useEffect(() => {
@@ -93,6 +259,30 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
       patient.uid,
       (data) => { setExercises(data); setExLoading(false); },
       ()     => setExLoading(false)
+    );
+  }, [patient?.uid]);
+
+  // ── Realtime: session feedback pain levels ────────────────────────────────
+  useEffect(() => {
+    if (!patient?.uid) return;
+    setFbLoading(true);
+    const q = query(
+      collection(db, "sessionFeedback"),
+      where("patientId", "==", patient.uid),
+      orderBy("sessionDate", "asc"),
+      limit(12)
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const entries: PainEntry[] = snap.docs.map((d) => ({
+          date: d.data().sessionDate as string,
+          pain: (d.data().painLevel as number) ?? 0,
+        }));
+        setFeedback(entries);
+        setFbLoading(false);
+      },
+      () => setFbLoading(false)
     );
   }, [patient?.uid]);
 
@@ -276,6 +466,19 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
         .pth-action-btn.primary:hover {
           background: #0C3C60; border-color: #0C3C60; color: #fff;
         }
+
+        /* ── Pain chart card — full width ── */
+        .pth-card-pain { grid-column: 1 / -1; }
+        .pth-pain-header {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 4px;
+        }
+        .pth-pain-title {
+          font-size: 15px; font-weight: 600; color: #1a1a1a;
+        }
+        .pth-pain-sub {
+          font-size: 12px; color: #9a9590; margin-bottom: 12px;
+        }
       `}</style>
 
       <div className="pth-root">
@@ -408,6 +611,25 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
                 <>You completed <strong>{completionPct}%</strong> of your exercises this week.</>
               )}
             </div>
+          </div>
+
+          {/* ── Pain Level Chart ── */}
+          <div className="pth-card pth-card-pain">
+            <div className="pth-card-label">Pain Level Tracking</div>
+            <div className="pth-pain-header">
+              <div className="pth-pain-title">Pain Level Over Time</div>
+            </div>
+            <div className="pth-pain-sub">
+              Based on your post-session feedback · last {Math.min(feedback.length, 12)} sessions
+            </div>
+            {fbLoading ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <Skel h={12} w="40%" />
+                <Skel h={80} w="100%" />
+              </div>
+            ) : (
+              <PainChart data={feedback} />
+            )}
           </div>
 
           {/* ── Section 5: Quick Actions ── */}
