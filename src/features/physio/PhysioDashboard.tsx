@@ -12,11 +12,14 @@ import SchedulePage        from "../schedule/SchedulePage";
 import ExerciseLibraryPage from "../exercises/ExerciseLibraryPage";
 import {
   subscribeToDashboardStats,
-  subscribeTodayAppointments,
   type DashboardStats,
-  type TodayAppointment,
 } from "../../services/dashboardService";
-import { fmtHour12 } from "../../services/appointmentService";
+import {
+  subscribeToAppointmentsByDay,
+  toDateStr,
+  fmtHour12,
+  type Appointment,
+} from "../../services/appointmentService";
 import type { PhysioProfile } from "../../services/authService";
 import {
   createUserWithEmailAndPassword,
@@ -606,14 +609,31 @@ function TeamTab() {
 
 // ─── Overview tab ─────────────────────────────────────────────────────────────
 
-function OverviewTab({ physio, isManager, isSecretary = false }: { physio: PhysioProfile; isManager: boolean; isSecretary?: boolean }) {
+// ─── Status display helper ─────────────────────────────────────────────────────
+// Maps Firestore appointment status values to human-readable labels and badge colours.
+
+function apptDisplayStatus(status: string): { label: string; color: string; textColor: string } {
+  if (status === "in_progress") return { label: "In Progress", color: "#fef3c7", textColor: "#92400e" };
+  if (status === "completed")   return { label: "Completed",   color: "#d8f3dc", textColor: "#1b4332" };
+  if (status === "cancelled")   return { label: "Cancelled",   color: "#fee2e2", textColor: "#b91c1c" };
+  return                               { label: "Upcoming",    color: "#D6EEF8", textColor: "#0C3C60" };
+}
+
+interface OverviewTabProps {
+  physio:          PhysioProfile;
+  isManager:       boolean;
+  isSecretary?:    boolean;
+  onViewPatient?:  (patientId: string) => void;
+}
+
+function OverviewTab({ physio, isManager, isSecretary = false, onViewPatient }: OverviewTabProps) {
   const hour     = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   const [stats,        setStats]        = useState<DashboardStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
-  const [todayAppts,  setTodayAppts]  = useState<TodayAppointment[]>([]);
+  const [todayAppts,  setTodayAppts]  = useState<Appointment[]>([]);
   const [apptLoading, setApptLoading] = useState(true);
 
   useEffect(() => {
@@ -627,8 +647,10 @@ function OverviewTab({ physio, isManager, isSecretary = false }: { physio: Physi
 
   useEffect(() => {
     setApptLoading(true);
-    const unsubscribe = subscribeTodayAppointments(
-      (isManager || isSecretary) ? "__all__" : physio.uid,
+    const today = toDateStr(new Date());
+    const unsubscribe = subscribeToAppointmentsByDay(
+      today,
+      (isManager || isSecretary) ? null : physio.uid,
       (data) => { setTodayAppts(data); setApptLoading(false); },
       ()     => setApptLoading(false)
     );
@@ -719,34 +741,50 @@ function OverviewTab({ physio, isManager, isSecretary = false }: { physio: Physi
           <div className="ph-ov-empty">No appointments scheduled for today.</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {todayAppts.map((a) => (
-              <div key={a.id} style={{
-                display: "flex", alignItems: "center", gap: 14,
-                padding: "11px 14px", borderRadius: 10,
-                background: "#f5f3ef", border: "1px solid #e5e0d8",
-              }}>
-                <div style={{
-                  minWidth: 58, textAlign: "center",
-                  fontFamily: "'Playfair Display', serif",
-                  fontSize: 15, fontWeight: 600, color: "#2E8BC0",
+            {todayAppts.map((a) => {
+              const { label, color, textColor } = apptDisplayStatus(a.status);
+              return (
+                <div key={a.id} style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "11px 14px", borderRadius: 10,
+                  background: "#f5f3ef", border: "1px solid #e5e0d8",
+                  flexWrap: "wrap",
                 }}>
-                  {fmtHour12(a.hour)}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>{a.patientName}</div>
-                  <div style={{ fontSize: 12, color: "#9a9590" }}>
-                    {a.sessionType}{(isManager || isSecretary) && a.physioName ? ` · ${a.physioName}` : ""}
+                  <div style={{
+                    minWidth: 58, textAlign: "center",
+                    fontFamily: "'Playfair Display', serif",
+                    fontSize: 15, fontWeight: 600, color: "#2E8BC0",
+                    flexShrink: 0,
+                  }}>
+                    {fmtHour12(a.hour)}
                   </div>
+                  <div style={{ flex: 1, minWidth: 120 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>{a.patientName}</div>
+                    <div style={{ fontSize: 12, color: "#9a9590" }}>
+                      {a.sessionType}{(isManager || isSecretary) && a.physioName ? ` · ${a.physioName}` : ""}
+                    </div>
+                  </div>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 100,
+                    background: color, color: textColor, whiteSpace: "nowrap", flexShrink: 0,
+                  }}>
+                    {label}
+                  </span>
+                  {isManager && a.patientId && onViewPatient && (
+                    <button
+                      onClick={() => onViewPatient(a.patientId)}
+                      style={{
+                        fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100,
+                        background: "transparent", border: "1px solid #2E8BC0", color: "#2E8BC0",
+                        cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                      }}
+                    >
+                      View Sheet
+                    </button>
+                  )}
                 </div>
-                <span style={{
-                  fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 100,
-                  background: a.status === "completed" ? "#d8f3dc" : a.status === "cancelled" ? "#fee2e2" : "#D6EEF8",
-                  color:      a.status === "completed" ? "#1b4332" : a.status === "cancelled" ? "#b91c1c" : "#0C3C60",
-                }}>
-                  {a.status === "completed" ? "Done" : a.status === "cancelled" ? "Cancelled" : "Scheduled"}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -1157,7 +1195,7 @@ export default function PhysioDashboard() {
               </>
             ) : (
               <>
-                {activeTab === "overview"  && <OverviewTab physio={physio} isManager={isManager} isSecretary={isSecretary} />}
+                {activeTab === "overview"  && <OverviewTab physio={physio} isManager={isManager} isSecretary={isSecretary} onViewPatient={(id) => setViewingPatientId(id)} />}
                 {activeTab === "patients"  && (
                   <PatientsTab
                     physioId={physio.uid}

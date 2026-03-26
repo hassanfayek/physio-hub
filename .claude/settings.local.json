@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -File \".specify/scripts/powershell/create-new-feature.ps1\" \"Build a clinic manager overview dashboard that shows real-time clinic activity for today. The overview should display: List of all appointments scheduled for today, each patient name, assigned physiotherapist, appointment time, current status \\(upcoming, in-progress, completed\\). Each item should include a button to navigate directly to the patient sheet to view treatment program and details.\" -Json -ShortName \"clinic-manager-dashboard\" \"Clinic Manager Today Dashboard\")",
+      "Bash(pwsh --version)",
+      "Bash(powershell -Command '$PSVersionTable.PSVersion')",
+      "Bash(powershell -File \".specify/scripts/powershell/setup-plan.ps1\" -Json)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

@@ -20,6 +20,7 @@ export interface DashboardStats {
 
 export interface TodayAppointment {
   id:          string;
+  patientId:   string;
   patientName: string;
   physioName:  string;
   hour:        number;
@@ -104,6 +105,7 @@ export function subscribeTodayAppointments(
       const appts: TodayAppointment[] = snap.docs
         .map((d) => ({
           id:          d.id,
+          patientId:   (d.data().patientId   as string) ?? "",
           patientName: (d.data().patientName as string) ?? "Patient",
           physioName:  (d.data().physioName  as string) ?? "",
           hour:        (d.data().hour        as number) ?? 0,
