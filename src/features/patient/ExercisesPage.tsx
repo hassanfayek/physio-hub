@@ -122,19 +122,25 @@ function ExerciseCard({
             </button>
           )}
 
-          {/* Issue 3: checkbox writes to Firestore */}
-          <button
-            className={`ep-complete-btn ${completed ? "ep-complete-btn-done" : ""} ${toggling ? "ep-complete-btn-busy" : ""}`}
-            disabled={toggling}
-            onClick={(e) => { e.stopPropagation(); onToggle(exercise); }}
-          >
-            {toggling
-              ? <><span className="ep-btn-spin" /> Saving…</>
-              : completed
-                ? <><Check size={14} strokeWidth={2.5} /> Completed — tap to undo</>
-                : "☐ Mark as Complete"
-            }
-          </button>
+          {/* Complete button — home exercises only */}
+          {(exercise.programType ?? "clinic") === "home" ? (
+            <button
+              className={`ep-complete-btn ${completed ? "ep-complete-btn-done" : ""} ${toggling ? "ep-complete-btn-busy" : ""}`}
+              disabled={toggling}
+              onClick={(e) => { e.stopPropagation(); onToggle(exercise); }}
+            >
+              {toggling
+                ? <><span className="ep-btn-spin" /> Saving…</>
+                : completed
+                  ? <><Check size={14} strokeWidth={2.5} /> Completed — tap to undo</>
+                  : "☐ Mark as Complete"
+              }
+            </button>
+          ) : (
+            <div className="ep-complete-btn ep-complete-clinic-note">
+              ⚕️ Marked by your physiotherapist
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -185,6 +191,7 @@ export default function ExercisesPage() {
 
   // ── Issue 3 + 4: Toggle with safe null, writes to Firestore ──────────────
   const handleToggle = async (rec: PatientExercise) => {
+    if ((rec.programType ?? "clinic") === "clinic") return;
     const currentCompleted = rec.completed ?? false;
     setTogglingId(rec.id);
     await toggleExerciseCompletion(rec.id, !currentCompleted, rec.patientId);
@@ -330,6 +337,7 @@ export default function ExercisesPage() {
         .ep-complete-btn:hover:not(:disabled) { border-color: #5BC0BE; color: #2E8BC0; }
         .ep-complete-btn-done  { background: #D6EEF8; border-color: #B3DEF0; color: #0C3C60; }
         .ep-complete-btn-busy  { opacity: 0.7; cursor: not-allowed; }
+        .ep-complete-clinic-note { cursor: default; color: #9a9590; font-size: 13px; border-style: dashed; }
         .ep-btn-spin {
           width: 13px; height: 13px; flex-shrink: 0;
           border: 2px solid rgba(46,139,192,0.3); border-top-color: #2E8BC0;

@@ -243,6 +243,7 @@ export default function ExerciseProgram({
 
   const handleToggle = async (rec: PatientExercise) => {
     if (!canComplete_) return;
+    if (viewerRole === "patient" && (rec.programType ?? "clinic") === "clinic") return;
     const currentCompleted = rec.completed ?? false;
     setTogglingId(rec.id);
     await toggleExerciseCompletion(rec.id, !currentCompleted, rec.patientId);
@@ -682,19 +683,26 @@ export default function ExerciseProgram({
 
                   {/* Checkbox */}
                   <div className="ep-checkbox-wrap">
+                    {(() => {
+                      const isClinicPatient = viewerRole === "patient" && (rec.programType ?? "clinic") === "clinic";
+                      const isDisabled = !canComplete_ || isClinicPatient;
+                      const title = !canComplete_
+                        ? "Only physiotherapists can mark exercises"
+                        : isClinicPatient
+                          ? "Clinic exercises are marked by your physiotherapist"
+                          : (rec.completed ?? false) ? "Mark as incomplete" : "Mark as completed";
+                      return (
                     <div
-                      className={`ep-checkbox ${(rec.completed ?? false) ? "checked" : ""} ${!canComplete_ ? "disabled" : ""} ${togglingId === rec.id ? "toggling" : ""}`}
+                      className={`ep-checkbox ${(rec.completed ?? false) ? "checked" : ""} ${isDisabled ? "disabled" : ""} ${togglingId === rec.id ? "toggling" : ""}`}
                       onClick={() => togglingId === rec.id ? undefined : handleToggle(rec)}
-                      title={
-                        !canComplete_
-                          ? "Only physiotherapists can mark exercises"
-                          : (rec.completed ?? false) ? "Mark as incomplete" : "Mark as completed"
-                      }
+                      title={title}
                     >
                       {(rec.completed ?? false) && (
                         <Check size={11} strokeWidth={3} color="#fff" />
                       )}
                     </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Body */}
