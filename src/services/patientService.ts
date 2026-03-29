@@ -26,6 +26,7 @@ export interface Patient {
   firstName:        string;
   lastName:         string;
   email:            string;
+  phone:            string;
   condition:        string;
   physioId:         string;
   status:           "active" | "discharged" | "on_hold";
@@ -93,6 +94,7 @@ function docToPatient(id: string, data: Record<string, unknown>): Patient {
     firstName: (data.firstName as string) ?? "",
     lastName:  (data.lastName  as string) ?? "",
     email:     (data.email     as string) ?? "",
+    phone:     (data.phone     as string) ?? "",
     condition: (data.condition as string) ?? "",
     physioId:  (data.physioId  as string) ?? "",
     status:           (data.status           as Patient["status"]) ?? "active",

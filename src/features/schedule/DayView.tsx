@@ -71,7 +71,7 @@ export default function DayView({
     setDeletingId(apptId);
     await deleteAppointment(apptId);
     setDeletingId(null);
-    showToast(`✓ Appointment for ${patientName} removed`);
+    showToast(`✓ Appointment for ${patientName || "Walk-in"} removed`);
   };
 
   const handleStatusUpdate = async (
@@ -425,7 +425,10 @@ export default function DayView({
                                   {initials}
                                 </div>
                                 <div>
-                                  <div className="dv-appt-patient">{a.patientName}</div>
+                                  <div className="dv-appt-patient">{a.patientName || "Walk-in"}</div>
+                                  {a.patientPhone && (
+                                    <div className="dv-appt-physio" style={{ color: "#5BC0BE" }}>{a.patientPhone}</div>
+                                  )}
                                   <div className="dv-appt-physio">{a.physioName}</div>
                                   {a.sessionType && (
                                     <div className="dv-appt-session">{a.sessionType}</div>

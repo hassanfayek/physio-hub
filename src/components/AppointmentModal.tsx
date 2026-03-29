@@ -50,6 +50,7 @@ export default function AppointmentModal({
   // Pre-select current physio for non-managers
   const [walkIn,      setWalkIn]      = useState(false);
   const [walkInName,  setWalkInName]  = useState("");
+  const [walkInPhone, setWalkInPhone] = useState("");
   const [patientId,   setPatientId]   = useState("");
   const [physioId,    setPhysioId]    = useState(isManager ? "" : currentPhysio.uid);
   const [sessionType, setSessionType] = useState("");
@@ -89,12 +90,15 @@ export default function AppointmentModal({
     const physioForName = physios.find((p) => p.uid === physioId) ?? currentPhysio as unknown as Physiotherapist;
 
     const result = await createAppointment({
-      patientId:   walkIn ? "" : patientId,
-      patientName: walkIn
+      patientId:    walkIn ? "" : patientId,
+      patientName:  walkIn
         ? walkInName.trim()
         : selectedPatient
           ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
           : "",
+      patientPhone: walkIn
+        ? walkInPhone.trim()
+        : selectedPatient?.phone ?? "",
       physioId,
       physioName: `Dr. ${physioForName.firstName} ${physioForName.lastName}`,
       date,
@@ -399,21 +403,34 @@ export default function AppointmentModal({
 
                   {/* Patient selector OR walk-in name */}
                   {walkIn ? (
-                    <div className="am-field">
-                      <label className="am-label">Patient Name</label>
-                      <input
-                        className="am-select"
-                        style={{ backgroundImage: "none" }}
-                        type="text"
-                        placeholder="e.g. John Doe (or leave as Walk-in)"
-                        value={walkInName}
-                        onChange={(e) => { setWalkInName(e.target.value); setError(null); }}
-                        autoFocus
-                      />
-                      <span style={{ fontSize: 12, color: "#92400e", marginTop: 4, display: "block" }}>
+                    <>
+                      <div className="am-field">
+                        <label className="am-label">Patient Name</label>
+                        <input
+                          className="am-select"
+                          style={{ backgroundImage: "none" }}
+                          type="text"
+                          placeholder="e.g. John Doe (or leave as Walk-in)"
+                          value={walkInName}
+                          onChange={(e) => { setWalkInName(e.target.value); setError(null); }}
+                          autoFocus
+                        />
+                      </div>
+                      <div className="am-field">
+                        <label className="am-label">Phone Number</label>
+                        <input
+                          className="am-select"
+                          style={{ backgroundImage: "none" }}
+                          type="tel"
+                          placeholder="+20 100 000 0000"
+                          value={walkInPhone}
+                          onChange={(e) => setWalkInPhone(e.target.value)}
+                        />
+                      </div>
+                      <span style={{ fontSize: 12, color: "#92400e", display: "block", marginTop: -6 }}>
                         ⚠ This appointment can be assigned to a registered patient later from the schedule.
                       </span>
-                    </div>
+                    </>
                   ) : (
                     <div className="am-field">
                       <label className="am-label">Select Patient</label>

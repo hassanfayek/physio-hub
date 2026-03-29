@@ -21,16 +21,17 @@ import { db } from "../firebase";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface Appointment {
-  id:          string;
-  patientId:   string;
-  patientName: string;
-  physioId:    string;
-  physioName:  string;
-  date:        string;   // YYYY-MM-DD
-  hour:        number;   // 0–23
-  sessionType: string;
-  status:      "scheduled" | "in_progress" | "completed" | "cancelled";
-  createdAt:   Timestamp | null;
+  id:           string;
+  patientId:    string;
+  patientName:  string;
+  patientPhone: string;
+  physioId:     string;
+  physioName:   string;
+  date:         string;   // YYYY-MM-DD
+  hour:         number;   // 0–23
+  sessionType:  string;
+  status:       "scheduled" | "in_progress" | "completed" | "cancelled";
+  createdAt:    Timestamp | null;
 }
 
 export interface ClinicSettings {
@@ -40,13 +41,14 @@ export interface ClinicSettings {
 }
 
 export interface CreateAppointmentPayload {
-  patientId:   string;
-  patientName: string;
-  physioId:    string;
-  physioName:  string;
-  date:        string;
-  hour:        number;
-  sessionType: string;
+  patientId:    string;
+  patientName:  string;
+  patientPhone?: string;
+  physioId:     string;
+  physioName:   string;
+  date:         string;
+  hour:         number;
+  sessionType:  string;
 }
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
@@ -82,9 +84,10 @@ function docToAppointment(id: string, data: Record<string, unknown>): Appointmen
 
   return {
     id,
-    patientId:   (data.patientId   as string) ?? "",
-    patientName: (data.patientName as string) ?? "",
-    physioId:    (data.physioId    as string) ?? "",
+    patientId:    (data.patientId    as string) ?? "",
+    patientName:  (data.patientName  as string) ?? "",
+    patientPhone: (data.patientPhone as string) ?? "",
+    physioId:     (data.physioId     as string) ?? "",
     physioName:  (data.physioName  as string) ?? "",
     date:        normDate,
     hour:        (data.hour        as number) ?? 0,
