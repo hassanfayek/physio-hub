@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { LayoutDashboard, Users, Calendar, Dumbbell, BarChart2, Plus, ChevronDown, ChevronRight, Pencil, LogOut, Menu, ArrowLeft } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
-import { doc, getDoc, deleteDoc, setDoc, updateDoc, serverTimestamp, getFirestore } from "firebase/firestore";
+import { doc, getDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAuth } from "../../hooks/useAuth";
 import PatientsTab      from "./PatientsTab";
@@ -22,15 +22,12 @@ import {
   type Appointment,
 } from "../../services/appointmentService";
 import type { PhysioProfile } from "../../services/authService";
-import {
-  createUserWithEmailAndPassword,
-  updateProfile,
-} from "firebase/auth";
-import { secondaryAuth } from "../../firebase";
 import logo from "../../assets/physio-logo.svg";
 import { subscribeToPhysiotherapists, type Physiotherapist } from "../../services/patientService";
 import { registerSecretary } from "../../services/authService";
 import { subscribeToSecretaries, deleteSecretary, type Secretary } from "../../services/secretaryService";
+import AddPhysioModal from "../../components/AddPhysioModal";
+import { createPortal } from "react-dom";
 
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
@@ -54,22 +51,9 @@ function IconAdd()       { return <Plus size={14} strokeWidth={2.5} color="white
 
 // ─── Team tab (manager only) ─────────────────────────────────────────────────
 
-interface AddPhysioForm {
-  firstName: string; lastName: string; email: string; password: string;
-  licenseNumber: string; clinicName: string; phone: string; specializations: string;
-  rank: string;
-}
-
-const EMPTY_PHYSIO_FORM: AddPhysioForm = {
-  firstName: "", lastName: "", email: "", password: "",
-  licenseNumber: "", clinicName: "", phone: "", specializations: "", rank: "junior",
-};
-
 function TeamTab() {
   const [physios,        setPhysios]        = React.useState<Physiotherapist[]>([]);
   const [showAddPhysio,  setShowAddPhysio]  = React.useState(false);
-  const [physioForm,     setPhysioForm]     = React.useState<AddPhysioForm>(EMPTY_PHYSIO_FORM);
-  const [saving,         setSaving]         = React.useState(false);
   const [expandedUid,    setExpandedUid]    = React.useState<string | null>(null);
   const [deletingUid,    setDeletingUid]    = React.useState<string | null>(null);
   const [editingPhysio,  setEditingPhysio]  = React.useState<typeof physios[0] | null>(null);
@@ -79,7 +63,6 @@ function TeamTab() {
   }>({ firstName: "", lastName: "", rank: "junior", licenseNumber: "", clinicName: "", phone: "", specializations: "" });
   const [editSaving,     setEditSaving]     = React.useState(false);
   const [editError,      setEditError]      = React.useState<string | null>(null);
-  const [saveError,      setSaveError]      = React.useState<string | null>(null);
   const [saveSuccess,    setSaveSuccess]    = React.useState<string | null>(null);
 
   // ── Secretary state ──────────────────────────────────────────────────────
@@ -146,65 +129,6 @@ function TeamTab() {
     }
     setEditSaving(false);
   };
-
-  const handleAddPhysio = async () => {
-    if (!physioForm.email || !physioForm.password || !physioForm.firstName || !physioForm.lastName) {
-      setSaveError("First name, last name, email and password are required."); return;
-    }
-    setSaving(true); setSaveError(null);
-    try {
-      // IMPORTANT: use secondaryAuth — this keeps the manager logged in
-      // createUserWithEmailAndPassword on the main auth would sign out the manager
-      const credential = await createUserWithEmailAndPassword(
-        secondaryAuth, physioForm.email, physioForm.password
-      );
-      const newUser = credential.user;
-      const displayName = `Dr. ${physioForm.firstName} ${physioForm.lastName}`;
-
-      // Update display name on the secondary auth user
-      await updateProfile(newUser, { displayName });
-
-      const now = serverTimestamp();
-
-      // Use secondaryDb so the new physio's token authorises the writes (isOwner passes)
-      const secondaryDb = getFirestore(secondaryAuth.app);
-      await setDoc(doc(secondaryDb, "users", newUser.uid), {
-        email:       physioForm.email,
-        role:        "physiotherapist",
-        displayName,
-        createdAt:   now,
-        updatedAt:   now,
-      });
-
-      await setDoc(doc(secondaryDb, "physiotherapists", newUser.uid), {
-        firstName:       physioForm.firstName,
-        lastName:        physioForm.lastName,
-        licenseNumber:   physioForm.licenseNumber,
-        clinicName:      physioForm.clinicName || "Physio+ Clinic",
-        phone:           physioForm.phone,
-        specializations: physioForm.specializations.split(",").map((t) => t.trim()).filter(Boolean),
-        rank:            physioForm.rank || "junior",
-        createdAt:       now,
-      });
-
-      // Sign the secondary auth user out — does NOT affect main auth/manager session
-      await secondaryAuth.signOut();
-
-      setSaveSuccess(`Dr. ${physioForm.firstName} ${physioForm.lastName} added successfully.`);
-      setPhysioForm(EMPTY_PHYSIO_FORM);
-      setShowAddPhysio(false);
-      setTimeout(() => setSaveSuccess(null), 4000);
-    } catch (err: unknown) {
-      const msg = (err as { message?: string }).message ?? "";
-      setSaveError(
-        msg.includes("email-already-in-use")
-          ? "This email is already registered."
-          : msg || "Failed to add physiotherapist."
-      );
-    }
-    setSaving(false);
-  };
-
 
   const handleAddSecretary = async () => {
     if (!secretaryForm.email || !secretaryForm.password || !secretaryForm.firstName || !secretaryForm.lastName) {
@@ -368,7 +292,7 @@ function TeamTab() {
       {saveSuccess && <div className="tm-success">✓ {saveSuccess}</div>}
 
       <div className="tm-action-row">
-        <button className="tm-add-btn physio" onClick={() => { setShowAddPhysio(true); setSaveError(null); }}>
+        <button className="tm-add-btn physio" onClick={() => setShowAddPhysio(true)}>
           <IconAdd /> Add Physiotherapist
         </button>
         <button className="tm-add-btn patient" onClick={() => { setShowAddSecretary(true); setSecretaryError(null); }}>
@@ -487,8 +411,19 @@ function TeamTab() {
         </div>
       )}
 
+      {/* Add Physio Modal */}
+      {showAddPhysio && (
+        <AddPhysioModal
+          onClose={() => setShowAddPhysio(false)}
+          onCreated={(fullName) => {
+            setSaveSuccess(`Dr. ${fullName} added successfully.`);
+            setTimeout(() => setSaveSuccess(null), 4000);
+          }}
+        />
+      )}
+
       {/* Add Secretary Modal */}
-      {showAddSecretary && (
+      {showAddSecretary && createPortal(
         <div className="tm-modal-overlay" onClick={() => !secretarySaving && setShowAddSecretary(false)}>
           <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="tm-modal-title">Add Secretary</div>
@@ -508,11 +443,12 @@ function TeamTab() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Edit Physio Modal */}
-      {editingPhysio && (
+      {editingPhysio && createPortal(
         <div className="tm-modal-overlay" onClick={() => !editSaving && setEditingPhysio(null)}>
           <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="tm-modal-title">Edit Physiotherapist</div>
@@ -561,48 +497,9 @@ function TeamTab() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-
-      {/* Add Physio Modal */}
-      {showAddPhysio && (
-        <div className="tm-modal-overlay" onClick={() => !saving && setShowAddPhysio(false)}>
-          <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="tm-modal-title">Add Physiotherapist</div>
-            <div className="tm-modal-sub">Create a new physiotherapist account. They will use this email and password to log in.</div>
-            <div className="tm-field-row">
-              <div className="tm-field"><label className="tm-label">First Name</label><input className="tm-input" value={physioForm.firstName} onChange={(e) => setPhysioForm({ ...physioForm, firstName: e.target.value })} placeholder="Ahmed" /></div>
-              <div className="tm-field"><label className="tm-label">Last Name</label><input className="tm-input" value={physioForm.lastName} onChange={(e) => setPhysioForm({ ...physioForm, lastName: e.target.value })} placeholder="Hassan" /></div>
-            </div>
-            <div className="tm-field"><label className="tm-label">Email Address</label><input className="tm-input" type="email" value={physioForm.email} onChange={(e) => setPhysioForm({ ...physioForm, email: e.target.value })} placeholder="dr.ahmed@clinic.com" /></div>
-            <div className="tm-field"><label className="tm-label">Password</label><input className="tm-input" type="password" value={physioForm.password} onChange={(e) => setPhysioForm({ ...physioForm, password: e.target.value })} placeholder="Min. 6 characters" /></div>
-            <div className="tm-field-row">
-              <div className="tm-field"><label className="tm-label">License Number</label><input className="tm-input" value={physioForm.licenseNumber} onChange={(e) => setPhysioForm({ ...physioForm, licenseNumber: e.target.value })} placeholder="PT-12345" /></div>
-              <div className="tm-field"><label className="tm-label">Phone</label><input className="tm-input" value={physioForm.phone} onChange={(e) => setPhysioForm({ ...physioForm, phone: e.target.value })} placeholder="+20 100 000 0000" /></div>
-            </div>
-            <div className="tm-field"><label className="tm-label">Clinic Name</label><input className="tm-input" value={physioForm.clinicName} onChange={(e) => setPhysioForm({ ...physioForm, clinicName: e.target.value })} placeholder="Physio+ Clinic" /></div>
-            <div className="tm-field">
-              <label className="tm-label">Rank / Level</label>
-              <select className="tm-input" value={physioForm.rank}
-                onChange={(e) => setPhysioForm({ ...physioForm, rank: e.target.value })}
-                style={{ cursor: "pointer" }}>
-                <option value="senior">Senior Physiotherapist</option>
-                <option value="junior">Junior Physiotherapist</option>
-                <option value="trainee">Trainee Physiotherapist</option>
-              </select>
-            </div>
-            <div className="tm-field"><label className="tm-label">Specializations (comma separated)</label><input className="tm-input" value={physioForm.specializations} onChange={(e) => setPhysioForm({ ...physioForm, specializations: e.target.value })} placeholder="Sports Rehab, Orthopaedics" /></div>
-            {saveError && <div className="tm-modal-error">{saveError}</div>}
-            <div className="tm-modal-actions">
-              <button className="tm-modal-cancel" onClick={() => setShowAddPhysio(false)}>Cancel</button>
-              <button className="tm-modal-save" disabled={saving} onClick={handleAddPhysio}>
-                {saving ? "Creating account…" : "Create Account"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
 
     </>
   );
