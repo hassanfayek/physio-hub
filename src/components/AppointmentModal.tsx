@@ -1,6 +1,7 @@
 // FILE: src/components/AppointmentModal.tsx
 
 import { useState, useEffect, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import {
   createAppointment,
   fmtHour,
@@ -117,7 +118,7 @@ export default function AppointmentModal({
     slotLoad >= 0.75 ? "#d97706" :
     "#0C3C60";
 
-  return (
+  return createPortal(
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap');
@@ -450,6 +451,7 @@ export default function AppointmentModal({
           </form>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }

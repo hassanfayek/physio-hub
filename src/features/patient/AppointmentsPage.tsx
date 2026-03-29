@@ -8,6 +8,7 @@
 // All CSS classes and JSX structure are unchanged from the original design.
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "../../hooks/useAuth";
 import {
   subscribeToPatientAppointments,
@@ -663,7 +664,7 @@ export default function AppointmentsPage() {
       )}
 
       {/* ── Booking confirmation modal ── */}
-      {confirmedAppt && (
+      {confirmedAppt && createPortal(
         <div className="ap-confirm-overlay" onClick={() => setConfirmedAppt(null)}>
           <div className="ap-confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ap-confirm-icon">✓</div>
@@ -686,11 +687,12 @@ export default function AppointmentsPage() {
               Done
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Cancel modal ── */}
-      {cancelTarget && (
+      {cancelTarget && createPortal(
         <div className="ap-modal-overlay" onClick={() => !cancelling && setCancelTarget(null)}>
           <div className="ap-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ap-modal-title">Cancel Appointment?</div>
@@ -712,7 +714,8 @@ export default function AppointmentsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
