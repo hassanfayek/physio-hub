@@ -511,7 +511,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
 
 
             {canAddPatient && (
-              <button className="pt-btn-primary" onClick={() => { setShowAddPatient(true); setAddError(null); }}>
+              <button className="pt-btn-primary" onClick={() => setShowAddPatient(true)}>
                 <UserPlus size={14} strokeWidth={2.5} />
                 Add Patient
               </button>
