@@ -77,7 +77,7 @@ export default function RegisterPage() {
   // ── Patient fields ──
   const [pat, setPat] = useState<RegisterPatientData>({
     email: "", password: "", firstName: "", lastName: "",
-    dateOfBirth: "", phone: "", primaryCondition: "",
+    dateOfBirth: "", phone: "",
   });
 
   // ── Physio fields ──
@@ -113,7 +113,7 @@ export default function RegisterPage() {
 
   // ── step-2 validation ──
   const step2Valid = role === "patient"
-    ? pat.dateOfBirth && pat.phone && pat.primaryCondition
+    ? pat.dateOfBirth && pat.phone
     : phy.licenseNumber && phy.clinicName && phy.phone && phy.specializations.length > 0;
 
   const handleSubmit = async (e: FormEvent) => {
@@ -659,14 +659,6 @@ export default function RegisterPage() {
                           />
                         </Field>
                       </div>
-                      <Field label="Primary condition / injury" hint="e.g. ACL tear, lower back pain, shoulder impingement">
-                        <Input
-                          placeholder="Describe your main condition"
-                          value={pat.primaryCondition}
-                          onChange={patSet("primaryCondition")}
-                          required
-                        />
-                      </Field>
                     </>
                   )}
 

@@ -73,7 +73,7 @@ export interface PatientProfile extends UserProfile {
   lastName:         string;
   dateOfBirth:      string;
   phone:            string;
-  primaryCondition: string;
+  primaryCondition?: string;
   assignedPhysioId: string | null;
   status:           "active" | "discharged" | "on_hold";
 }
@@ -110,7 +110,6 @@ export interface RegisterPatientData {
   lastName:         string;
   dateOfBirth:      string;
   phone:            string;
-  primaryCondition: string;
 }
 
 export interface RegisterPhysioData {
@@ -191,7 +190,6 @@ export async function registerPatient(
     lastName:         data.lastName,
     dateOfBirth:      data.dateOfBirth,
     phone:            data.phone,
-    primaryCondition: data.primaryCondition,
     assignedPhysioId: null,
     status:           "active",
     createdAt:        now,
@@ -212,7 +210,6 @@ export async function registerPatient(
     lastName:         data.lastName,
     dateOfBirth:      data.dateOfBirth,
     phone:            data.phone,
-    primaryCondition: data.primaryCondition,
     assignedPhysioId: null,
     status:           "active",
     createdAt:        null,
