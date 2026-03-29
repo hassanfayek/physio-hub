@@ -1,9 +1,9 @@
 // src/features/auth/LoginPage.tsx
 import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { login, sendPasswordReset, parseFirebaseError } from "../../services/authService";
+import { login, loginWithCode, sendPasswordReset, parseFirebaseError } from "../../services/authService";
 import logo from "../../assets/physio-logo.svg";
-import { Activity, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, KeyRound } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
 
 type RoleTab = "patient" | "physiotherapist";
@@ -12,38 +12,42 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { lang, toggleLang, t } = useLang();
 
-  const [role,      setRole]      = useState<RoleTab>("patient");
-  const [email,     setEmail]     = useState("");
-  const [password,  setPassword]  = useState("");
-  const [showPw,    setShowPw]    = useState(false);
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState<string | null>(null);
-  const [resetSent, setResetSent] = useState(false);
-  const [resetEmail,setResetEmail]= useState("");
-  const [showReset, setShowReset] = useState(false);
+  const [role,       setRole]       = useState<RoleTab>("patient");
+  const [code,       setCode]       = useState("");
+  const [email,      setEmail]      = useState("");
+  const [password,   setPassword]   = useState("");
+  const [showPw,     setShowPw]     = useState(false);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
+  const [resetSent,  setResetSent]  = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [showReset,  setShowReset]  = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const profile = await login(email, password);
-      const isPhysioRole = profile.role === "physiotherapist" || profile.role === "clinic_manager" || profile.role === "secretary";
-      const tabMismatch  =
-        (role === "patient"         && profile.role !== "patient") ||
-        (role === "physiotherapist" && !isPhysioRole);
-      if (tabMismatch) {
-        setError(
-          role === "patient"
-            ? "This account is registered as a Physiotherapist. Please switch to the Physiotherapist tab."
-            : "This account is registered as a Patient. Please switch to the Patient tab."
-        );
-        setLoading(false);
-        return;
+      if (role === "patient") {
+        await loginWithCode(code);
+        navigate("/patient");
+      } else {
+        const profile = await login(email, password);
+        const isPhysioRole = profile.role === "physiotherapist" || profile.role === "clinic_manager" || profile.role === "secretary";
+        if (!isPhysioRole) {
+          setError("This account is registered as a Patient. Please use the Patient tab.");
+          setLoading(false);
+          return;
+        }
+        navigate("/physio");
       }
-      navigate(profile.role === "patient" ? "/patient" : "/physio");
     } catch (err) {
-      setError(parseFirebaseError(err).message);
+      const msg = parseFirebaseError(err).message;
+      setError(
+        role === "patient"
+          ? "Invalid access code. Please check your code and try again."
+          : msg
+      );
     } finally {
       setLoading(false);
     }
@@ -761,47 +765,78 @@ export default function LoginPage() {
             {/* Login form */}
             {!showReset && (
               <form onSubmit={handleSubmit} noValidate>
-                <div className="lp-field">
-                  <label className="lp-label">{t("auth.email")}</label>
-                  <input
-                    className="lp-input"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => { setEmail(e.target.value); setError(null); }}
-                    required
-                    autoComplete="email"
-                  />
-                </div>
-
-                <div className="lp-field">
-                  <label className="lp-label">{t("auth.password")}</label>
-                  <div className="lp-input-wrap">
-                    <input
-                      className="lp-input has-suffix"
-                      type={showPw ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => { setPassword(e.target.value); setError(null); }}
-                      required
-                      autoComplete="current-password"
-                    />
-                    <button className="lp-input-suffix" type="button" onClick={() => setShowPw(!showPw)} tabIndex={-1}>
-                      {showPw
-                        ? <EyeOff size={15} strokeWidth={2} />
-                        : <Eye size={15} strokeWidth={2} />
+                {role === "patient" ? (
+                  /* ── Patient: code only ── */
+                  <div className="lp-field">
+                    <label className="lp-label">{lang === "ar" ? "رمز الدخول" : "Patient Access Code"}</label>
+                    <div className="lp-input-wrap">
+                      <input
+                        className="lp-input has-suffix"
+                        type="text"
+                        placeholder="PH-XXXXXX"
+                        value={code}
+                        onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(null); }}
+                        required
+                        autoComplete="off"
+                        style={{ letterSpacing: "0.12em", fontWeight: 600, fontSize: 18 }}
+                        autoFocus
+                      />
+                      <span className="lp-input-suffix" style={{ pointerEvents: "none", color: "#2E8BC0" }}>
+                        <KeyRound size={15} strokeWidth={2} />
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#9a9590", marginTop: 6 }}>
+                      {lang === "ar"
+                        ? "رمزك يبدأ بـ PH- ويتكون من 8 أحرف — يُرسَل إليك من قِبَل العيادة"
+                        : "Your code starts with PH- and is 8 characters — provided by the clinic"
                       }
-                    </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  /* ── Staff: email + password ── */
+                  <>
+                    <div className="lp-field">
+                      <label className="lp-label">{t("auth.email")}</label>
+                      <input
+                        className="lp-input"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => { setEmail(e.target.value); setError(null); }}
+                        required
+                        autoComplete="email"
+                      />
+                    </div>
+                    <div className="lp-field">
+                      <label className="lp-label">{t("auth.password")}</label>
+                      <div className="lp-input-wrap">
+                        <input
+                          className="lp-input has-suffix"
+                          type={showPw ? "text" : "password"}
+                          placeholder="••••••••"
+                          value={password}
+                          onChange={(e) => { setPassword(e.target.value); setError(null); }}
+                          required
+                          autoComplete="current-password"
+                        />
+                        <button className="lp-input-suffix" type="button" onClick={() => setShowPw(!showPw)} tabIndex={-1}>
+                          {showPw ? <EyeOff size={15} strokeWidth={2} /> : <Eye size={15} strokeWidth={2} />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="lp-forgot-row">
+                      <button type="button" className="lp-link sm" onClick={() => { setShowReset(true); setResetEmail(email); }}>
+                        {t("auth.forgot")}
+                      </button>
+                    </div>
+                  </>
+                )}
 
-                <div className="lp-forgot-row">
-                  <button type="button" className="lp-link sm" onClick={() => { setShowReset(true); setResetEmail(email); }}>
-                    {t("auth.forgot")}
-                  </button>
-                </div>
-
-                <button className="lp-submit" type="submit" disabled={loading || !email || !password}>
+                <button
+                  className="lp-submit"
+                  type="submit"
+                  disabled={loading || (role === "patient" ? !code : !email || !password)}
+                >
                   {loading
                     ? <><div className="lp-spinner" />{t("auth.signingIn")}</>
                     : `${t("auth.signInAs")} ${role === "patient" ? t("auth.patient") : t("auth.physio")}`
@@ -811,11 +846,12 @@ export default function LoginPage() {
             )}
 
             <div className="lp-form-footer">
-              <div className="lp-footer-main">
-                {t("auth.noAccount")}{" "}
-                <Link to="/register" className="lp-link">{t("auth.createOne")}</Link>
+              <div className="lp-footer-fine" style={{ textAlign: "center" }}>
+                {role === "patient"
+                  ? (lang === "ar" ? "رمز الدخول يُرسَل إليك من قِبَل العيادة" : "Your access code is provided by the clinic")
+                  : t("auth.terms")
+                }
               </div>
-              <div className="lp-footer-fine">{t("auth.terms")}</div>
             </div>
           </div>
         </div>

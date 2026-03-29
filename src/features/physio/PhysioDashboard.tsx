@@ -1164,6 +1164,26 @@ export default function PhysioDashboard() {
               ))}
             </div>
 
+            {/* Add staff account — manager/secretary only */}
+            {(isManager || isSecretary) && (
+              <div style={{ padding: "0 0 8px" }}>
+                <button
+                  onClick={() => navigate("/register")}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    width: "100%", padding: "11px 10px", borderRadius: 10,
+                    background: "rgba(91,192,190,0.12)", border: "1px solid rgba(91,192,190,0.25)",
+                    color: "#5BC0BE", fontFamily: "'Outfit', sans-serif",
+                    fontSize: 14, fontWeight: 500, cursor: "pointer", textAlign: "left",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <Plus size={16} strokeWidth={2} color="#5BC0BE" />
+                  {lang === "ar" ? "إضافة حساب موظف" : "Add Staff Account"}
+                </button>
+              </div>
+            )}
+
             {/* Sign out */}
             <div className="phd-sidebar-signout">
               <button className="phd-sidebar-signout-btn" onClick={handleLogout}>

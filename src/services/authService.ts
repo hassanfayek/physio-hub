@@ -128,6 +128,57 @@ export interface AuthError {
   message: string;
 }
 
+// ─── Patient code helpers ─────────────────────────────────────────────────────
+
+/** Generates a human-readable 8-char code, e.g. "PH-A3K9F2" */
+export function generatePatientCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0/1/I to avoid confusion
+  let code = "PH-";
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+/** Internal email derived from a patient code — patients never see this */
+export function codeToEmail(code: string): string {
+  return `${code.replace("-", "").toLowerCase()}@ph.internal`;
+}
+
+/** Sign a patient in using their 8-char access code */
+export async function loginWithCode(code: string): Promise<PatientProfile> {
+  const normalised = code.trim().toUpperCase();
+  const email      = codeToEmail(normalised);
+  // The password is always the code itself (uppercased, with dash)
+  await signInWithEmailAndPassword(auth, email, normalised);
+
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error("Login failed.");
+
+  // Load profile from Firestore
+  const userSnap = await getDoc(doc(db, "users", currentUser.uid));
+  if (!userSnap.exists()) throw new Error("Patient profile not found.");
+
+  const userData = userSnap.data() as DocumentData;
+  const patSnap  = await getDoc(doc(db, "patients", currentUser.uid));
+  const patData  = patSnap.exists() ? patSnap.data() as DocumentData : {};
+
+  return {
+    uid:              currentUser.uid,
+    email:            userData.email ?? email,
+    role:             "patient",
+    displayName:      userData.displayName ?? "",
+    firstName:        patData.firstName ?? "",
+    lastName:         patData.lastName  ?? "",
+    dateOfBirth:      patData.dateOfBirth ?? "",
+    phone:            patData.phone ?? "",
+    assignedPhysioId: patData.assignedPhysioId ?? null,
+    status:           patData.status ?? "active",
+    createdAt:        null,
+    updatedAt:        null,
+  };
+}
+
 // ─── Error normaliser ─────────────────────────────────────────────────────────
 
 export function parseFirebaseError(error: unknown): AuthError {

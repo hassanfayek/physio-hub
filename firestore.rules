@@ -40,7 +40,7 @@ service cloud.firestore {
     // ── Patients ──────────────────────────────────────────────────────────────
     match /patients/{patientId} {
       allow read:            if isAuth();
-      allow create:          if isAuth() && request.auth.uid == patientId;
+      allow create:          if isStaff() || (isAuth() && request.auth.uid == patientId);
       allow update, delete:  if isStaff();
     }
 

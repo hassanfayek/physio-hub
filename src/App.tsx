@@ -167,8 +167,12 @@ function AppRoutes() {
       <Route path="/" element={
         <PublicRoute><LoginPage /></PublicRoute>
       } />
+
+      {/* Staff registration — protected, only accessible when already logged in as staff */}
       <Route path="/register" element={
-        <PublicRoute><RegisterPage /></PublicRoute>
+        <ProtectedRoute requiredRole="physiotherapist">
+          <RegisterPage />
+        </ProtectedRoute>
       } />
 
       {/* Protected */}

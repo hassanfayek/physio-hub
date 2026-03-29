@@ -54,19 +54,21 @@ export interface Physiotherapist {
 export interface CreatePatientPayload {
   firstName: string;
   lastName:  string;
-  email:     string;
-  password:  string;
   condition: string;
   physioId:  string;
+  dateOfBirth?: string;
+  phone?:       string;
 }
 
 export interface CreatePatientResult {
   patient: Patient;
+  code:    string; // the generated access code — show once to the staff
   error?:  never;
 }
 
 export interface CreatePatientError {
   patient?: never;
+  code?:    never;
   error:    string;
 }
 
@@ -121,13 +123,18 @@ function docToPhysio(id: string, data: Record<string, unknown>): Physiotherapist
 
 // ─── Create patient ───────────────────────────────────────────────────────────
 // Uses a secondary Firebase app so the manager/physio session stays intact.
+// Generates a unique access code — no email/password required from the clinic.
 
 export async function createPatient(
   payload: CreatePatientPayload
 ): Promise<CreatePatientResult | CreatePatientError> {
   try {
+    const { generatePatientCode, codeToEmail } = await import("./authService");
     const { initializeApp, getApps } = await import("firebase/app");
     const { getAuth } = await import("firebase/auth");
+
+    const code  = generatePatientCode();
+    const email = codeToEmail(code);
 
     const SECONDARY_APP_NAME = "patient-creation-worker";
     const secondaryApp =
@@ -140,26 +147,31 @@ export async function createPatient(
     const secondaryAuth: Auth = getAuth(secondaryApp);
     const credential = await createUserWithEmailAndPassword(
       secondaryAuth,
-      payload.email,
-      payload.password
+      email,
+      code   // password = the code itself
     );
     const { uid } = credential.user;
     await secondaryAuth.signOut();
 
+    const displayName = `${payload.firstName} ${payload.lastName}`;
+
     await setDoc(doc(db, "patients", uid), {
-      firstName: payload.firstName,
-      lastName:  payload.lastName,
-      email:     payload.email,
-      condition: payload.condition,
-      physioId:  payload.physioId,
-      status:    "active",
-      createdAt: serverTimestamp(),
+      firstName:    payload.firstName,
+      lastName:     payload.lastName,
+      email,
+      condition:    payload.condition,
+      physioId:     payload.physioId,
+      dateOfBirth:  payload.dateOfBirth ?? "",
+      phone:        payload.phone ?? "",
+      accessCode:   code,
+      status:       "active",
+      createdAt:    serverTimestamp(),
     });
 
     await setDoc(doc(db, "users", uid), {
-      email:       payload.email,
+      email,
       role:        "patient",
-      displayName: `${payload.firstName} ${payload.lastName}`,
+      displayName,
       createdAt:   serverTimestamp(),
       updatedAt:   serverTimestamp(),
     });
@@ -169,7 +181,7 @@ export async function createPatient(
         uid,
         firstName: payload.firstName,
         lastName:  payload.lastName,
-        email:     payload.email,
+        email,
         condition: payload.condition,
         physioId:  payload.physioId,
         status:    "active",
@@ -181,6 +193,7 @@ export async function createPatient(
         traineeId:        null,
         traineeName:      null,
       },
+      code,
     };
   } catch (err) {
     return { error: parseError(err) };
