@@ -145,16 +145,30 @@ export async function createPatient(
       );
 
     const secondaryAuth: Auth = getAuth(secondaryApp);
+    const { getFirestore: getSecondaryFirestore } = await import("firebase/firestore");
+    const secondaryDb = getSecondaryFirestore(secondaryApp);
+
     const credential = await createUserWithEmailAndPassword(
       secondaryAuth,
       email,
       code   // password = the code itself
     );
     const { uid } = credential.user;
-    await secondaryAuth.signOut();
 
     const displayName = `${payload.firstName} ${payload.lastName}`;
 
+    // Write users doc as the new patient (secondary auth) — satisfies uid == request.auth.uid rule
+    await setDoc(doc(secondaryDb, "users", uid), {
+      email,
+      role:        "patient",
+      displayName,
+      createdAt:   serverTimestamp(),
+      updatedAt:   serverTimestamp(),
+    });
+
+    await secondaryAuth.signOut();
+
+    // Write patients doc as the manager (main db) — satisfies isStaff() rule
     await setDoc(doc(db, "patients", uid), {
       firstName:    payload.firstName,
       lastName:     payload.lastName,
@@ -166,14 +180,6 @@ export async function createPatient(
       accessCode:   code,
       status:       "active",
       createdAt:    serverTimestamp(),
-    });
-
-    await setDoc(doc(db, "users", uid), {
-      email,
-      role:        "patient",
-      displayName,
-      createdAt:   serverTimestamp(),
-      updatedAt:   serverTimestamp(),
     });
 
     return {
