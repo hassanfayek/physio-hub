@@ -1,6 +1,7 @@
 // FILE: src/components/AddPatientModal.tsx
 
 import { useState, useEffect, type FormEvent, type ChangeEvent } from "react";
+import { createPortal } from "react-dom";
 import { createPatient, type CreatePatientPayload, type Physiotherapist } from "../services/patientService";
 import type { Patient } from "../services/patientService";
 import { X, AlertCircle, Copy, Check } from "lucide-react";
@@ -106,7 +107,7 @@ export default function AddPatientModal({
     onClose();
   };
 
-  return (
+  return createPortal(
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap');
@@ -373,6 +374,7 @@ export default function AddPatientModal({
 
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
