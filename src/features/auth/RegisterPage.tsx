@@ -68,7 +68,7 @@ function passwordStrength(pw: string): { score: number; label: string; color: st
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { lang, toggleLang } = useLang();
+  const { lang, toggleLang, t } = useLang();
 
   const [role,    setRole]    = useState<RoleTab>("patient");
   const [step,    setStep]    = useState<Step>(1);
@@ -478,8 +478,8 @@ export default function RegisterPage() {
           <div className="rp-brand-row">
             <Link to="/" className="rp-brand">Physio<span>+</span> Hub</Link>
             <span className="rp-login-link">
-              Already registered?
-              <Link to="/" className="rp-link">Sign in</Link>
+              {t("reg.alreadyHaveAccount")}
+              <Link to="/" className="rp-link">{t("reg.signIn")}</Link>
             </span>
             <button className="lang-toggle" onClick={toggleLang} title="Switch language" style={{ marginLeft: 8 }}>
               {lang === "en" ? "🌐 العربية" : "🌐 English"}
@@ -492,12 +492,12 @@ export default function RegisterPage() {
               <div className={`rp-step-circle ${step > 1 ? "done" : step === 1 ? "active" : "idle"}`}>
                 {step > 1 ? "✓" : "1"}
               </div>
-              <span className={`rp-step-text ${step === 1 ? "active" : ""}`}>Account</span>
+              <span className={`rp-step-text ${step === 1 ? "active" : ""}`}>{t("reg.stepAccount")}</span>
             </div>
             <div className={`rp-step-line ${step > 1 ? "done" : ""}`} />
             <div className="rp-step">
               <div className={`rp-step-circle ${step === 2 ? "active" : "idle"}`}>2</div>
-              <span className={`rp-step-text ${step === 2 ? "active" : ""}`}>Profile</span>
+              <span className={`rp-step-text ${step === 2 ? "active" : ""}`}>{t("reg.stepProfile")}</span>
             </div>
           </div>
 
@@ -513,8 +513,8 @@ export default function RegisterPage() {
             {/* ── STEP 1 ── */}
             {step === 1 && (
               <>
-                <div className="rp-card-title">Create your account</div>
-                <div className="rp-card-sub">Set up your Physio+ Hub login credentials</div>
+                <div className="rp-card-title">{t("reg.step1Title")}</div>
+                <div className="rp-card-sub">{t("reg.step1Sub")}</div>
 
                 {/* Role selector */}
                 <div className="rp-role-tabs">
@@ -529,14 +529,14 @@ export default function RegisterPage() {
                         ? <User size={15} strokeWidth={2} />
                         : <Stethoscope size={15} strokeWidth={2} />
                       }
-                      {r === "patient" ? "Patient" : "Physiotherapist"}
+                      {r === "patient" ? t("auth.patient") : t("auth.physio")}
                     </button>
                   ))}
                 </div>
 
                 <form onSubmit={handleSubmit} noValidate>
                   <div className="rp-grid-2">
-                    <Field label="First name">
+                    <Field label={t("reg.firstName")}>
                       <Input
                         placeholder="Alex"
                         value={role === "patient" ? pat.firstName : phy.firstName}
@@ -544,7 +544,7 @@ export default function RegisterPage() {
                         required
                       />
                     </Field>
-                    <Field label="Last name">
+                    <Field label={t("reg.lastName")}>
                       <Input
                         placeholder="Johnson"
                         value={role === "patient" ? pat.lastName : phy.lastName}
@@ -554,7 +554,7 @@ export default function RegisterPage() {
                     </Field>
                   </div>
 
-                  <Field label="Email address">
+                  <Field label={t("reg.email")}>
                     <Input
                       type="email"
                       placeholder="you@example.com"
@@ -565,7 +565,7 @@ export default function RegisterPage() {
                     />
                   </Field>
 
-                  <Field label="Password">
+                  <Field label={t("reg.password")}>
                     <div className="rp-pw-wrap">
                       <Input
                         type={showPw ? "text" : "password"}
@@ -600,7 +600,7 @@ export default function RegisterPage() {
                     )}
                   </Field>
 
-                  <Field label="Confirm password">
+                  <Field label={t("reg.confirmPw")}>
                     <Input
                       type={showPw ? "text" : "password"}
                       placeholder="Re-enter password"
@@ -611,8 +611,8 @@ export default function RegisterPage() {
                     {confirmPw && (
                       <div className="rp-pw-match" style={{ color: currentPassword === confirmPw ? "#22c55e" : "#ef4444" }}>
                         {currentPassword === confirmPw
-                          ? <><Check size={13} strokeWidth={2.5} /> Passwords match</>
-                          : <><X size={13} strokeWidth={2.5} /> Passwords do not match</>
+                          ? <><Check size={13} strokeWidth={2.5} /> {t("reg.pwMatch")}</>
+                          : <><X size={13} strokeWidth={2.5} /> {t("reg.pwNoMatch")}</>
                         }
                       </div>
                     )}
@@ -620,7 +620,7 @@ export default function RegisterPage() {
 
                   <div className="rp-actions">
                     <button className="rp-submit" type="submit" disabled={!step1Valid}>
-                      Continue
+                      {t("reg.continue")}
                       <ArrowRight size={16} strokeWidth={2.5} />
                     </button>
                   </div>
@@ -631,13 +631,13 @@ export default function RegisterPage() {
             {/* ── STEP 2 ── */}
             {step === 2 && (
               <>
-                <div className="rp-card-title">Complete your profile</div>
-                <div className="rp-card-sub">We need a few more details to set up your account</div>
+                <div className="rp-card-title">{t("reg.step2Title")}</div>
+                <div className="rp-card-sub">{t("reg.step2Sub")}</div>
 
                 <div className="rp-role-badge">
                   {role === "patient"
-                    ? <><User size={13} strokeWidth={2} /> Patient Account</>
-                    : <><Stethoscope size={13} strokeWidth={2} /> Physiotherapist Account</>
+                    ? <><User size={13} strokeWidth={2} /> {t("reg.patientAccount")}</>
+                    : <><Stethoscope size={13} strokeWidth={2} /> {t("reg.physioAccount")}</>
                   }
                 </div>
 
@@ -646,7 +646,7 @@ export default function RegisterPage() {
                   {role === "patient" && (
                     <>
                       <div className="rp-grid-2">
-                        <Field label="Date of birth">
+                        <Field label={t("reg.dob")}>
                           <Input
                             type="date"
                             value={pat.dateOfBirth}
@@ -654,7 +654,7 @@ export default function RegisterPage() {
                             required
                           />
                         </Field>
-                        <Field label="Phone number">
+                        <Field label={t("reg.phone")}>
                           <Input
                             type="tel"
                             placeholder="+44 7700 000000"
@@ -679,7 +679,7 @@ export default function RegisterPage() {
                             required
                           />
                         </Field>
-                        <Field label="Phone number">
+                        <Field label={t("reg.phone")}>
                           <Input
                             type="tel"
                             placeholder="+44 7700 000000"
@@ -725,12 +725,12 @@ export default function RegisterPage() {
                   <div className="rp-actions">
                     <button type="button" className="rp-back-btn" onClick={() => setStep(1)}>
                       <ArrowLeft size={14} strokeWidth={2.5} />
-                      Back
+                      {t("reg.back")}
                     </button>
                     <button className="rp-submit" type="submit" disabled={!step2Valid || loading}>
                       {loading
-                        ? <><div className="rp-spinner" /> Creating account…</>
-                        : "Create Account"
+                        ? <><div className="rp-spinner" /> {t("reg.creating")}</>
+                        : t("reg.createAccount")
                       }
                     </button>
                   </div>

@@ -10,7 +10,7 @@ type RoleTab = "patient" | "physiotherapist";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { lang, toggleLang } = useLang();
+  const { lang, toggleLang, t } = useLang();
 
   const [role,      setRole]      = useState<RoleTab>("patient");
   const [email,     setEmail]     = useState("");
@@ -694,8 +694,8 @@ export default function LoginPage() {
                   {lang === "en" ? "🌐 العربية" : "🌐 English"}
                 </button>
               </div>
-              <div className="lp-form-heading">Welcome back</div>
-              <div className="lp-form-sub">Sign in to your account to continue</div>
+              <div className="lp-form-heading">{t("auth.welcome")}</div>
+              <div className="lp-form-sub">{t("auth.welcomeSub")}</div>
             </div>
 
             {/* Role tabs */}
@@ -710,7 +710,7 @@ export default function LoginPage() {
                   <span className="lp-role-tab-icon">
                     <span className="lp-role-tab-icon-dot" />
                   </span>
-                  {r === "patient" ? "Patient" : "Physiotherapist"}
+                  {r === "patient" ? t("auth.patient") : t("auth.physio")}
                 </button>
               ))}
             </div>
@@ -720,29 +720,29 @@ export default function LoginPage() {
               <div className="lp-reset-panel">
                 {resetSent ? (
                   <div className="lp-reset-success">
-                    ✓ Reset link sent to <strong>{resetEmail}</strong>.<br />Check your inbox.
+                    ✓ {t("auth.resetSentPrefix")} <strong>{resetEmail}</strong>.<br />{t("auth.resetSentSuffix")}
                     <br />
                     <button className="lp-link" style={{ marginTop: 10, display: "inline-block" }} onClick={() => { setShowReset(false); setResetSent(false); }}>
-                      Back to sign in
+                      {t("auth.backToSignIn")}
                     </button>
                   </div>
                 ) : (
                   <>
-                    <div className="lp-reset-title">Reset your password</div>
-                    <div className="lp-reset-sub">We'll send a reset link to your email address.</div>
+                    <div className="lp-reset-title">{t("auth.resetTitle")}</div>
+                    <div className="lp-reset-sub">{t("auth.resetSub")}</div>
                     <form onSubmit={handlePasswordReset}>
                       <input
                         className="lp-input"
                         type="email"
-                        placeholder="Your email address"
+                        placeholder={t("auth.emailPlaceholder")}
                         value={resetEmail}
                         onChange={(e) => setResetEmail(e.target.value)}
                         required
                         style={{ marginBottom: 12 }}
                       />
                       <div className="lp-reset-row">
-                        <button className="lp-reset-btn" type="submit" disabled={loading}>Send reset link</button>
-                        <button className="lp-reset-cancel" type="button" onClick={() => setShowReset(false)}>Cancel</button>
+                        <button className="lp-reset-btn" type="submit" disabled={loading}>{t("auth.resetSend")}</button>
+                        <button className="lp-reset-cancel" type="button" onClick={() => setShowReset(false)}>{t("auth.resetCancel")}</button>
                       </div>
                     </form>
                   </>
@@ -762,7 +762,7 @@ export default function LoginPage() {
             {!showReset && (
               <form onSubmit={handleSubmit} noValidate>
                 <div className="lp-field">
-                  <label className="lp-label">Email address</label>
+                  <label className="lp-label">{t("auth.email")}</label>
                   <input
                     className="lp-input"
                     type="email"
@@ -775,7 +775,7 @@ export default function LoginPage() {
                 </div>
 
                 <div className="lp-field">
-                  <label className="lp-label">Password</label>
+                  <label className="lp-label">{t("auth.password")}</label>
                   <div className="lp-input-wrap">
                     <input
                       className="lp-input has-suffix"
@@ -797,14 +797,14 @@ export default function LoginPage() {
 
                 <div className="lp-forgot-row">
                   <button type="button" className="lp-link sm" onClick={() => { setShowReset(true); setResetEmail(email); }}>
-                    Forgot password?
+                    {t("auth.forgot")}
                   </button>
                 </div>
 
                 <button className="lp-submit" type="submit" disabled={loading || !email || !password}>
                   {loading
-                    ? <><div className="lp-spinner" />Signing in…</>
-                    : `Sign in as ${role === "patient" ? "Patient" : "Physiotherapist"}`
+                    ? <><div className="lp-spinner" />{t("auth.signingIn")}</>
+                    : `${t("auth.signInAs")} ${role === "patient" ? t("auth.patient") : t("auth.physio")}`
                   }
                 </button>
               </form>
@@ -812,12 +812,10 @@ export default function LoginPage() {
 
             <div className="lp-form-footer">
               <div className="lp-footer-main">
-                Don't have an account?{" "}
-                <Link to="/register" className="lp-link">Create one</Link>
+                {t("auth.noAccount")}{" "}
+                <Link to="/register" className="lp-link">{t("auth.createOne")}</Link>
               </div>
-              <div className="lp-footer-fine">
-                By signing in you agree to our Terms of Service<br />and Privacy Policy
-              </div>
+              <div className="lp-footer-fine">{t("auth.terms")}</div>
             </div>
           </div>
         </div>

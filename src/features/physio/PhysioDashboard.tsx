@@ -810,7 +810,7 @@ function ComingSoon({ label }: { label: string }) {
 export default function PhysioDashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { lang, toggleLang } = useLang();
+  const { lang, toggleLang, t } = useLang();
   const [activeTab,        setActiveTab]        = useState<Tab>("overview");
   const [sidebarOpen,      setSidebarOpen]      = useState(false);
   const [viewingPatientId, setViewingPatientId] = useState<string | null>(null);
@@ -844,12 +844,12 @@ export default function PhysioDashboard() {
   if (!physio) return null;
 
   const TABS: TabDef[] = [
-    { id: "overview",  label: "Overview",         icon: <IconOverview /> },
-    { id: "patients",  label: "Patients",         icon: <IconPatients /> },
-    ...(isManager ? [{ id: "team" as Tab, label: "Team",    icon: <IconTeam /> }] : []),
-    { id: "schedule",  label: "Schedule",         icon: <IconSchedule /> },
-    ...(!isSecretary ? [{ id: "exercises" as Tab, label: "Exercise Library", icon: <IconExercises /> }] : []),
-    ...(!isSecretary ? [{ id: "reports"   as Tab, label: "Reports",          icon: <IconReports /> }]   : []),
+    { id: "overview",  label: t("nav.overview"),       icon: <IconOverview /> },
+    { id: "patients",  label: t("nav.patients"),       icon: <IconPatients /> },
+    ...(isManager ? [{ id: "team" as Tab, label: t("nav.team"), icon: <IconTeam /> }] : []),
+    { id: "schedule",  label: t("nav.schedule"),       icon: <IconSchedule /> },
+    ...(!isSecretary ? [{ id: "exercises" as Tab, label: t("nav.exercises.lib"), icon: <IconExercises /> }] : []),
+    ...(!isSecretary ? [{ id: "reports"   as Tab, label: t("nav.reports"),       icon: <IconReports /> }]   : []),
   ];
 
   const handleLogout = async () => {
@@ -1110,7 +1110,7 @@ export default function PhysioDashboard() {
             </div>
             <button className="phd-logout-btn" onClick={handleLogout}>
               <LogOut size={13} strokeWidth={2} color="#9a9590" />
-              Sign out
+              {t("common.signOut")}
             </button>
           </div>
         </header>
@@ -1146,7 +1146,7 @@ export default function PhysioDashboard() {
             </div>
 
             <div className="phd-nav-section">
-              <div className="phd-nav-label">Navigation</div>
+              <div className="phd-nav-label">{t("nav.navigation")}</div>
               {TABS.map((tab) => (
                 <div
                   key={tab.id}
@@ -1168,7 +1168,7 @@ export default function PhysioDashboard() {
             <div className="phd-sidebar-signout">
               <button className="phd-sidebar-signout-btn" onClick={handleLogout}>
                 <LogOut size={16} strokeWidth={2} color="rgba(255,255,255,0.55)" />
-                Sign out
+                {t("common.signOut")}
               </button>
             </div>
           </aside>

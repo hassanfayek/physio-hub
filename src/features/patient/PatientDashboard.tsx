@@ -51,7 +51,7 @@ export default function PatientDashboard() {
   const [activeTab,   setActiveTab]   = useState<Tab>("home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
-  const { lang, toggleLang } = useLang();
+  const { lang, toggleLang, t } = useLang();
 
   const handleLogout = async () => {
     await logout();
@@ -430,7 +430,7 @@ export default function PatientDashboard() {
             
             {/* Navigation */}
             <div className="pd2-nav-section">
-              <div className="pd2-nav-label">My Portal</div>
+              <div className="pd2-nav-label">{t("nav.myPortal")}</div>
               {TABS.map((tab) => (
                 <div
                   key={tab.id}
@@ -439,8 +439,8 @@ export default function PatientDashboard() {
                 >
                   <div className="pd2-nav-icon">{tab.icon}</div>
                   <div className="pd2-nav-text">
-                    <div className="pd2-nav-title">{tab.label}</div>
-                    <div className="pd2-nav-desc">{tab.desc}</div>
+                    <div className="pd2-nav-title">{t(`nav.${tab.id === "sheet" ? "patientSheet" : tab.id}`)}</div>
+                    <div className="pd2-nav-desc">{t(`nav.${tab.id === "sheet" ? "patientSheet" : tab.id}.desc`)}</div>
                   </div>
                   <div className="pd2-nav-arrow">
                     <ChevronRight size={14} strokeWidth={2} color="white" />
@@ -455,7 +455,7 @@ export default function PatientDashboard() {
             <div className="pd2-sidebar-signout">
               <button className="pd2-sidebar-signout-btn" onClick={handleLogout}>
                 <LogOut size={16} strokeWidth={2} color="rgba(255,255,255,0.55)" />
-                Sign out
+                {t("common.signOut")}
               </button>
             </div>
           </aside>
@@ -465,7 +465,7 @@ export default function PatientDashboard() {
             {activeTab !== "home" && (
               <button className="pd2-back-btn" onClick={() => setActiveTab("home")}>
                 <ChevronLeft size={14} strokeWidth={2.5} />
-                Back
+                {t("nav.back")}
               </button>
             )}
             <div className="pd2-page-wrap">

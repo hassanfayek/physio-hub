@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import type { Patient } from "../services/patientService";
 import { ChevronUp, ChevronDown, Search, RefreshCw, Plus, AlertCircle } from "lucide-react";
+import { useLang } from "../contexts/LanguageContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,9 +19,9 @@ type SortKey = "name" | "condition" | "status" | "createdAt";
 type SortDir = "asc" | "desc";
 
 const STATUS_META = {
-  active:     { label: "Active",     bg: "#d8f3dc", text: "#1b4332" },
-  discharged: { label: "Discharged", bg: "#f3f4f6", text: "#374151" },
-  on_hold:    { label: "On Hold",    bg: "#fef3c7", text: "#92400e" },
+  active:     { key: "common.active",     bg: "#d8f3dc", text: "#1b4332" },
+  discharged: { key: "common.discharged", bg: "#f3f4f6", text: "#374151" },
+  on_hold:    { key: "common.on_hold",    bg: "#fef3c7", text: "#92400e" },
 } as const;
 
 // ─── Skeleton row ─────────────────────────────────────────────────────────────
@@ -84,6 +85,7 @@ export default function PatientsList({
   onRefresh,
   onAddPatient,
 }: PatientsListProps) {
+  const { t } = useLang();
   const [search,  setSearch]  = useState("");
   const [status,  setStatus]  = useState<"all" | Patient["status"]>("all");
   const [sortKey, setSortKey] = useState<SortKey>("createdAt");
@@ -468,7 +470,7 @@ export default function PatientsList({
               <Search className="pl-search-icon" size={15} strokeWidth={2} />
               <input
                 className="pl-search"
-                placeholder="Search patients…"
+                placeholder={t("common.search")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -476,11 +478,11 @@ export default function PatientsList({
             <div className="pl-toolbar-right">
               <button className="pl-refresh-btn" onClick={onRefresh} title="Refresh list">
                 <RefreshCw size={14} strokeWidth={2} />
-                Refresh
+                {t("common.refresh")}
               </button>
               <button className="pl-add-btn" onClick={onAddPatient}>
                 <Plus size={14} strokeWidth={2.5} />
-                Add Patient
+                {t("common.addPatient")}
               </button>
             </div>
           </div>
@@ -491,7 +493,7 @@ export default function PatientsList({
                 className={`pl-filter-tab ${status === s ? "active" : ""}`}
                 onClick={() => setStatus(s)}
               >
-                {s === "all" ? "All" : STATUS_META[s].label}
+                {s === "all" ? t("common.all") : s === "active" ? t("common.active") : s === "on_hold" ? t("common.on_hold") : t("common.discharged")}
                 <span className="pl-filter-count">{statusCounts[s]}</span>
               </button>
             ))}
@@ -514,25 +516,25 @@ export default function PatientsList({
                 <tr>
                   <th onClick={() => handleSort("name")}>
                     <div className="pl-th-inner">
-                      Patient <SortIcon active={sortKey === "name"} dir={sortDir} />
+                      {t("common.patient")} <SortIcon active={sortKey === "name"} dir={sortDir} />
                     </div>
                   </th>
                   <th onClick={() => handleSort("condition")}>
                     <div className="pl-th-inner">
-                      Condition <SortIcon active={sortKey === "condition"} dir={sortDir} />
+                      {t("common.condition")} <SortIcon active={sortKey === "condition"} dir={sortDir} />
                     </div>
                   </th>
                   <th onClick={() => handleSort("status")}>
                     <div className="pl-th-inner">
-                      Status <SortIcon active={sortKey === "status"} dir={sortDir} />
+                      {t("common.status")} <SortIcon active={sortKey === "status"} dir={sortDir} />
                     </div>
                   </th>
                   <th className="pl-col-added" onClick={() => handleSort("createdAt")}>
                     <div className="pl-th-inner">
-                      Added <SortIcon active={sortKey === "createdAt"} dir={sortDir} />
+                      {t("common.added")} <SortIcon active={sortKey === "createdAt"} dir={sortDir} />
                     </div>
                   </th>
-                  <th>Actions</th>
+                  <th>{t("common.actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -588,7 +590,7 @@ export default function PatientsList({
                         <td>
                           <span className="pl-status" style={{ background: statusMeta.bg, color: statusMeta.text }}>
                             <span className="pl-status-dot" />
-                            {statusMeta.label}
+                            {t(statusMeta.key)}
                           </span>
                         </td>
                         <td className="pl-col-added" style={{ color: "#9a9590", fontSize: 13 }}>
@@ -596,8 +598,8 @@ export default function PatientsList({
                         </td>
                         <td>
                           <div className="pl-row-action">
-                            <button className="pl-action-btn primary">View</button>
-                            <button className="pl-action-btn">Notes</button>
+                            <button className="pl-action-btn primary">{t("common.view")}</button>
+                            <button className="pl-action-btn">{t("common.notes")}</button>
                           </div>
                         </td>
                       </tr>
