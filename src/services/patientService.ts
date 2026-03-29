@@ -190,6 +190,7 @@ export async function createPatient(
         firstName: payload.firstName,
         lastName:  payload.lastName,
         email,
+        phone:     payload.phone ?? "",
         condition: payload.condition,
         physioId:  payload.physioId,
         status:    "active",
