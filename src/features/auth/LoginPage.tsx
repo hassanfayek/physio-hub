@@ -1,9 +1,9 @@
 // src/features/auth/LoginPage.tsx
 import { useState, type FormEvent } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { login, loginWithCode, sendPasswordReset, parseFirebaseError } from "../../services/authService";
 import logo from "../../assets/physio-logo.svg";
-import { AlertCircle, Eye, EyeOff, KeyRound } from "lucide-react";
+import { Activity, AlertCircle, Eye, EyeOff, KeyRound } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
 
 type RoleTab = "patient" | "physiotherapist";
