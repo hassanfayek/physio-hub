@@ -48,11 +48,13 @@ export default function AppointmentModal({
     : patients.filter((p) => p.physioId === currentPhysio.uid);
 
   // Pre-select current physio for non-managers
-  const [patientId,  setPatientId]  = useState("");
-  const [physioId,   setPhysioId]   = useState(isManager ? "" : currentPhysio.uid);
+  const [walkIn,      setWalkIn]      = useState(false);
+  const [walkInName,  setWalkInName]  = useState("");
+  const [patientId,   setPatientId]   = useState("");
+  const [physioId,    setPhysioId]    = useState(isManager ? "" : currentPhysio.uid);
   const [sessionType, setSessionType] = useState("");
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState<string | null>(null);
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState<string | null>(null);
 
   // Close on Escape
   useEffect(() => {
@@ -67,14 +69,15 @@ export default function AppointmentModal({
   }, []);
 
   const selectedPatient = availablePatients.find((p) => p.uid === patientId);
-    (physioId === currentPhysio.uid ? currentPhysio : null);
 
   // Check if this patient is already booked in this slot
-  const alreadyBooked = patientId
+  const alreadyBooked = !walkIn && patientId
     ? existing.some((a) => a.patientId === patientId)
     : false;
 
-  const canSubmit = patientId && physioId && sessionType && !isFull && !alreadyBooked && !loading;
+  const canSubmit = walkIn
+    ? walkInName.trim() && physioId && sessionType && !isFull && !loading
+    : patientId && physioId && sessionType && !isFull && !alreadyBooked && !loading;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -86,10 +89,12 @@ export default function AppointmentModal({
     const physioForName = physios.find((p) => p.uid === physioId) ?? currentPhysio as unknown as Physiotherapist;
 
     const result = await createAppointment({
-      patientId,
-      patientName: selectedPatient
-        ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
-        : "",
+      patientId:   walkIn ? "" : patientId,
+      patientName: walkIn
+        ? walkInName.trim()
+        : selectedPatient
+          ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
+          : "",
       physioId,
       physioName: `Dr. ${physioForName.firstName} ${physioForName.lastName}`,
       date,
@@ -170,6 +175,27 @@ export default function AppointmentModal({
         .am-close:hover { background: #f0ede8; color: #1a1a1a; border-color: #c0bbb4; }
 
         .am-body { padding: 0 28px; display: flex; flex-direction: column; gap: 14px; }
+
+        /* Walk-in toggle */
+        .am-toggle-row {
+          display: flex; gap: 6px; padding: 4px;
+          background: #f5f3ef; border-radius: 10px;
+        }
+        .am-toggle-btn {
+          flex: 1; padding: 8px 10px; border-radius: 7px; border: none;
+          font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
+          cursor: pointer; transition: all 0.15s; background: transparent; color: #9a9590;
+        }
+        .am-toggle-btn.active {
+          background: #fff; color: #1a1a1a;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.08); font-weight: 600;
+        }
+        .am-walkin-badge {
+          display: inline-flex; align-items: center; gap: 5px;
+          background: #fef3c7; color: #92400e; border-radius: 100px;
+          font-size: 11px; font-weight: 600; padding: 3px 10px;
+          letter-spacing: 0.04em; text-transform: uppercase;
+        }
 
         /* Slot capacity bar */
         .am-capacity {
@@ -350,30 +376,69 @@ export default function AppointmentModal({
 
               {!isFull && (
                 <>
-                  {/* Patient selector */}
+                  {/* Registered / Walk-in toggle */}
                   <div className="am-field">
-                    <label className="am-label">Select Patient</label>
-                    <div className="am-select-wrap">
-                      <select
-                        className="am-select"
-                        value={patientId}
-                        onChange={(e) => { setPatientId(e.target.value); setError(null); }}
-                        required
+                    <label className="am-label">Patient Type</label>
+                    <div className="am-toggle-row">
+                      <button
+                        type="button"
+                        className={`am-toggle-btn ${!walkIn ? "active" : ""}`}
+                        onClick={() => { setWalkIn(false); setError(null); }}
                       >
-                        <option value="">— Choose a patient —</option>
-                        {availablePatients.map((p) => (
-                          <option key={p.uid} value={p.uid}>
-                            {p.firstName} {p.lastName}
-                          </option>
-                        ))}
-                      </select>
+                        Registered Patient
+                      </button>
+                      <button
+                        type="button"
+                        className={`am-toggle-btn ${walkIn ? "active" : ""}`}
+                        onClick={() => { setWalkIn(true); setPatientId(""); setError(null); }}
+                      >
+                        Walk-in / Unregistered
+                      </button>
                     </div>
-                    {availablePatients.length === 0 && (
-                      <span style={{ fontSize: 12, color: "#9a9590" }}>
-                        {isManager ? "No patients in the system." : "You have no assigned patients."}
-                      </span>
-                    )}
                   </div>
+
+                  {/* Patient selector OR walk-in name */}
+                  {walkIn ? (
+                    <div className="am-field">
+                      <label className="am-label">Patient Name</label>
+                      <input
+                        className="am-select"
+                        style={{ backgroundImage: "none" }}
+                        type="text"
+                        placeholder="e.g. John Doe (or leave as Walk-in)"
+                        value={walkInName}
+                        onChange={(e) => { setWalkInName(e.target.value); setError(null); }}
+                        autoFocus
+                      />
+                      <span style={{ fontSize: 12, color: "#92400e", marginTop: 4, display: "block" }}>
+                        ⚠ This appointment can be assigned to a registered patient later from the schedule.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="am-field">
+                      <label className="am-label">Select Patient</label>
+                      <div className="am-select-wrap">
+                        <select
+                          className="am-select"
+                          value={patientId}
+                          onChange={(e) => { setPatientId(e.target.value); setError(null); }}
+                          required
+                        >
+                          <option value="">— Choose a patient —</option>
+                          {availablePatients.map((p) => (
+                            <option key={p.uid} value={p.uid}>
+                              {p.firstName} {p.lastName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {availablePatients.length === 0 && (
+                        <span style={{ fontSize: 12, color: "#9a9590" }}>
+                          {isManager ? "No patients in the system." : "You have no assigned patients."}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Physio selector — manager only */}
                   {isManager && (

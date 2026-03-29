@@ -378,6 +378,26 @@ export async function cancelPatientAppointment(
   }
 }
 
+// ─── Assign a walk-in appointment to a registered patient ────────────────────
+// Call this once the patient has been added to the system. Updates patientId
+// and patientName so the appointment appears on the patient's portal.
+
+export async function assignAppointmentToPatient(
+  appointmentId: string,
+  patientId:     string,
+  patientName:   string
+): Promise<{ error?: string }> {
+  try {
+    await updateDoc(doc(db, "appointments", appointmentId), {
+      patientId,
+      patientName,
+    });
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
 // ─── Update appointment status (clinic manager only) ─────────────────────────
 
 export async function updateAppointmentStatus(

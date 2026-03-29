@@ -1,11 +1,13 @@
 // FILE: src/features/schedule/DayView.tsx
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, Plus, Trash2, Check } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ArrowLeft, Plus, Trash2, Check, UserCheck } from "lucide-react";
 import {
   subscribeToAppointmentsByDay,
   deleteAppointment,
   updateAppointmentStatus,
+  assignAppointmentToPatient,
   fmtHour12,
   type Appointment,
   type ClinicSettings,
@@ -36,12 +38,17 @@ export default function DayView({
   isManager,
   onBack,
 }: DayViewProps) {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loading,      setLoading]      = useState(true);
-  const [modalSlot,    setModalSlot]    = useState<number | null>(null);
-  const [deletingId,   setDeletingId]   = useState<string | null>(null);
+  const [appointments,  setAppointments]  = useState<Appointment[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [modalSlot,     setModalSlot]     = useState<number | null>(null);
+  const [deletingId,    setDeletingId]    = useState<string | null>(null);
   const [updatingId,    setUpdatingId]    = useState<string | null>(null);
-  const [toast,        setToast]        = useState<string | null>(null);
+  const [toast,         setToast]         = useState<string | null>(null);
+  // Assign-patient flow
+  const [assignAppt,    setAssignAppt]    = useState<Appointment | null>(null);
+  const [assignPtId,    setAssignPtId]    = useState("");
+  const [assignSaving,  setAssignSaving]  = useState(false);
+  const [assignError,   setAssignError]   = useState<string | null>(null);
 
   // Realtime subscription for this day
   useEffect(() => {
@@ -76,6 +83,24 @@ export default function DayView({
     await updateAppointmentStatus(apptId, status);
     setUpdatingId(null);
     showToast(`✓ ${patientName} marked as ${status}`);
+  };
+
+  const handleAssignSave = async () => {
+    if (!assignAppt || !assignPtId) return;
+    setAssignSaving(true);
+    setAssignError(null);
+    const pt = patients.find((p) => p.uid === assignPtId);
+    if (!pt) { setAssignError("Patient not found."); setAssignSaving(false); return; }
+    const { error } = await assignAppointmentToPatient(
+      assignAppt.id,
+      pt.uid,
+      `${pt.firstName} ${pt.lastName}`
+    );
+    setAssignSaving(false);
+    if (error) { setAssignError(error); return; }
+    setAssignAppt(null);
+    setAssignPtId("");
+    showToast(`✓ Appointment assigned to ${pt.firstName} ${pt.lastName}`);
   };
 
   const displayDate = new Date(date + "T00:00:00").toLocaleDateString("en-GB", {
@@ -241,6 +266,70 @@ export default function DayView({
           from { opacity:0; transform: translateX(-50%) translateY(12px); }
           to   { opacity:1; transform: translateX(-50%) translateY(0); }
         }
+
+        .dv-unassigned-badge {
+          font-size: 10.5px; font-weight: 700; padding: 2px 8px;
+          border-radius: 100px; background: #fef3c7; color: #92400e;
+          white-space: nowrap; letter-spacing: 0.04em; text-transform: uppercase;
+        }
+        .dv-assign-btn {
+          display: inline-flex; align-items: center; gap: 5px;
+          height: 28px; border-radius: 8px; padding: 0 10px;
+          border: 1.5px solid #fbbf24; background: #fffbeb;
+          font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500;
+          cursor: pointer; color: #92400e; transition: all 0.15s; white-space: nowrap;
+        }
+        .dv-assign-btn:hover { background: #fef3c7; }
+
+        /* Assign modal */
+        .dv-assign-overlay {
+          position: fixed; inset: 0; z-index: 1001;
+          background: rgba(10,15,10,0.45); backdrop-filter: blur(3px);
+          display: flex; align-items: center; justify-content: center; padding: 24px;
+          animation: dvOverlayIn 0.15s ease both;
+        }
+        @keyframes dvOverlayIn { from { opacity:0; } to { opacity:1; } }
+        .dv-assign-modal {
+          background: #fff; border-radius: 20px; padding: 28px;
+          width: min(400px, 100%);
+          box-shadow: 0 24px 80px rgba(0,0,0,0.18);
+          animation: dvModalIn 0.2s cubic-bezier(0.16,1,0.3,1) both;
+          font-family: 'Outfit', sans-serif;
+        }
+        @keyframes dvModalIn {
+          from { opacity:0; transform: scale(0.95) translateY(10px); }
+          to   { opacity:1; transform: scale(1) translateY(0); }
+        }
+        .dv-assign-title { font-size: 18px; font-weight: 600; color: #1a1a1a; margin-bottom: 5px; }
+        .dv-assign-sub   { font-size: 13px; color: #9a9590; margin-bottom: 20px; }
+        .dv-assign-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #5a5550; margin-bottom: 6px; display: block; }
+        .dv-assign-select {
+          width: 100%; padding: 11px 14px; border-radius: 10px; box-sizing: border-box;
+          border: 1.5px solid #e5e0d8; background: #fafaf8;
+          font-family: 'Outfit', sans-serif; font-size: 14px; color: #1a1a1a;
+          outline: none; appearance: none; cursor: pointer; min-height: 44px;
+          background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a9590' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px;
+        }
+        .dv-assign-select:focus { border-color: #2E8BC0; box-shadow: 0 0 0 3px rgba(46,139,192,0.1); }
+        .dv-assign-error { font-size: 13px; color: #b91c1c; margin-top: 10px; }
+        .dv-assign-actions { display: flex; gap: 8px; margin-top: 20px; }
+        .dv-assign-cancel {
+          padding: 11px 18px; border-radius: 10px;
+          border: 1.5px solid #e5e0d8; background: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 500;
+          color: #5a5550; cursor: pointer;
+        }
+        .dv-assign-cancel:hover { background: #f5f3ef; }
+        .dv-assign-save {
+          flex: 1; padding: 11px; border-radius: 10px; border: none;
+          background: #2E8BC0; color: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600;
+          cursor: pointer; transition: background 0.15s;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .dv-assign-save:hover:not(:disabled) { background: #0C3C60; }
+        .dv-assign-save:disabled { opacity: 0.55; cursor: not-allowed; }
       `}</style>
 
       <div className="dv-root">
@@ -344,11 +433,23 @@ export default function DayView({
                                 </div>
                               </div>
                               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5 }}>
+                                {!a.patientId && (
+                                  <span className="dv-unassigned-badge">Unassigned</span>
+                                )}
                                 <span className={`dv-appt-status ${a.status ?? "scheduled"}`}>
                                   {a.status === "completed" ? "✓ Completed"
                                     : a.status === "cancelled" ? "✗ Cancelled"
                                     : "Scheduled"}
                                 </span>
+                                {isManager && !a.patientId && (
+                                  <button
+                                    className="dv-assign-btn"
+                                    onClick={() => { setAssignAppt(a); setAssignPtId(""); setAssignError(null); }}
+                                    type="button"
+                                  >
+                                    <UserCheck size={12} strokeWidth={2.5} /> Assign Patient
+                                  </button>
+                                )}
                                 {isManager && a.status !== "completed" && a.status !== "cancelled" && (
                                   <div style={{ display: "flex", gap: 4 }}>
                                     <button
@@ -413,6 +514,43 @@ export default function DayView({
           <Check size={14} strokeWidth={2.5} />
           {toast}
         </div>
+      )}
+
+      {/* Assign-patient modal */}
+      {assignAppt && createPortal(
+        <div className="dv-assign-overlay" onClick={(e) => { if (e.target === e.currentTarget) setAssignAppt(null); }}>
+          <div className="dv-assign-modal">
+            <div className="dv-assign-title">Assign to Patient</div>
+            <div className="dv-assign-sub">
+              Link this appointment ({assignAppt.patientName || "Walk-in"} · {fmtHour12(assignAppt.hour)}) to a registered patient profile.
+            </div>
+            <label className="dv-assign-label">Select Patient</label>
+            <select
+              className="dv-assign-select"
+              value={assignPtId}
+              onChange={(e) => { setAssignPtId(e.target.value); setAssignError(null); }}
+            >
+              <option value="">— Choose a patient —</option>
+              {patients.map((p) => (
+                <option key={p.uid} value={p.uid}>
+                  {p.firstName} {p.lastName}
+                </option>
+              ))}
+            </select>
+            {assignError && <div className="dv-assign-error">{assignError}</div>}
+            <div className="dv-assign-actions">
+              <button className="dv-assign-cancel" onClick={() => setAssignAppt(null)}>Cancel</button>
+              <button
+                className="dv-assign-save"
+                disabled={!assignPtId || assignSaving}
+                onClick={handleAssignSave}
+              >
+                {assignSaving ? "Saving…" : "Assign Patient"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </>
   );
