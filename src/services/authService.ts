@@ -188,6 +188,7 @@ export async function registerPatient(
   await setDoc(doc(secondaryDb, "patients", user.uid), {
     firstName:        data.firstName,
     lastName:         data.lastName,
+    email:            data.email,
     dateOfBirth:      data.dateOfBirth,
     phone:            data.phone,
     assignedPhysioId: null,
