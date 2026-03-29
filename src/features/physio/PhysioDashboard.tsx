@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { LayoutDashboard, Users, Calendar, Dumbbell, BarChart2, Plus, ChevronDown, ChevronRight, Pencil, LogOut, Menu, ArrowLeft } from "lucide-react";
+import { useLang } from "../../contexts/LanguageContext";
 import { doc, getDoc, deleteDoc, setDoc, updateDoc, serverTimestamp, getFirestore } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAuth } from "../../hooks/useAuth";
@@ -809,6 +810,7 @@ function ComingSoon({ label }: { label: string }) {
 export default function PhysioDashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { lang, toggleLang } = useLang();
   const [activeTab,        setActiveTab]        = useState<Tab>("overview");
   const [sidebarOpen,      setSidebarOpen]      = useState(false);
   const [viewingPatientId, setViewingPatientId] = useState<string | null>(null);
@@ -1098,6 +1100,9 @@ export default function PhysioDashboard() {
 
           {/* Right: user + sign out */}
           <div className="phd-topbar-right">
+            <button className="lang-toggle" onClick={toggleLang} title="Switch language">
+              {lang === "en" ? "🌐 العربية" : "🌐 English"}
+            </button>
             <div className="phd-user-chip">
               <div className="phd-user-name">
                 {isManager ? physio.firstName : isSecretary ? physio.firstName : `Dr. ${physio.lastName}`}

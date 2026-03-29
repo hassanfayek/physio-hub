@@ -10,6 +10,7 @@ import PatientSheetPage from "./PatientSheetPage";
 import FeedbackPage from "./FeedbackPage";
 import logo from "../../assets/physio-logo.svg";
 import { Home, Dumbbell, CalendarDays, FileText, MessageSquare, Menu, ChevronRight, LogOut, ChevronLeft } from "lucide-react";
+import { useLang } from "../../contexts/LanguageContext";
 
 type Tab = "home" | "exercises" | "appointments" | "sheet" | "feedback";
 
@@ -50,6 +51,7 @@ export default function PatientDashboard() {
   const [activeTab,   setActiveTab]   = useState<Tab>("home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
+  const { lang, toggleLang } = useLang();
 
   const handleLogout = async () => {
     await logout();
@@ -405,6 +407,9 @@ export default function PatientDashboard() {
 
           {/* Right: user chip + sign out */}
           <div className="pd2-topbar-right">
+            <button className="lang-toggle" onClick={toggleLang} title="Switch language">
+              {lang === "en" ? "🌐 العربية" : "🌐 English"}
+            </button>
             <div className="pd2-user-chip" onClick={() => navigate("/patient/profile")}>
 <div className="pd2-user-name">{patientFullName}</div>
             </div>

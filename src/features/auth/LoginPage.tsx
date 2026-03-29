@@ -4,11 +4,13 @@ import { useNavigate, Link } from "react-router-dom";
 import { login, sendPasswordReset, parseFirebaseError } from "../../services/authService";
 import logo from "../../assets/physio-logo.svg";
 import { Activity, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { useLang } from "../../contexts/LanguageContext";
 
 type RoleTab = "patient" | "physiotherapist";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { lang, toggleLang } = useLang();
 
   const [role,      setRole]      = useState<RoleTab>("patient");
   const [email,     setEmail]     = useState("");
@@ -688,6 +690,9 @@ export default function LoginPage() {
                   <div className="lp-form-logo-text">Physio<span>+</span> Clinic</div>
                   <div className="lp-form-logo-sub">Patient Portal</div>
                 </div>
+                <button className="lang-toggle" onClick={toggleLang} style={{ marginLeft: "auto" }} title="Switch language">
+                  {lang === "en" ? "🌐 العربية" : "🌐 English"}
+                </button>
               </div>
               <div className="lp-form-heading">Welcome back</div>
               <div className="lp-form-sub">Sign in to your account to continue</div>

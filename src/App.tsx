@@ -14,6 +14,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { type ReactNode } from "react";
 
 import { AuthProvider, useAuth } from "./hooks/useAuth";
+import { LanguageProvider } from "./contexts/LanguageContext";
 import LoginPage    from "./features/auth/LoginPage";
 import RegisterPage from "./features/auth/RegisterPage";
 import logo from "./assets/physio-logo.svg";
@@ -192,10 +193,12 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AuthProvider>
+    </LanguageProvider>
   );
 }

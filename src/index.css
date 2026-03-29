@@ -1,7 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
+
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+/* RTL — applied when <html dir="rtl"> */
+:root[dir="rtl"] {
+  font-family: 'Cairo', 'Outfit', system-ui, sans-serif;
+}
+:root[dir="rtl"] * {
+  font-family: 'Cairo', 'Outfit', system-ui, sans-serif !important;
+  letter-spacing: 0 !important;
+}
+/* Language toggle button — shared style */
+.lang-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1.5px solid #e5e0d8;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5a5550;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  min-height: 36px;
+  line-height: 1;
+}
+.lang-toggle:hover {
+  border-color: #2E8BC0;
+  color: #2E8BC0;
+  background: #f0f7ff;
+}
+:root[dir="rtl"] .lang-toggle {
+  font-family: 'Cairo', sans-serif !important;
 }
 
 :root {

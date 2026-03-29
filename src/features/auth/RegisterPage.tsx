@@ -2,6 +2,7 @@
 import { useState, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { AlertCircle, User, Stethoscope, Eye, EyeOff, Check, X, ArrowRight, ArrowLeft } from "lucide-react";
+import { useLang } from "../../contexts/LanguageContext";
 import {
   registerPatient,
   registerPhysio,
@@ -67,6 +68,7 @@ function passwordStrength(pw: string): { score: number; label: string; color: st
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const { lang, toggleLang } = useLang();
 
   const [role,    setRole]    = useState<RoleTab>("patient");
   const [step,    setStep]    = useState<Step>(1);
@@ -479,6 +481,9 @@ export default function RegisterPage() {
               Already registered?
               <Link to="/" className="rp-link">Sign in</Link>
             </span>
+            <button className="lang-toggle" onClick={toggleLang} title="Switch language" style={{ marginLeft: 8 }}>
+              {lang === "en" ? "🌐 العربية" : "🌐 English"}
+            </button>
           </div>
 
           {/* Stepper */}
