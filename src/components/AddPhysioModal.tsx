@@ -76,7 +76,7 @@ export default function AddPhysioModal({ onClose, onCreated }: AddPhysioModalPro
     setLoading(false);
 
     if ("error" in result) {
-      setError(result.error);
+      setError(result.error ?? "An unexpected error occurred.");
       return;
     }
 
