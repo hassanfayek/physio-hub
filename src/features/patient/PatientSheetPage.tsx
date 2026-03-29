@@ -1419,53 +1419,55 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
           background: #fafaf8; border-radius: 14px;
           border: 1.5px dashed #e5e0d8;
         }
-        /* ── SESSION HISTORY ── */
-        .ps-sh-card {
-          background: #fff;
-          border: 1.5px solid #e5e0d8;
-          border-radius: 14px;
-          padding: 16px 18px;
-          margin-bottom: 10px;
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          transition: border-color 0.15s;
+        /* ── SESSION HISTORY TABLE ── */
+        .ps-sh-wrap { overflow-x: auto; border-radius: 14px; border: 1.5px solid #e5e0d8; }
+        .ps-sh-table {
+          width: 100%; border-collapse: collapse;
+          font-family: 'Outfit', sans-serif; font-size: 13.5px;
         }
-        .ps-sh-card:hover { border-color: #B3DEF0; }
-        .ps-sh-date-badge {
-          width: 52px; height: 56px; flex-shrink: 0;
-          border-radius: 11px;
-          background: linear-gradient(145deg, #EAF5FC, #D6EEF8);
-          border: 1px solid #B3DEF0;
-          display: flex; flex-direction: column;
-          align-items: center; justify-content: center;
+        .ps-sh-table thead tr {
+          background: #f5f3ef; border-bottom: 1.5px solid #e5e0d8;
         }
-        .ps-sh-day   { font-size: 20px; font-weight: 700; color: #2E8BC0; font-family: 'Playfair Display', serif; line-height: 1; }
-        .ps-sh-month { font-size: 10px; text-transform: uppercase; color: #5BC0BE; letter-spacing: 0.05em; }
-        .ps-sh-info  { flex: 1; }
-        .ps-sh-type  { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 3px; }
-        .ps-sh-meta  { font-size: 12.5px; color: #9a9590; }
-        .ps-sh-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+        .ps-sh-table th {
+          padding: 11px 14px; text-align: left;
+          font-size: 11px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.07em; color: #9a9590; white-space: nowrap;
+        }
+        .ps-sh-table tbody tr {
+          border-bottom: 1px solid #f0ede8; transition: background 0.12s;
+        }
+        .ps-sh-table tbody tr:last-child { border-bottom: none; }
+        .ps-sh-table tbody tr:hover { background: #fafaf8; }
+        .ps-sh-table td { padding: 12px 14px; vertical-align: middle; }
+        .ps-sh-date-cell { white-space: nowrap; }
+        .ps-sh-date-main { font-weight: 600; color: #1a1a1a; }
+        .ps-sh-date-sub  { font-size: 11.5px; color: #9a9590; margin-top: 1px; }
+        .ps-sh-type-cell { font-weight: 500; color: #1a1a1a; }
+        .ps-sh-physio-cell { color: #5a5550; }
+        .ps-sh-time-cell { color: #5a5550; white-space: nowrap; }
         .ps-sh-status {
+          display: inline-block;
           font-size: 11.5px; font-weight: 600;
-          padding: 3px 10px; border-radius: 100px;
+          padding: 3px 10px; border-radius: 100px; white-space: nowrap;
         }
-        .ps-sh-status.completed  { background: #d8f3dc; color: #1b4332; }
-        .ps-sh-status.cancelled  { background: #fee2e2; color: #991b1b; }
-        .ps-sh-status.scheduled  { background: #D6EEF8; color: #0C3C60; }
+        .ps-sh-status.completed { background: #d8f3dc; color: #1b4332; }
+        .ps-sh-status.cancelled { background: #fee2e2; color: #991b1b; }
+        .ps-sh-status.scheduled { background: #D6EEF8; color: #0C3C60; }
         .ps-sh-btn-row { display: flex; gap: 5px; }
         .ps-sh-btn {
           font-family: 'Outfit', sans-serif;
           font-size: 11px; font-weight: 600;
           padding: 4px 10px; border-radius: 7px;
-          border: 1.5px solid; cursor: pointer;
-          transition: all 0.15s;
+          border: 1.5px solid; cursor: pointer; transition: all 0.15s; white-space: nowrap;
         }
         .ps-sh-btn.complete { border-color: #b7e4c7; color: #1b4332; background: #f0fdf4; }
         .ps-sh-btn.complete:hover { background: #d8f3dc; }
-        .ps-sh-btn.cancel  { border-color: #fca5a5; color: #991b1b; background: #fff5f5; }
-        .ps-sh-btn.cancel:hover  { background: #fee2e2; }
+        .ps-sh-btn.cancel   { border-color: #fca5a5; color: #991b1b; background: #fff5f5; }
+        .ps-sh-btn.cancel:hover   { background: #fee2e2; }
         .ps-sh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        @media (max-width: 540px) {
+          .ps-sh-table th, .ps-sh-table td { padding: 10px 10px; }
+        }
         /* ── Patient Profile section ── */
         .ps-profile-grid {
           display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
@@ -2827,52 +2829,63 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
               No sessions found for this patient.
             </div>
           ) : (
-            sessionHistory.map((appt) => {
-              const [, m, d] = appt.date.split("-");
-              const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-              const dayNum  = parseInt(d, 10);
-              const monStr  = MONTHS[parseInt(m, 10) - 1] ?? "";
-              const busy    = updatingStatusId === appt.id;
-              return (
-                <div key={appt.id} className="ps-sh-card">
-                  <div className="ps-sh-date-badge">
-                    <div className="ps-sh-day">{dayNum}</div>
-                    <div className="ps-sh-month">{monStr}</div>
-                  </div>
-                  <div className="ps-sh-info">
-                    <div className="ps-sh-type">{appt.sessionType}</div>
-                    <div className="ps-sh-meta">
-                      {fmtHour12(appt.hour)}{appt.physioName ? ` · ${appt.physioName}` : ""}
-                    </div>
-                  </div>
-                  <div className="ps-sh-actions">
-                    <span className={`ps-sh-status ${appt.status}`}>
-                      {appt.status === "completed" ? "✓ Completed"
-                        : appt.status === "cancelled" ? "✗ Cancelled"
-                        : "Scheduled"}
-                    </span>
-                    {isManager && appt.status !== "completed" && appt.status !== "cancelled" && (
-                      <div className="ps-sh-btn-row">
-                        <button
-                          className="ps-sh-btn complete"
-                          disabled={busy}
-                          onClick={() => handleUpdateStatus(appt.id, "completed")}
-                        >
-                          {busy ? "…" : "✓ Complete"}
-                        </button>
-                        <button
-                          className="ps-sh-btn cancel"
-                          disabled={busy}
-                          onClick={() => handleUpdateStatus(appt.id, "cancelled")}
-                        >
-                          {busy ? "…" : "✗ Cancel"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })
+            <div className="ps-sh-wrap">
+              <table className="ps-sh-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Session Type</th>
+                    <th>Physiotherapist</th>
+                    <th>Status</th>
+                    {isManager && <th>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sessionHistory.map((appt) => {
+                    const [y, m, d] = appt.date.split("-");
+                    const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                    const dateStr = `${parseInt(d, 10)} ${MONTHS[parseInt(m, 10) - 1] ?? ""} ${y}`;
+                    const busy    = updatingStatusId === appt.id;
+                    return (
+                      <tr key={appt.id}>
+                        <td className="ps-sh-date-cell">
+                          <div className="ps-sh-date-main">{dateStr}</div>
+                        </td>
+                        <td className="ps-sh-time-cell">{fmtHour12(appt.hour)}</td>
+                        <td className="ps-sh-type-cell">{appt.sessionType || "—"}</td>
+                        <td className="ps-sh-physio-cell">{appt.physioName || "—"}</td>
+                        <td>
+                          <span className={`ps-sh-status ${appt.status ?? "scheduled"}`}>
+                            {appt.status === "completed" ? "✓ Completed"
+                              : appt.status === "cancelled" ? "✗ Cancelled"
+                              : "Scheduled"}
+                          </span>
+                        </td>
+                        {isManager && (
+                          <td>
+                            {appt.status !== "completed" && appt.status !== "cancelled" ? (
+                              <div className="ps-sh-btn-row">
+                                <button
+                                  className="ps-sh-btn complete"
+                                  disabled={busy}
+                                  onClick={() => handleUpdateStatus(appt.id, "completed")}
+                                >{busy ? "…" : "✓ Done"}</button>
+                                <button
+                                  className="ps-sh-btn cancel"
+                                  disabled={busy}
+                                  onClick={() => handleUpdateStatus(appt.id, "cancelled")}
+                                >{busy ? "…" : "✗ Cancel"}</button>
+                              </div>
+                            ) : "—"}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </>
       )}
