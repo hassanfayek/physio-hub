@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Check, Trash2, Search, X, Plus, AlertCircle, UserPlus } from "lucide-react";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, serverTimestamp, getFirestore } from "firebase/firestore";
-import { secondaryAuth } from "../../firebase";
+import AddPatientModal from "../../components/AddPatientModal";
 import {
   subscribeToPhysioPatients,
   subscribeToAllPatients,
@@ -162,9 +160,6 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
 
   // ── Add Patient modal state ────────────────────────────────────────────────
   const [showAddPatient, setShowAddPatient] = useState(false);
-  const [addForm,        setAddForm]        = useState({ firstName: "", lastName: "", email: "", password: "", condition: "" });
-  const [addSaving,      setAddSaving]      = useState(false);
-  const [addError,       setAddError]       = useState<string | null>(null);
 
   const physioMap = useRef<Map<string, string>>(new Map());
   useEffect(() => {
@@ -210,45 +205,6 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
     );
   });
 
-  const handleAddPatient = async () => {
-    const { firstName, lastName, email, password, condition } = addForm;
-    if (!firstName || !lastName || !email || !password) {
-      setAddError("First name, last name, email and password are required."); return;
-    }
-    if (password.length < 6) {
-      setAddError("Password must be at least 6 characters."); return;
-    }
-    setAddSaving(true); setAddError(null);
-    try {
-      const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-      const uid = credential.user.uid;
-      // Use secondaryDb so the new patient's token authorises the writes (isOwner passes)
-      const secondaryDb = getFirestore(secondaryAuth.app);
-      await setDoc(doc(secondaryDb, "users", uid), {
-        email, role: "patient",
-        displayName: `${firstName} ${lastName}`,
-        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-      });
-      await setDoc(doc(secondaryDb, "patients", uid), {
-        firstName, lastName, email,
-        condition: condition || "",
-        physioId: physioId,
-        status: "active",
-        createdAt: serverTimestamp(),
-      });
-      await secondaryAuth.signOut();
-      setShowAddPatient(false);
-      setAddForm({ firstName: "", lastName: "", email: "", password: "", condition: "" });
-      showToast(`✓ ${firstName} ${lastName} added as a patient`);
-    } catch (err: unknown) {
-      const e = err as { message?: string; code?: string };
-      setAddError(
-        e.code === "auth/email-already-in-use" ? "This email is already registered." :
-        e.message ?? "Failed to create patient account."
-      );
-    }
-    setAddSaving(false);
-  };
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -733,26 +689,14 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
 
         {/* Add Patient Modal */}
         {showAddPatient && (
-          <div className="pt-modal-overlay" onClick={() => !addSaving && setShowAddPatient(false)}>
-            <div className="pt-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="pt-modal-title">Add Patient</div>
-              <div className="pt-modal-sub">Create a new patient account. They can log in with this email and password.</div>
-              <div className="pt-modal-row">
-                <div className="pt-modal-field"><label className="pt-modal-label">First Name</label><input className="pt-modal-input" value={addForm.firstName} onChange={(e) => setAddForm({ ...addForm, firstName: e.target.value })} placeholder="Sara" /></div>
-                <div className="pt-modal-field"><label className="pt-modal-label">Last Name</label><input className="pt-modal-input" value={addForm.lastName} onChange={(e) => setAddForm({ ...addForm, lastName: e.target.value })} placeholder="Mohamed" /></div>
-              </div>
-              <div className="pt-modal-field"><label className="pt-modal-label">Email Address</label><input className="pt-modal-input" type="email" value={addForm.email} onChange={(e) => setAddForm({ ...addForm, email: e.target.value })} placeholder="patient@email.com" /></div>
-              <div className="pt-modal-field"><label className="pt-modal-label">Password</label><input className="pt-modal-input" type="password" value={addForm.password} onChange={(e) => setAddForm({ ...addForm, password: e.target.value })} placeholder="Min. 6 characters" /></div>
-              <div className="pt-modal-field"><label className="pt-modal-label">Condition / Reason for Referral</label><input className="pt-modal-input" value={addForm.condition} onChange={(e) => setAddForm({ ...addForm, condition: e.target.value })} placeholder="e.g. ACL Rehabilitation" /></div>
-              {addError && <div className="pt-modal-error">{addError}</div>}
-              <div className="pt-modal-actions">
-                <button className="pt-modal-cancel" onClick={() => setShowAddPatient(false)}>Cancel</button>
-                <button className="pt-modal-save" disabled={addSaving} onClick={handleAddPatient}>
-                  {addSaving ? "Creating account…" : "Create Patient Account"}
-                </button>
-              </div>
-            </div>
-          </div>
+          <AddPatientModal
+            physioId={physioId}
+            physios={isManager ? physios : []}
+            onClose={() => setShowAddPatient(false)}
+            onCreated={(patient) => {
+              showToast(`✓ ${patient.firstName} ${patient.lastName} added`);
+            }}
+          />
         )}
 
         {/* Toast */}
