@@ -86,17 +86,17 @@ export default function PatientPricingSection({
 
   // ── Session price form ──────────────────────────────────────────────────────
   const [sessionPriceAppt,   setSessionPriceAppt]   = useState<Appointment | null>(null);
-  const [sessionPriceForm,   setSessionPriceForm]   = useState({ amount: "", paid: false, paidDate: "", packageId: "", notes: "" });
+  const [sessionPriceForm,   setSessionPriceForm]   = useState({ amount: "", discountType: "none" as "none" | "pct" | "fixed", discountValue: "", paid: false, paidDate: "", packageId: "", notes: "" });
   const [sessionPriceSaving, setSessionPriceSaving] = useState(false);
   const [sessionPriceError,  setSessionPriceError]  = useState<string | null>(null);
   const [deletingSpId,       setDeletingSpId]       = useState<string | null>(null);
   const [deletingSp,         setDeletingSp]         = useState(false);
 
   // ── Package form ────────────────────────────────────────────────────────────
-  const EMPTY_PKG = { packageSize: 6, pricePerSession: "", startDate: new Date().toISOString().slice(0, 10), paidAmount: "", notes: "", active: true };
+  const EMPTY_PKG = { packageSize: 6, priceMode: "per" as "per" | "total", pricePerSession: "", totalPrice: "", discountType: "none" as "none" | "pct" | "fixed", discountValue: "", startDate: new Date().toISOString().slice(0, 10), paidAmount: "", notes: "", active: true };
   const [showPkgForm,   setShowPkgForm]   = useState(false);
   const [editPkg,       setEditPkg]       = useState<SessionPackage | null>(null);
-  const [pkgForm,       setPkgForm]       = useState({ ...EMPTY_PKG, packageSize: 6 as number, pricePerSession: "", paidAmount: "" });
+  const [pkgForm,       setPkgForm]       = useState({ ...EMPTY_PKG, packageSize: 6 as number });
   const [pkgSaving,     setPkgSaving]     = useState(false);
   const [pkgError,      setPkgError]      = useState<string | null>(null);
   const [deletingPkgId, setDeletingPkgId] = useState<string | null>(null);
@@ -211,11 +211,13 @@ export default function PatientPricingSection({
   const openSessionPrice = (appt: Appointment) => {
     const existing = sessionPriceMap.get(appt.id);
     setSessionPriceForm({
-      amount:    existing ? String(existing.amount) : "",
-      paid:      existing?.paid ?? false,
-      paidDate:  existing?.paidDate ?? "",
-      packageId: existing?.packageId ?? "",
-      notes:     existing?.notes ?? "",
+      amount:        existing ? String(existing.amount) : "",
+      discountType:  "none",
+      discountValue: "",
+      paid:          existing?.paid ?? false,
+      paidDate:      existing?.paidDate ?? "",
+      packageId:     existing?.packageId ?? "",
+      notes:         existing?.notes ?? "",
     });
     setSessionPriceAppt(appt);
     setSessionPriceError(null);
@@ -223,8 +225,12 @@ export default function PatientPricingSection({
 
   const handleSaveSessionPrice = async () => {
     if (!sessionPriceAppt) return;
-    const amount = parseFloat(sessionPriceForm.amount);
-    if (isNaN(amount) || amount < 0) { setSessionPriceError("Please enter a valid amount."); return; }
+    const baseAmount = parseFloat(sessionPriceForm.amount);
+    if (isNaN(baseAmount) || baseAmount < 0) { setSessionPriceError("Please enter a valid amount."); return; }
+    const finalAmount = spFinalAmount();
+    const discountNote = sessionPriceForm.discountType !== "none"
+      ? ` [Discount: ${sessionPriceForm.discountType === "pct" ? sessionPriceForm.discountValue + "%" : fmt(parseFloat(sessionPriceForm.discountValue) || 0) + " off"}]`
+      : "";
     setSessionPriceSaving(true); setSessionPriceError(null);
     const result = await setSessionPrice({
       patientId,
@@ -232,11 +238,11 @@ export default function PatientPricingSection({
       date:        sessionPriceAppt.date,
       sessionType: sessionPriceAppt.sessionType,
       physioName:  sessionPriceAppt.physioName,
-      amount,
+      amount:      finalAmount,
       paid:        sessionPriceForm.paid,
       paidDate:    sessionPriceForm.paid ? (sessionPriceForm.paidDate || sessionPriceAppt.date) : "",
       packageId:   sessionPriceForm.packageId,
-      notes:       sessionPriceForm.notes.trim(),
+      notes:       (sessionPriceForm.notes.trim() + discountNote).trim(),
     });
     setSessionPriceSaving(false);
     if ("error" in result && result.error) { setSessionPriceError(result.error); return; }
@@ -262,22 +268,41 @@ export default function PatientPricingSection({
   };
 
   // ── Package CRUD ─────────────────────────────────────────────────────────────
+  // ── Package price helpers ────────────────────────────────────────────────────
+  const calcDiscount = (base: number, type: "none" | "pct" | "fixed", val: string): number => {
+    if (type === "pct")   return base * (parseFloat(val) / 100);
+    if (type === "fixed") return parseFloat(val) || 0;
+    return 0;
+  };
+  const pkgBaseTotal = (): number => {
+    if (pkgForm.priceMode === "total") return parseFloat(pkgForm.totalPrice) || 0;
+    return (parseFloat(pkgForm.pricePerSession) || 0) * pkgForm.packageSize;
+  };
+  const pkgDiscount = (): number => calcDiscount(pkgBaseTotal(), pkgForm.discountType, pkgForm.discountValue);
+  const pkgFinalTotal = (): number => Math.max(0, pkgBaseTotal() - pkgDiscount());
+  const pkgPPS = (): number => pkgForm.packageSize > 0 ? pkgFinalTotal() / pkgForm.packageSize : 0;
+
+  const spBaseAmount = (): number => parseFloat(sessionPriceForm.amount) || 0;
+  const spDiscount = (): number => calcDiscount(spBaseAmount(), sessionPriceForm.discountType, sessionPriceForm.discountValue);
+  const spFinalAmount = (): number => Math.max(0, spBaseAmount() - spDiscount());
+
   const openAddPkg = () => {
-    setPkgForm({ packageSize: 6, pricePerSession: "", startDate: new Date().toISOString().slice(0, 10), paidAmount: "", notes: "", active: true });
+    setPkgForm({ ...EMPTY_PKG, packageSize: 6 });
     setEditPkg(null); setPkgError(null); setShowPkgForm(true);
   };
 
   const openEditPkg = (pkg: SessionPackage) => {
-    setPkgForm({ packageSize: pkg.packageSize, pricePerSession: String(pkg.pricePerSession), startDate: pkg.startDate, paidAmount: String(pkg.paidAmount), notes: pkg.notes, active: pkg.active });
+    setPkgForm({ packageSize: pkg.packageSize, priceMode: "per", pricePerSession: String(pkg.pricePerSession), totalPrice: String(pkg.totalAmount), discountType: "none", discountValue: "", startDate: pkg.startDate, paidAmount: String(pkg.paidAmount), notes: pkg.notes, active: pkg.active });
     setEditPkg(pkg); setPkgError(null); setShowPkgForm(true);
   };
 
   const handleSavePkg = async () => {
-    const pps = parseFloat(String(pkgForm.pricePerSession));
+    const finalTotal = pkgFinalTotal();
+    const pps        = pkgPPS();
     const paid = parseFloat(String(pkgForm.paidAmount) || "0");
-    if (isNaN(pps) || pps < 0) { setPkgError("Please enter a valid price per session."); return; }
+    if (finalTotal <= 0) { setPkgError("Please enter a valid price."); return; }
     setPkgSaving(true); setPkgError(null);
-    const totalAmount = pps * pkgForm.packageSize;
+    const totalAmount = finalTotal;
     const payload = {
       patientId,
       packageSize:     pkgForm.packageSize,
@@ -287,7 +312,7 @@ export default function PatientPricingSection({
       startDate:       pkgForm.startDate,
       sessionsUsed:    editPkg ? editPkg.sessionsUsed : 0,
       active:          pkgForm.active,
-      notes:           pkgForm.notes.trim(),
+      notes:           `${pkgForm.notes.trim()}${pkgForm.discountType !== "none" ? ` [Discount: ${pkgForm.discountType === "pct" ? pkgForm.discountValue + "%" : fmt(parseFloat(pkgForm.discountValue) || 0) + " off"}]` : ""}`.trim(),
     };
     if (editPkg) {
       const { error } = await updateSessionPackage(editPkg.id, payload);
@@ -471,6 +496,38 @@ export default function PatientPricingSection({
         .pps-pkg-size-opt-label { font-size: 18px; font-weight: 700; font-family: 'Playfair Display', serif; }
         .pps-pkg-size-opt-sub { font-size: 11px; color: #9a9590; }
         .pps-pkg-size-opt.selected .pps-pkg-size-opt-sub { color: #2E8BC0; }
+
+        /* Price mode toggle */
+        .pps-mode-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 0; }
+        .pps-mode-opt {
+          padding: 9px 12px; border-radius: 10px; border: 1.5px solid #e5e0d8;
+          text-align: center; cursor: pointer; transition: all 0.15s;
+          font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500; color: #5a5550;
+        }
+        .pps-mode-opt:hover { border-color: #2E8BC0; color: #2E8BC0; }
+        .pps-mode-opt.selected { border-color: #2E8BC0; background: #EAF5FC; color: #2E8BC0; font-weight: 700; }
+
+        /* Discount row */
+        .pps-discount-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .pps-discount-type {
+          width: 100%; padding: 10px 13px; border-radius: 10px; box-sizing: border-box;
+          border: 1.5px solid #e5e0d8; background: #fafaf8;
+          font-family: 'Outfit', sans-serif; font-size: 14px; color: #1a1a1a;
+          outline: none; appearance: none; cursor: pointer; min-height: 42px;
+          background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a9590' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px;
+          transition: border-color 0.15s;
+        }
+        .pps-discount-type:focus { border-color: #2E8BC0; }
+        .pps-final-row {
+          display: flex; align-items: center; justify-content: space-between;
+          background: #f0fdf4; border: 1.5px solid #b7e4c7; border-radius: 10px;
+          padding: 10px 14px; margin-top: 2px;
+        }
+        .pps-final-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #1b4332; }
+        .pps-final-value { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: #1b4332; }
+        .pps-final-sub   { font-size: 11px; color: #52b788; text-align: right; }
+
         .pps-modal-error { font-size: 13px; color: #b91c1c; margin-bottom: 10px; }
         .pps-modal-actions { display: flex; gap: 8px; margin-top: 20px; }
         .pps-modal-cancel { padding: 11px 18px; border-radius: 10px; border: 1.5px solid #e5e0d8; background: #fff; font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 500; color: #5a5550; cursor: pointer; }
@@ -909,6 +966,33 @@ export default function PatientPricingSection({
               </div>
             )}
             <div className="pps-field">
+              <label className="pps-label">Discount</label>
+              <div className="pps-discount-row">
+                <select className="pps-discount-type" value={sessionPriceForm.discountType} onChange={(e) => setSessionPriceForm({ ...sessionPriceForm, discountType: e.target.value as "none"|"pct"|"fixed", discountValue: "" })}>
+                  <option value="none">No Discount</option>
+                  <option value="pct">Percentage (%)</option>
+                  <option value="fixed">Fixed Amount</option>
+                </select>
+                {sessionPriceForm.discountType !== "none" && (
+                  <input className="pps-input" type="number" min="0" step="0.01"
+                    placeholder={sessionPriceForm.discountType === "pct" ? "e.g. 10" : "e.g. 50.00"}
+                    value={sessionPriceForm.discountValue}
+                    onChange={(e) => setSessionPriceForm({ ...sessionPriceForm, discountValue: e.target.value })} />
+                )}
+              </div>
+            </div>
+            {(spBaseAmount() > 0 || sessionPriceForm.discountType !== "none") && (
+              <div className="pps-final-row" style={{ marginBottom: 14 }}>
+                <div>
+                  <div className="pps-final-label">Final Amount</div>
+                  {sessionPriceForm.discountType !== "none" && spDiscount() > 0 && (
+                    <div className="pps-final-sub">− {fmt(spDiscount())} discount</div>
+                  )}
+                </div>
+                <div className="pps-final-value">{fmt(spFinalAmount())}</div>
+              </div>
+            )}
+            <div className="pps-field">
               <label className="pps-label">Notes (optional)</label>
               <input className="pps-input" type="text" placeholder="e.g. Package session 3 of 12..." value={sessionPriceForm.notes} onChange={(e) => setSessionPriceForm({ ...sessionPriceForm, notes: e.target.value })} />
             </div>
@@ -957,16 +1041,71 @@ export default function PatientPricingSection({
                 </div>
               </div>
             )}
-            <div className="pps-field-row">
-              <div className="pps-field">
-                <label className="pps-label">Price Per Session</label>
-                <input className="pps-input" type="number" min="0" step="0.01" placeholder="0.00" value={pkgForm.pricePerSession} onChange={(e) => setPkgForm({ ...pkgForm, pricePerSession: e.target.value })} />
-              </div>
-              <div className="pps-field">
-                <label className="pps-label">Total ({fmt((parseFloat(String(pkgForm.pricePerSession)) || 0) * pkgForm.packageSize)})</label>
-                <input className="pps-input" readOnly value={fmt((parseFloat(String(pkgForm.pricePerSession)) || 0) * pkgForm.packageSize)} style={{ background: "#f0ede8", color: "#5a5550" }} />
+            {/* Price entry mode */}
+            <div className="pps-field">
+              <label className="pps-label">Enter Price As</label>
+              <div className="pps-mode-toggle">
+                <div className={`pps-mode-opt ${pkgForm.priceMode === "per" ? "selected" : ""}`} onClick={() => setPkgForm({ ...pkgForm, priceMode: "per", totalPrice: "" })}>
+                  Per Session
+                </div>
+                <div className={`pps-mode-opt ${pkgForm.priceMode === "total" ? "selected" : ""}`} onClick={() => setPkgForm({ ...pkgForm, priceMode: "total", pricePerSession: "" })}>
+                  Total Package Price
+                </div>
               </div>
             </div>
+
+            {pkgForm.priceMode === "per" ? (
+              <div className="pps-field-row">
+                <div className="pps-field">
+                  <label className="pps-label">Price Per Session</label>
+                  <input className="pps-input" type="number" min="0" step="0.01" placeholder="0.00" value={pkgForm.pricePerSession} onChange={(e) => setPkgForm({ ...pkgForm, pricePerSession: e.target.value })} />
+                </div>
+                <div className="pps-field">
+                  <label className="pps-label">Subtotal</label>
+                  <input className="pps-input" readOnly value={fmt((parseFloat(pkgForm.pricePerSession) || 0) * pkgForm.packageSize)} style={{ background: "#f0ede8", color: "#5a5550" }} />
+                </div>
+              </div>
+            ) : (
+              <div className="pps-field">
+                <label className="pps-label">Total Package Price</label>
+                <input className="pps-input" type="number" min="0" step="0.01" placeholder="0.00" value={pkgForm.totalPrice} onChange={(e) => setPkgForm({ ...pkgForm, totalPrice: e.target.value })} />
+              </div>
+            )}
+
+            {/* Discount */}
+            <div className="pps-field">
+              <label className="pps-label">Discount</label>
+              <div className="pps-discount-row">
+                <select className="pps-discount-type" value={pkgForm.discountType} onChange={(e) => setPkgForm({ ...pkgForm, discountType: e.target.value as "none"|"pct"|"fixed", discountValue: "" })}>
+                  <option value="none">No Discount</option>
+                  <option value="pct">Percentage (%)</option>
+                  <option value="fixed">Fixed Amount</option>
+                </select>
+                {pkgForm.discountType !== "none" && (
+                  <input className="pps-input" type="number" min="0" step="0.01"
+                    placeholder={pkgForm.discountType === "pct" ? "e.g. 10" : "e.g. 100.00"}
+                    value={pkgForm.discountValue}
+                    onChange={(e) => setPkgForm({ ...pkgForm, discountValue: e.target.value })} />
+                )}
+              </div>
+            </div>
+
+            {/* Final total preview */}
+            {pkgBaseTotal() > 0 && (
+              <div className="pps-final-row" style={{ marginBottom: 14 }}>
+                <div>
+                  <div className="pps-final-label">Final Total</div>
+                  {pkgForm.discountType !== "none" && pkgDiscount() > 0 && (
+                    <div className="pps-final-sub">− {fmt(pkgDiscount())} discount · {fmt(pkgPPS())} / session</div>
+                  )}
+                  {pkgForm.discountType === "none" && (
+                    <div className="pps-final-sub">{fmt(pkgPPS())} per session</div>
+                  )}
+                </div>
+                <div className="pps-final-value">{fmt(pkgFinalTotal())}</div>
+              </div>
+            )}
+
             <div className="pps-field-row">
               <div className="pps-field">
                 <label className="pps-label">Amount Paid</label>
