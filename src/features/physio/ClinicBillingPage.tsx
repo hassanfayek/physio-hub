@@ -31,20 +31,6 @@ interface RawPackage {
 
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function startOfMonth(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
-function endOfMonth(d: Date): string {
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return toDateStr(last);
-}
-function isoWeek(d: Date): string {
-  // Returns "YYYY-Www" (ISO week string for grouping)
-  const jan4 = new Date(d.getFullYear(), 0, 4);
-  const dayOfYear = Math.floor((d.getTime() - new Date(d.getFullYear(), 0, 1).getTime()) / 86400000) + 1;
-  const wn = Math.ceil((dayOfYear + ((jan4.getDay() + 6) % 7)) / 7);
-  return `${d.getFullYear()}-W${String(wn).padStart(2, "0")}`;
-}
 
 function monthLabel(ym: string): string {
   const [y, m] = ym.split("-");
