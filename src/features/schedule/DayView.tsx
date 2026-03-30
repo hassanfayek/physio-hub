@@ -7,6 +7,7 @@ import {
   subscribeToAppointmentsByDay,
   deleteAppointment,
   updateAppointmentStatus,
+  updateAppointmentConfirmation,
   assignAppointmentToPatient,
   fmtHour12,
   type Appointment,
@@ -43,6 +44,7 @@ export default function DayView({
   const [modalSlot,     setModalSlot]     = useState<number | null>(null);
   const [deletingId,    setDeletingId]    = useState<string | null>(null);
   const [updatingId,    setUpdatingId]    = useState<string | null>(null);
+  const [confirmingId,  setConfirmingId]  = useState<string | null>(null);
   const [toast,         setToast]         = useState<string | null>(null);
   // Assign-patient flow
   const [assignAppt,    setAssignAppt]    = useState<Appointment | null>(null);
@@ -88,6 +90,13 @@ export default function DayView({
                 : status === "in_progress" ? "In Progress"
                 : "Scheduled";
     showToast(`✓ ${patientName || "Walk-in"} marked as ${label}`);
+  };
+
+  const handleToggleConfirm = async (a: Appointment) => {
+    setConfirmingId(a.id);
+    await updateAppointmentConfirmation(a.id, !a.confirmedByPatient);
+    setConfirmingId(null);
+    showToast(a.confirmedByPatient ? "Confirmation removed" : `✓ ${a.patientName || "Walk-in"} confirmed`);
   };
 
   const handleAssignSave = async () => {
@@ -254,6 +263,18 @@ export default function DayView({
         .dv-status-select:hover:not(:disabled) { border-color: #2E8BC0; }
         .dv-status-select:focus { border-color: #2E8BC0; box-shadow: 0 0 0 3px rgba(46,139,192,0.1); }
         .dv-status-select:disabled { opacity: 0.5; cursor: not-allowed; }
+        .dv-confirm-btn {
+          display: inline-flex; align-items: center; gap: 5px;
+          height: 26px; padding: 0 10px; border-radius: 7px;
+          font-family: 'Outfit', sans-serif; font-size: 11.5px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s; border: 1.5px solid; white-space: nowrap;
+          flex-shrink: 0;
+        }
+        .dv-confirm-btn.confirmed   { border-color: #b7e4c7; color: #1b4332; background: #f0fdf4; }
+        .dv-confirm-btn.confirmed:hover { background: #d8f3dc; }
+        .dv-confirm-btn.unconfirmed { border-color: #e5e0d8; color: #9a9590; background: #fafaf8; }
+        .dv-confirm-btn.unconfirmed:hover { border-color: #2E8BC0; color: #2E8BC0; background: #EAF5FC; }
+        .dv-confirm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .dv-status-select.completed   { border-color: #b7e4c7; background-color: #f0fdf4; color: #1b4332; }
         .dv-status-select.cancelled   { border-color: #fca5a5; background-color: #fff5f5; color: #991b1b; }
         .dv-status-select.rescheduled { border-color: #c4b5fd; background-color: #f5f3ff; color: #4c1d95; }
@@ -450,6 +471,15 @@ export default function DayView({
                                 </div>
                               </div>
                               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5 }}>
+                                <button
+                                  className={`dv-confirm-btn ${a.confirmedByPatient ? "confirmed" : "unconfirmed"}`}
+                                  disabled={confirmingId === a.id}
+                                  onClick={() => handleToggleConfirm(a)}
+                                  type="button"
+                                  title={a.confirmedByPatient ? "Patient confirmed — click to remove" : "Mark as confirmed by patient"}
+                                >
+                                  {a.confirmedByPatient ? "✓ Patient Confirmed" : "Unconfirmed"}
+                                </button>
                                 {!a.patientId && (
                                   <span className="dv-unassigned-badge">Unassigned</span>
                                 )}

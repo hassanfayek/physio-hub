@@ -32,6 +32,7 @@ export interface Appointment {
   sessionType:  string;
   status:       "scheduled" | "in_progress" | "completed" | "cancelled" | "rescheduled";
   createdAt:    Timestamp | null;
+  confirmedByPatient: boolean;
 }
 
 export interface ClinicSettings {
@@ -98,6 +99,7 @@ function docToAppointment(id: string, data: Record<string, unknown>): Appointmen
                 : (data.status as string) === "rescheduled"  ? "rescheduled"
                 : "scheduled") as Appointment["status"],
     createdAt:   (data.createdAt   as Timestamp | null) ?? null,
+    confirmedByPatient: (data.confirmedByPatient as boolean) ?? false,
   };
 }
 
@@ -441,4 +443,20 @@ export function subscribeToPatientAllAppointments(
     },
     (err) => onError?.(err)
   );
+}
+
+// ─── Toggle patient confirmation ──────────────────────────────────────────────
+
+export async function updateAppointmentConfirmation(
+  appointmentId: string,
+  confirmed: boolean
+): Promise<{ error?: string }> {
+  try {
+    await updateDoc(doc(db, "appointments", appointmentId), {
+      confirmedByPatient: confirmed,
+    });
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
 }

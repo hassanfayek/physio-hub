@@ -12,6 +12,7 @@ import {
   onSnapshot,
   setDoc,
   getDoc,
+  getDocs,
   serverTimestamp,
   type Timestamp,
 } from "firebase/firestore";
@@ -158,6 +159,182 @@ export async function deleteBillingEntry(
 ): Promise<{ error?: string }> {
   try {
     await deleteDoc(doc(db, "patientBilling", entryId));
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+// ─── Session Price (per completed appointment) ────────────────────────────────
+
+export interface SessionPrice {
+  id:            string;
+  patientId:     string;
+  appointmentId: string;
+  date:          string;
+  sessionType:   string;
+  physioName:    string;
+  amount:        number;
+  paid:          boolean;
+  paidDate:      string;
+  packageId:     string;   // empty if not covered by a package
+  notes:         string;
+  createdAt:     Timestamp | null;
+}
+
+function docToSessionPrice(id: string, data: Record<string, unknown>): SessionPrice {
+  return {
+    id,
+    patientId:     (data.patientId     as string)           ?? "",
+    appointmentId: (data.appointmentId as string)           ?? "",
+    date:          (data.date          as string)           ?? "",
+    sessionType:   (data.sessionType   as string)           ?? "",
+    physioName:    (data.physioName    as string)           ?? "",
+    amount:        (data.amount        as number)           ?? 0,
+    paid:          (data.paid          as boolean)          ?? false,
+    paidDate:      (data.paidDate      as string)           ?? "",
+    packageId:     (data.packageId     as string)           ?? "",
+    notes:         (data.notes         as string)           ?? "",
+    createdAt:     (data.createdAt     as Timestamp | null) ?? null,
+  };
+}
+
+export function subscribeToSessionPrices(
+  patientId: string,
+  onData:    (prices: SessionPrice[]) => void,
+  onError?:  (err: Error) => void
+): () => void {
+  const q = query(
+    collection(db, "patientSessionPrices"),
+    where("patientId", "==", patientId),
+    orderBy("date", "desc")
+  );
+  return onSnapshot(
+    q,
+    (snap) => onData(snap.docs.map((d) => docToSessionPrice(d.id, d.data()))),
+    (err)  => onError?.(err)
+  );
+}
+
+export async function setSessionPrice(
+  price: Omit<SessionPrice, "id" | "createdAt">
+): Promise<{ id: string; error?: never } | { id?: never; error: string }> {
+  try {
+    // upsert by appointmentId
+    const q = query(
+      collection(db, "patientSessionPrices"),
+      where("appointmentId", "==", price.appointmentId)
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const ref = snap.docs[0].ref;
+      await updateDoc(ref, { ...price, updatedAt: null });
+      return { id: ref.id };
+    }
+    const ref = await addDoc(collection(db, "patientSessionPrices"), {
+      ...price,
+      createdAt: serverTimestamp(),
+    });
+    return { id: ref.id };
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+export async function deleteSessionPrice(
+  priceId: string
+): Promise<{ error?: string }> {
+  try {
+    await deleteDoc(doc(db, "patientSessionPrices", priceId));
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+// ─── Session Packages ─────────────────────────────────────────────────────────
+
+export interface SessionPackage {
+  id:              string;
+  patientId:       string;
+  packageSize:     number;   // 6, 12, or 24
+  pricePerSession: number;
+  totalAmount:     number;
+  paidAmount:      number;
+  startDate:       string;
+  sessionsUsed:    number;
+  active:          boolean;
+  notes:           string;
+  createdAt:       Timestamp | null;
+}
+
+function docToPackage(id: string, data: Record<string, unknown>): SessionPackage {
+  return {
+    id,
+    patientId:       (data.patientId       as string)           ?? "",
+    packageSize:     (data.packageSize     as number)           ?? 6,
+    pricePerSession: (data.pricePerSession as number)           ?? 0,
+    totalAmount:     (data.totalAmount     as number)           ?? 0,
+    paidAmount:      (data.paidAmount      as number)           ?? 0,
+    startDate:       (data.startDate       as string)           ?? "",
+    sessionsUsed:    (data.sessionsUsed    as number)           ?? 0,
+    active:          (data.active          as boolean)          ?? true,
+    notes:           (data.notes           as string)           ?? "",
+    createdAt:       (data.createdAt       as Timestamp | null) ?? null,
+  };
+}
+
+export function subscribeToPatientPackages(
+  patientId: string,
+  onData:    (packages: SessionPackage[]) => void,
+  onError?:  (err: Error) => void
+): () => void {
+  const q = query(
+    collection(db, "patientPackages"),
+    where("patientId", "==", patientId),
+    orderBy("createdAt", "desc")
+  );
+  return onSnapshot(
+    q,
+    (snap) => onData(snap.docs.map((d) => docToPackage(d.id, d.data()))),
+    (err)  => onError?.(err)
+  );
+}
+
+export async function addSessionPackage(
+  pkg: Omit<SessionPackage, "id" | "createdAt">
+): Promise<{ id: string; error?: never } | { id?: never; error: string }> {
+  try {
+    const ref = await addDoc(collection(db, "patientPackages"), {
+      ...pkg,
+      createdAt: serverTimestamp(),
+    });
+    return { id: ref.id };
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+export async function updateSessionPackage(
+  pkgId:   string,
+  updates: Partial<Omit<SessionPackage, "id" | "createdAt">>
+): Promise<{ error?: string }> {
+  try {
+    await updateDoc(doc(db, "patientPackages", pkgId), {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    });
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+export async function deleteSessionPackage(
+  pkgId: string
+): Promise<{ error?: string }> {
+  try {
+    await deleteDoc(doc(db, "patientPackages", pkgId));
     return {};
   } catch (err) {
     return { error: parseError(err) };
