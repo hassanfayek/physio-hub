@@ -30,7 +30,7 @@ export interface Appointment {
   date:         string;   // YYYY-MM-DD
   hour:         number;   // 0–23
   sessionType:  string;
-  status:       "scheduled" | "in_progress" | "completed" | "cancelled";
+  status:       "scheduled" | "in_progress" | "completed" | "cancelled" | "rescheduled";
   createdAt:    Timestamp | null;
 }
 
@@ -92,9 +92,10 @@ function docToAppointment(id: string, data: Record<string, unknown>): Appointmen
     date:        normDate,
     hour:        (data.hour        as number) ?? 0,
     sessionType: (data.sessionType as string) ?? "",
-    status:      ((data.status as string) === "completed"   ? "completed"
-                : (data.status as string) === "cancelled"   ? "cancelled"
-                : (data.status as string) === "in_progress" ? "in_progress"
+    status:      ((data.status as string) === "completed"    ? "completed"
+                : (data.status as string) === "cancelled"    ? "cancelled"
+                : (data.status as string) === "in_progress"  ? "in_progress"
+                : (data.status as string) === "rescheduled"  ? "rescheduled"
                 : "scheduled") as Appointment["status"],
     createdAt:   (data.createdAt   as Timestamp | null) ?? null,
   };

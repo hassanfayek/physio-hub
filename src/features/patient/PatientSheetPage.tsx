@@ -671,7 +671,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
 
   const handleUpdateStatus = async (
     apptId: string,
-    status: "completed" | "cancelled" | "scheduled"
+    status: "completed" | "cancelled" | "scheduled" | "in_progress" | "rescheduled"
   ) => {
     setUpdatingStatusId(apptId);
     await updateAppointmentStatus(apptId, status);
@@ -1452,21 +1452,29 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
           font-size: 11.5px; font-weight: 600;
           padding: 3px 10px; border-radius: 100px; white-space: nowrap;
         }
-        .ps-sh-status.completed { background: #d8f3dc; color: #1b4332; }
-        .ps-sh-status.cancelled { background: #fee2e2; color: #991b1b; }
-        .ps-sh-status.scheduled { background: #D6EEF8; color: #0C3C60; }
-        .ps-sh-btn-row { display: flex; gap: 5px; }
-        .ps-sh-btn {
+        .ps-sh-status.completed   { background: #d8f3dc; color: #1b4332; }
+        .ps-sh-status.cancelled   { background: #fee2e2; color: #991b1b; }
+        .ps-sh-status.scheduled   { background: #D6EEF8; color: #0C3C60; }
+        .ps-sh-status.in_progress { background: #fef3c7; color: #92400e; }
+        .ps-sh-status.rescheduled { background: #ede9fe; color: #4c1d95; }
+        .ps-sh-status-select {
           font-family: 'Outfit', sans-serif;
-          font-size: 11px; font-weight: 600;
-          padding: 4px 10px; border-radius: 7px;
-          border: 1.5px solid; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+          font-size: 12px; font-weight: 500;
+          padding: 5px 28px 5px 10px; border-radius: 8px;
+          border: 1.5px solid #e5e0d8; background: #fafaf8;
+          color: #1a1a1a; cursor: pointer; outline: none;
+          appearance: none; min-height: 30px;
+          background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a9590' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat; background-position: right 8px center;
+          transition: border-color 0.15s;
         }
-        .ps-sh-btn.complete { border-color: #b7e4c7; color: #1b4332; background: #f0fdf4; }
-        .ps-sh-btn.complete:hover { background: #d8f3dc; }
-        .ps-sh-btn.cancel   { border-color: #fca5a5; color: #991b1b; background: #fff5f5; }
-        .ps-sh-btn.cancel:hover   { background: #fee2e2; }
-        .ps-sh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .ps-sh-status-select:hover:not(:disabled) { border-color: #2E8BC0; }
+        .ps-sh-status-select:focus { border-color: #2E8BC0; box-shadow: 0 0 0 3px rgba(46,139,192,0.1); }
+        .ps-sh-status-select:disabled { opacity: 0.5; cursor: not-allowed; }
+        .ps-sh-status-select.completed   { border-color: #b7e4c7; background-color: #f0fdf4; color: #1b4332; }
+        .ps-sh-status-select.cancelled   { border-color: #fca5a5; background-color: #fff5f5; color: #991b1b; }
+        .ps-sh-status-select.rescheduled { border-color: #c4b5fd; background-color: #f5f3ff; color: #4c1d95; }
+        .ps-sh-status-select.in_progress { border-color: #fcd34d; background-color: #fffbeb; color: #92400e; }
         @media (max-width: 540px) {
           .ps-sh-table th, .ps-sh-table td { padding: 10px 10px; }
         }
@@ -2817,7 +2825,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
               <circle cx="12" cy="12" r="3"/>
             </svg>
             {isManager
-              ? "You can mark sessions as completed or cancelled."
+              ? "You can update each session's status using the dropdown."
               : "Session history is view-only."}
           </div>
 
@@ -2859,27 +2867,32 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                         <td className="ps-sh-physio-cell">{appt.physioName || "—"}</td>
                         <td>
                           <span className={`ps-sh-status ${appt.status ?? "scheduled"}`}>
-                            {appt.status === "completed" ? "✓ Completed"
-                              : appt.status === "cancelled" ? "✗ Cancelled"
+                            {appt.status === "completed"   ? "✓ Completed"
+                              : appt.status === "cancelled"   ? "✗ Cancelled"
+                              : appt.status === "rescheduled" ? "↺ Rescheduled"
+                              : appt.status === "in_progress" ? "● In Progress"
                               : "Scheduled"}
                           </span>
                         </td>
                         {isManager && (
                           <td>
-                            {appt.status !== "completed" && appt.status !== "cancelled" ? (
-                              <div className="ps-sh-btn-row">
-                                <button
-                                  className="ps-sh-btn complete"
-                                  disabled={busy}
-                                  onClick={() => handleUpdateStatus(appt.id, "completed")}
-                                >{busy ? "…" : "✓ Done"}</button>
-                                <button
-                                  className="ps-sh-btn cancel"
-                                  disabled={busy}
-                                  onClick={() => handleUpdateStatus(appt.id, "cancelled")}
-                                >{busy ? "…" : "✗ Cancel"}</button>
-                              </div>
-                            ) : "—"}
+                            <select
+                              className={`ps-sh-status-select ${appt.status ?? "scheduled"}`}
+                              value={appt.status ?? "scheduled"}
+                              disabled={busy}
+                              onChange={(e) =>
+                                handleUpdateStatus(
+                                  appt.id,
+                                  e.target.value as "completed" | "cancelled" | "scheduled" | "in_progress" | "rescheduled"
+                                )
+                              }
+                            >
+                              <option value="scheduled">Scheduled</option>
+                              <option value="in_progress">In Progress</option>
+                              <option value="completed">Completed</option>
+                              <option value="cancelled">Cancelled</option>
+                              <option value="rescheduled">Rescheduled</option>
+                            </select>
                           </td>
                         )}
                       </tr>
