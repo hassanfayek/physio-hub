@@ -10,8 +10,10 @@ import {
   type Physiotherapist,
 } from "../../services/patientService";
 import type { PhysioProfile } from "../../services/authService";
-import ExerciseProgram      from "./ExerciseProgram";
-import JointAssessmentSheet from "./JointAssessmentSheet";
+import ExerciseProgram        from "./ExerciseProgram";
+import JointAssessmentSheet  from "./JointAssessmentSheet";
+import PatientPricingSection from "./PatientPricingSection";
+import { subscribeToBillingSettings } from "../../services/priceService";
 import {
   collection, addDoc, deleteDoc, updateDoc, doc, setDoc, query, where, orderBy,
   onSnapshot, serverTimestamp, type Timestamp,
@@ -543,6 +545,17 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     return subscribeToPhysiotherapists(setPhysios);
   }, [user?.role]);
 
+  // ── Billing visibility for secretary ──────────────────────────────────────
+  const [secretaryCanViewPricing, setSecretaryCanViewPricing] = useState(true);
+  useEffect(() => {
+    const r = user?.role ?? "patient";
+    if (r !== "clinic_manager" && r !== "secretary") return;
+    return subscribeToBillingSettings(
+      (s) => setSecretaryCanViewPricing(s.secretaryCanView),
+      () => {}
+    );
+  }, [user?.role]);
+
   // ── Permission logic ───────────────────────────────────────────────────────
   const role = user?.role ?? "patient";
 
@@ -614,13 +627,20 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     { id: "session-history",   label: "Session History" },
     { id: "exercises",         label: "Exercises" },
     { id: "joint-assessment",  label: "Body Profile",     physioOnly: true },
+    { id: "pricing",           label: "Price Sheet",       billingOnly: true },
   ];
   // Filter sections by role:
   //   physioOnly  → hidden from patients
   //   managerOnly → only clinic_manager + the patient themselves can see
+  //   billingOnly → only clinic_manager; secretary only when secretaryCanView === true
   const sections = allSections.filter((sec) => {
     if (sec.physioOnly  && role === "patient")        return false;
     if (sec.managerOnly && role === "physiotherapist") return false;
+    if (sec.billingOnly) {
+      if (role === "clinic_manager") return true;
+      if (role === "secretary") return secretaryCanViewPricing;
+      return false;
+    }
     return true;
   });
 
@@ -2903,6 +2923,15 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
             </div>
           )}
         </>
+      )}
+      {/* ── PRICING ── */}
+      {activeSection === "pricing" && (role === "clinic_manager" || role === "secretary") && (
+        <PatientPricingSection
+          patientId={patientId}
+          isManager={role === "clinic_manager"}
+          isSecretary={role === "secretary"}
+          patientName={patient ? `${patient.firstName} ${patient.lastName}` : "Patient"}
+        />
       )}
       {/* ── BODY PROFILE ── */}
       {activeSection === "joint-assessment" && role !== "patient" && (
