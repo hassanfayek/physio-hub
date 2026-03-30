@@ -685,7 +685,9 @@ export default function PatientPricingSection({
                               <button className={`pps-paid-badge ${sp.paid ? "paid" : "unpaid"}`} onClick={async () => {
                                 const paid = !sp.paid;
                                 const paidDate = paid ? (sp.paidDate || new Date().toISOString().slice(0, 10)) : "";
-                                await setSessionPrice({ ...sp, paid, paidDate, id: undefined as unknown as string, createdAt: undefined as unknown as null });
+                                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                                const { id: _id, createdAt: _ca, ...spRest } = sp;
+                                await setSessionPrice({ ...spRest, paid, paidDate });
                                 showToast(paid ? "Marked as paid" : "Marked as unpaid");
                               }}>
                                 {sp.paid ? <><Check size={10} strokeWidth={3} /> Paid</> : <><X size={10} strokeWidth={3} /> Unpaid</>}
