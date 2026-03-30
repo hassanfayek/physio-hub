@@ -156,7 +156,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
   const [toastMsg,       setToastMsg]       = useState<string | null>(null);
   const [searchQuery,    setSearchQuery]    = useState("");
 
-  const canAddPatient = isManager || isSenior;
+  const canAddPatient = isManager || isSenior || isSecretary;
 
   // ── Add Patient modal state ────────────────────────────────────────────────
   const [showAddPatient, setShowAddPatient] = useState(false);

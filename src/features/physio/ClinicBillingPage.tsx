@@ -7,10 +7,10 @@ import {
   collection, query, orderBy, onSnapshot, type Timestamp,
 } from "firebase/firestore";
 import { createPortal } from "react-dom";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { db } from "../../firebase";
 import { toDateStr, getWeekStart } from "../../services/appointmentService";
-import { setSessionPrice } from "../../services/priceService";
+import { setSessionPrice, deleteSessionPrice } from "../../services/priceService";
 
 // ─── Local types (raw Firestore shapes) ──────────────────────────────────────
 
@@ -74,6 +74,16 @@ export default function ClinicBillingPage() {
   const [editSessionForm,   setEditSessionForm]   = useState({ date: "", sessionType: "", physioName: "", amount: "", paid: false, paidDate: "", notes: "" });
   const [editSessionSaving, setEditSessionSaving] = useState(false);
   const [editSessionError,  setEditSessionError]  = useState<string | null>(null);
+
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const [deletingSession,   setDeletingSession]   = useState(false);
+
+  const handleDeleteSession = async (id: string) => {
+    setDeletingSession(true);
+    await deleteSessionPrice(id);
+    setDeletingSession(false);
+    setDeletingSessionId(null);
+  };
 
   const openEditSession = (s: RawSessionPrice) => {
     setEditingSession(s);
@@ -288,6 +298,11 @@ export default function ClinicBillingPage() {
         .cb-empty { text-align: center; padding: 48px 20px; color: #c0bbb4; font-size: 14px; }
         .cb-edit-btn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 8px; border: 1.5px solid #e8e3dc; background: #fff; font-size: 12px; font-weight: 500; color: #5a5550; cursor: pointer; font-family: inherit; white-space: nowrap; }
         .cb-edit-btn:hover { border-color: #1a3a2a; color: #1a3a2a; background: #f5f3ef; }
+        .cb-del-btn { display: inline-flex; align-items: center; justify-content: center; padding: 4px 7px; border-radius: 8px; border: 1.5px solid #fecaca; background: #fff; color: #b91c1c; cursor: pointer; }
+        .cb-del-btn:hover { background: #fef2f2; }
+        .cb-del-confirm-btn { padding: 4px 10px; border-radius: 8px; border: none; background: #b91c1c; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; }
+        .cb-del-confirm-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .cb-del-cancel-btn { padding: 4px 10px; border-radius: 8px; border: 1.5px solid #e8e3dc; background: #fff; font-size: 12px; color: #5a5550; cursor: pointer; font-family: inherit; white-space: nowrap; }
 
         /* Package cards */
         .cb-pkg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
@@ -552,7 +567,19 @@ export default function ClinicBillingPage() {
                           <td><span className={`cb-paid-pill ${s.paid ? "paid" : "unpaid"}`}>{s.paid ? "✓ Paid" : "Unpaid"}</span></td>
                           <td>{s.packageId ? <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 100, background: "#ede9fe", color: "#4c1d95" }}>Pkg</span> : <span style={{ color: "#c0bbb4" }}>—</span>}</td>
                           <td style={{ color: "#9a9590", fontSize: 12 }}>{s.notes || "—"}</td>
-                          <td><button className="cb-edit-btn" onClick={() => openEditSession(s)}><Pencil size={12} strokeWidth={2} /> Edit</button></td>
+                          <td>
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <button className="cb-edit-btn" onClick={() => openEditSession(s)}><Pencil size={12} strokeWidth={2} /> Edit</button>
+                              {deletingSessionId === s.id ? (
+                                <>
+                                  <button className="cb-del-confirm-btn" disabled={deletingSession} onClick={() => handleDeleteSession(s.id)}>{deletingSession ? "…" : "Confirm"}</button>
+                                  <button className="cb-del-cancel-btn" onClick={() => setDeletingSessionId(null)}>Cancel</button>
+                                </>
+                              ) : (
+                                <button className="cb-del-btn" onClick={() => setDeletingSessionId(s.id)}><Trash2 size={12} strokeWidth={2} /></button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
