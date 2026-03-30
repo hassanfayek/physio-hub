@@ -86,7 +86,7 @@ export default function PatientPricingSection({
 
   // ── Session price form ──────────────────────────────────────────────────────
   const [sessionPriceAppt,   setSessionPriceAppt]   = useState<Appointment | null>(null);
-  const [sessionPriceForm,   setSessionPriceForm]   = useState({ amount: "", discountType: "none" as "none" | "pct" | "fixed", discountValue: "", paid: false, paidDate: "", packageId: "", notes: "" });
+  const [sessionPriceForm,   setSessionPriceForm]   = useState({ amount: "", discountType: "none" as "none" | "pct" | "fixed", discountValue: "", paid: false, paidDate: "", packageId: "", notes: "", sessionType: "", physioName: "" });
   const [sessionPriceSaving, setSessionPriceSaving] = useState(false);
   const [sessionPriceError,  setSessionPriceError]  = useState<string | null>(null);
   const [deletingSpId,       setDeletingSpId]       = useState<string | null>(null);
@@ -218,6 +218,8 @@ export default function PatientPricingSection({
       paidDate:      existing?.paidDate ?? "",
       packageId:     existing?.packageId ?? "",
       notes:         existing?.notes ?? "",
+      sessionType:   existing?.sessionType ?? appt.sessionType ?? "",
+      physioName:    existing?.physioName  ?? appt.physioName  ?? "",
     });
     setSessionPriceAppt(appt);
     setSessionPriceError(null);
@@ -236,8 +238,8 @@ export default function PatientPricingSection({
       patientId,
       appointmentId: sessionPriceAppt.id,
       date:        sessionPriceAppt.date,
-      sessionType: sessionPriceAppt.sessionType,
-      physioName:  sessionPriceAppt.physioName,
+      sessionType: sessionPriceForm.sessionType || sessionPriceAppt.sessionType,
+      physioName:  sessionPriceForm.physioName  || sessionPriceAppt.physioName,
       amount:      finalAmount,
       paid:        sessionPriceForm.paid,
       paidDate:    sessionPriceForm.paid ? (sessionPriceForm.paidDate || sessionPriceAppt.date) : "",
@@ -946,7 +948,17 @@ export default function PatientPricingSection({
         <div className="pps-overlay" onClick={(e) => { if (e.target === e.currentTarget && !sessionPriceSaving) setSessionPriceAppt(null); }}>
           <div className="pps-modal" onClick={(e) => e.stopPropagation()}>
             <div className="pps-modal-title">Session Price</div>
-            <div className="pps-modal-sub">{sessionPriceAppt.date} · {fmtHour12(sessionPriceAppt.hour)} · {sessionPriceAppt.sessionType || "Session"}</div>
+            <div className="pps-modal-sub">{sessionPriceAppt.date} · {fmtHour12(sessionPriceAppt.hour)}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+              <div className="pps-field" style={{ marginBottom: 0 }}>
+                <label className="pps-label">Session Type</label>
+                <input className="pps-input" type="text" placeholder="e.g. Physiotherapy" value={sessionPriceForm.sessionType} onChange={(e) => setSessionPriceForm({ ...sessionPriceForm, sessionType: e.target.value })} />
+              </div>
+              <div className="pps-field" style={{ marginBottom: 0 }}>
+                <label className="pps-label">Physiotherapist</label>
+                <input className="pps-input" type="text" placeholder="Name" value={sessionPriceForm.physioName} onChange={(e) => setSessionPriceForm({ ...sessionPriceForm, physioName: e.target.value })} />
+              </div>
+            </div>
             <div className="pps-field">
               <label className="pps-label">Amount Charged</label>
               <input className="pps-input" type="number" min="0" step="0.01" placeholder="0.00" value={sessionPriceForm.amount} onChange={(e) => setSessionPriceForm({ ...sessionPriceForm, amount: e.target.value })} />
