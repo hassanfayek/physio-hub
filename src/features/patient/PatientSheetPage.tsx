@@ -346,9 +346,11 @@ export interface PatientSheetPageProps {
   /** Optional callback so a host component can render a back button or
    *  handle back-navigation without this component knowing about it. */
   onBack?: () => void;
+  /** Jump directly to a specific section on mount (e.g. "session-history") */
+  initialSection?: string;
 }
 
-export default function PatientSheetPage({ patientId: patientIdProp }: PatientSheetPageProps = {}) {
+export default function PatientSheetPage({ patientId: patientIdProp, initialSection }: PatientSheetPageProps = {}) {
   const { user } = useAuth();
 
   // Patient ID resolution:
@@ -591,7 +593,7 @@ export default function PatientSheetPage({ patientId: patientIdProp }: PatientSh
   const [extSaved,      setExtSaved]     = useState(false);
 
   // ── Local UI state (unchanged) ─────────────────────────────────────────────
-  const [activeSection, setActiveSection] = useState<string>("diagnosis");
+  const [activeSection, setActiveSection] = useState<string>(initialSection ?? "diagnosis");
   const [previewDoc,    setPreviewDoc]    = useState<PatientDocument | null>(null);
 
   // ── Live documents state ──────────────────────────────────────────────────

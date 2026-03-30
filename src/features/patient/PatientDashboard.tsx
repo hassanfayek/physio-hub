@@ -9,7 +9,7 @@ import AppointmentsPage from "./AppointmentsPage";
 import PatientSheetPage from "./PatientSheetPage";
 import FeedbackPage from "./FeedbackPage";
 import logo from "../../assets/physio-logo.svg";
-import { Home, Dumbbell, CalendarDays, FileText, MessageSquare, Menu, ChevronRight, LogOut, ChevronLeft } from "lucide-react";
+import { Home, Dumbbell, CalendarDays, FileText, MessageSquare, Menu, ChevronRight, LogOut, ChevronLeft, History } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
 
 type Tab = "home" | "exercises" | "appointments" | "sheet" | "feedback";
@@ -48,8 +48,9 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; desc: string }[] = 
 ];
 
 export default function PatientDashboard() {
-  const [activeTab,   setActiveTab]   = useState<Tab>("home");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeTab,    setActiveTab]    = useState<Tab>("home");
+  const [sidebarOpen,  setSidebarOpen]  = useState(false);
+  const [sheetSection, setSheetSection] = useState<string | undefined>(undefined);
   const navigate = useNavigate();
   const { lang, toggleLang, t } = useLang();
 
@@ -435,7 +436,7 @@ export default function PatientDashboard() {
                 <div
                   key={tab.id}
                   className={`pd2-nav-item ${activeTab === tab.id ? "active" : ""}`}
-                  onClick={() => { setActiveTab(tab.id); setSidebarOpen(false); }}
+                  onClick={() => { setActiveTab(tab.id); setSheetSection(undefined); setSidebarOpen(false); }}
                 >
                   <div className="pd2-nav-icon">{tab.icon}</div>
                   <div className="pd2-nav-text">
@@ -449,7 +450,29 @@ export default function PatientDashboard() {
               ))}
             </div>
 
-
+            {/* Quick Links */}
+            <div className="pd2-nav-section">
+              <div className="pd2-nav-label">Quick Access</div>
+              <div
+                className={`pd2-nav-item ${activeTab === "sheet" && sheetSection === "session-history" ? "active" : ""}`}
+                onClick={() => {
+                  setSheetSection("session-history");
+                  setActiveTab("sheet");
+                  setSidebarOpen(false);
+                }}
+              >
+                <div className="pd2-nav-icon">
+                  <History size={20} strokeWidth={1.8} color="white" />
+                </div>
+                <div className="pd2-nav-text">
+                  <div className="pd2-nav-title">Session History</div>
+                  <div className="pd2-nav-desc">Past sessions</div>
+                </div>
+                <div className="pd2-nav-arrow">
+                  <ChevronRight size={14} strokeWidth={2} color="white" />
+                </div>
+              </div>
+            </div>
 
             {/* Sign out */}
             <div className="pd2-sidebar-signout">
@@ -472,7 +495,7 @@ export default function PatientDashboard() {
               {activeTab === "home"         && <PatientHomePage onNavigate={(tab: string) => setActiveTab(tab as Tab)} />}
               {activeTab === "exercises"    && <ExercisesPage />}
               {activeTab === "appointments" && <AppointmentsPage />}
-              {activeTab === "sheet"        && <PatientSheetPage />}
+              {activeTab === "sheet"        && <PatientSheetPage key={sheetSection ?? "sheet"} initialSection={sheetSection} />}
               {activeTab === "feedback"     && <FeedbackPage />}
             </div>
           </main>
