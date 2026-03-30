@@ -6,8 +6,11 @@ import { useState, useEffect, useMemo } from "react";
 import {
   collection, query, orderBy, onSnapshot, type Timestamp,
 } from "firebase/firestore";
+import { createPortal } from "react-dom";
+import { Pencil } from "lucide-react";
 import { db } from "../../firebase";
 import { toDateStr, getWeekStart } from "../../services/appointmentService";
+import { setSessionPrice } from "../../services/priceService";
 
 // ─── Local types (raw Firestore shapes) ──────────────────────────────────────
 
@@ -65,6 +68,39 @@ export default function ClinicBillingPage() {
 
   // ── Active section detail ───────────────────────────────────────────────
   const [activeSection, setActiveSection] = useState<"overview" | "entries" | "sessions" | "packages">("overview");
+
+  // ── Session charge edit modal ────────────────────────────────────────────
+  const [editingSession,    setEditingSession]    = useState<RawSessionPrice | null>(null);
+  const [editSessionForm,   setEditSessionForm]   = useState({ date: "", sessionType: "", physioName: "", amount: "", paid: false, paidDate: "", notes: "" });
+  const [editSessionSaving, setEditSessionSaving] = useState(false);
+  const [editSessionError,  setEditSessionError]  = useState<string | null>(null);
+
+  const openEditSession = (s: RawSessionPrice) => {
+    setEditingSession(s);
+    setEditSessionForm({ date: s.date, sessionType: s.sessionType, physioName: s.physioName, amount: String(s.amount), paid: s.paid, paidDate: s.paidDate, notes: s.notes });
+    setEditSessionError(null);
+  };
+
+  const handleSaveEditSession = async () => {
+    if (!editingSession) return;
+    const amount = parseFloat(editSessionForm.amount);
+    if (isNaN(amount) || amount < 0) { setEditSessionError("Enter a valid amount."); return; }
+    setEditSessionSaving(true); setEditSessionError(null);
+    const { id: _id, createdAt: _ca, ...rest } = editingSession;
+    const result = await setSessionPrice({
+      ...rest,
+      date:        editSessionForm.date,
+      sessionType: editSessionForm.sessionType,
+      physioName:  editSessionForm.physioName,
+      amount,
+      paid:        editSessionForm.paid,
+      paidDate:    editSessionForm.paid ? (editSessionForm.paidDate || editSessionForm.date) : "",
+      notes:       editSessionForm.notes,
+    });
+    setEditSessionSaving(false);
+    if ("error" in result && result.error) { setEditSessionError(result.error); return; }
+    setEditingSession(null);
+  };
 
   useEffect(() => {
     let done = 0;
@@ -250,6 +286,8 @@ export default function ClinicBillingPage() {
         .cb-paid-pill.paid   { background: #d8f3dc; color: #1b4332; }
         .cb-paid-pill.unpaid { background: #fee2e2; color: #991b1b; }
         .cb-empty { text-align: center; padding: 48px 20px; color: #c0bbb4; font-size: 14px; }
+        .cb-edit-btn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 8px; border: 1.5px solid #e8e3dc; background: #fff; font-size: 12px; font-weight: 500; color: #5a5550; cursor: pointer; font-family: inherit; white-space: nowrap; }
+        .cb-edit-btn:hover { border-color: #1a3a2a; color: #1a3a2a; background: #f5f3ef; }
 
         /* Package cards */
         .cb-pkg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
@@ -502,7 +540,7 @@ export default function ClinicBillingPage() {
                 <div className="cb-table-wrap">
                   <table className="cb-table">
                     <thead>
-                      <tr><th>Date</th><th>Session Type</th><th>Physiotherapist</th><th>Amount</th><th>Status</th><th>Package</th><th>Notes</th></tr>
+                      <tr><th>Date</th><th>Session Type</th><th>Physiotherapist</th><th>Amount</th><th>Status</th><th>Package</th><th>Notes</th><th></th></tr>
                     </thead>
                     <tbody>
                       {filteredSessions.map((s) => (
@@ -514,6 +552,7 @@ export default function ClinicBillingPage() {
                           <td><span className={`cb-paid-pill ${s.paid ? "paid" : "unpaid"}`}>{s.paid ? "✓ Paid" : "Unpaid"}</span></td>
                           <td>{s.packageId ? <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 100, background: "#ede9fe", color: "#4c1d95" }}>Pkg</span> : <span style={{ color: "#c0bbb4" }}>—</span>}</td>
                           <td style={{ color: "#9a9590", fontSize: 12 }}>{s.notes || "—"}</td>
+                          <td><button className="cb-edit-btn" onClick={() => openEditSession(s)}><Pencil size={12} strokeWidth={2} /> Edit</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -565,6 +604,67 @@ export default function ClinicBillingPage() {
           </>
         )}
       </div>
+
+      {/* ── Session Charge Edit Modal ── */}
+      {editingSession && createPortal(
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={(e) => { if (e.target === e.currentTarget && !editSessionSaving) setEditingSession(null); }}>
+          <div style={{ background: "#fff", borderRadius: 18, padding: "28px 28px 22px", width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", fontFamily: "'Outfit',sans-serif" }}
+            onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4, color: "#1a1a1a" }}>Edit Session Charge</div>
+            <div style={{ fontSize: 13, color: "#9a9590", marginBottom: 20 }}>{editingSession.date}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "#5a5550", display: "block", marginBottom: 5 }}>Session Type</label>
+                <input style={{ width: "100%", padding: "9px 12px", borderRadius: 10, border: "1.5px solid #e8e3dc", fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+                  value={editSessionForm.sessionType} onChange={(e) => setEditSessionForm({ ...editSessionForm, sessionType: e.target.value })} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "#5a5550", display: "block", marginBottom: 5 }}>Physiotherapist</label>
+                <input style={{ width: "100%", padding: "9px 12px", borderRadius: 10, border: "1.5px solid #e8e3dc", fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+                  value={editSessionForm.physioName} onChange={(e) => setEditSessionForm({ ...editSessionForm, physioName: e.target.value })} />
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "#5a5550", display: "block", marginBottom: 5 }}>Date</label>
+                <input type="date" style={{ width: "100%", padding: "9px 12px", borderRadius: 10, border: "1.5px solid #e8e3dc", fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+                  value={editSessionForm.date} onChange={(e) => setEditSessionForm({ ...editSessionForm, date: e.target.value })} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "#5a5550", display: "block", marginBottom: 5 }}>Amount</label>
+                <input type="number" min="0" step="0.01" style={{ width: "100%", padding: "9px 12px", borderRadius: 10, border: "1.5px solid #e8e3dc", fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+                  value={editSessionForm.amount} onChange={(e) => setEditSessionForm({ ...editSessionForm, amount: e.target.value })} />
+              </div>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 500, color: "#5a5550", display: "block", marginBottom: 5 }}>Notes</label>
+              <input style={{ width: "100%", padding: "9px 12px", borderRadius: 10, border: "1.5px solid #e8e3dc", fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+                value={editSessionForm.notes} onChange={(e) => setEditSessionForm({ ...editSessionForm, notes: e.target.value })} />
+            </div>
+            <div style={{ marginBottom: 14, display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
+              onClick={() => setEditSessionForm({ ...editSessionForm, paid: !editSessionForm.paid, paidDate: !editSessionForm.paid ? (editSessionForm.paidDate || new Date().toISOString().slice(0,10)) : "" })}>
+              <input type="checkbox" checked={editSessionForm.paid} readOnly style={{ width: 16, height: 16, cursor: "pointer" }} />
+              <span style={{ fontSize: 14, color: "#1a1a1a" }}>Mark as Paid</span>
+            </div>
+            {editSessionForm.paid && (
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "#5a5550", display: "block", marginBottom: 5 }}>Paid On</label>
+                <input type="date" style={{ width: "100%", padding: "9px 12px", borderRadius: 10, border: "1.5px solid #e8e3dc", fontSize: 14, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+                  value={editSessionForm.paidDate} onChange={(e) => setEditSessionForm({ ...editSessionForm, paidDate: e.target.value })} />
+              </div>
+            )}
+            {editSessionError && <div style={{ background: "#fef2f2", color: "#b91c1c", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 14 }}>{editSessionError}</div>}
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button style={{ padding: "9px 20px", borderRadius: 10, border: "1.5px solid #e8e3dc", background: "transparent", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}
+                onClick={() => setEditingSession(null)}>Cancel</button>
+              <button style={{ padding: "9px 20px", borderRadius: 10, border: "none", background: "#1a3a2a", color: "#fff", fontSize: 14, fontWeight: 600, cursor: editSessionSaving ? "not-allowed" : "pointer", opacity: editSessionSaving ? 0.7 : 1, fontFamily: "inherit" }}
+                disabled={editSessionSaving} onClick={handleSaveEditSession}>{editSessionSaving ? "Saving…" : "Save Changes"}</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }
