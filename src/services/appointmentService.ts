@@ -418,6 +418,20 @@ export async function updateAppointmentStatus(
   }
 }
 
+// ─── Update appointment session type ─────────────────────────────────────────
+
+export async function updateAppointmentSessionType(
+  appointmentId: string,
+  sessionType: string
+): Promise<{ error?: string }> {
+  try {
+    await updateDoc(doc(db, "appointments", appointmentId), { sessionType });
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
 // ─── Realtime: all appointments for a patient (no date filter, sorted desc) ──
 
 export function subscribeToPatientAllAppointments(

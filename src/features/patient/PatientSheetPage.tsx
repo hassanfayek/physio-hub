@@ -21,6 +21,7 @@ import {
 import {
   subscribeToPatientAllAppointments,
   updateAppointmentStatus,
+  updateAppointmentSessionType,
   fmtHour12,
   type Appointment as ApptRecord,
 } from "../../services/appointmentService";
@@ -679,6 +680,8 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
   // ── Session history (from appointments collection) ────────────────────────
   const [sessionHistory,     setSessionHistory]     = useState<ApptRecord[]>([]);
   const [updatingStatusId,   setUpdatingStatusId]   = useState<string | null>(null);
+  const [editingTypeId,      setEditingTypeId]      = useState<string | null>(null);
+  const [editingTypeValue,   setEditingTypeValue]   = useState("");
 
   useEffect(() => {
     if (!patientId) return;
@@ -688,6 +691,11 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       () => {}
     );
   }, [patientId]);
+
+  const handleSaveSessionType = async (apptId: string) => {
+    await updateAppointmentSessionType(apptId, editingTypeValue.trim());
+    setEditingTypeId(null);
+  };
 
   const handleUpdateStatus = async (
     apptId: string,
@@ -1465,6 +1473,12 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         .ps-sh-date-main { font-weight: 600; color: #1a1a1a; }
         .ps-sh-date-sub  { font-size: 11.5px; color: #9a9590; margin-top: 1px; }
         .ps-sh-type-cell { font-weight: 500; color: #1a1a1a; }
+        .ps-sh-type-edit-btn { display: inline-flex; align-items: center; justify-content: center; padding: 2px 5px; border-radius: 6px; border: 1.5px solid #e8e3dc; background: transparent; color: #9a9590; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+        tr:hover .ps-sh-type-edit-btn { opacity: 1; }
+        .ps-sh-type-edit-btn:hover { border-color: #1a3a2a; color: #1a3a2a; background: #f5f3ef; }
+        .ps-sh-type-input { padding: 4px 8px; border-radius: 7px; border: 1.5px solid #2E8BC0; font-size: 13px; font-family: inherit; outline: none; width: 130px; }
+        .ps-sh-type-save { padding: 3px 8px; border-radius: 7px; border: none; background: #1a3a2a; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .ps-sh-type-cancel { padding: 3px 8px; border-radius: 7px; border: 1.5px solid #e8e3dc; background: #fff; font-size: 12px; color: #5a5550; cursor: pointer; }
         .ps-sh-physio-cell { color: #5a5550; }
         .ps-sh-time-cell { color: #5a5550; white-space: nowrap; }
         .ps-sh-status {
@@ -2883,7 +2897,33 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                           <div className="ps-sh-date-main">{dateStr}</div>
                         </td>
                         <td className="ps-sh-time-cell">{fmtHour12(appt.hour)}</td>
-                        <td className="ps-sh-type-cell">{appt.sessionType || "—"}</td>
+                        <td className="ps-sh-type-cell">
+                          {isManager && editingTypeId === appt.id ? (
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <input
+                                className="ps-sh-type-input"
+                                autoFocus
+                                value={editingTypeValue}
+                                onChange={(e) => setEditingTypeValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleSaveSessionType(appt.id);
+                                  if (e.key === "Escape") setEditingTypeId(null);
+                                }}
+                              />
+                              <button className="ps-sh-type-save" onClick={() => handleSaveSessionType(appt.id)}>✓</button>
+                              <button className="ps-sh-type-cancel" onClick={() => setEditingTypeId(null)}>✕</button>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span>{appt.sessionType || "—"}</span>
+                              {isManager && (
+                                <button className="ps-sh-type-edit-btn" onClick={() => { setEditingTypeId(appt.id); setEditingTypeValue(appt.sessionType || ""); }}>
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
                         <td className="ps-sh-physio-cell">{appt.physioName || "—"}</td>
                         <td>
                           <span className={`ps-sh-status ${appt.status ?? "scheduled"}`}>
