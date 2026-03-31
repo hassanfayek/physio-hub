@@ -127,13 +127,13 @@ service cloud.firestore {
     }
 
     match /patientSessionPrices/{docId} {
-      allow read:          if isManager() || isSecretary();
+      allow read:          if isManager() || isSecretary() || isPhysio();
       allow write:         if isManager() || isSecretary();
     }
 
     match /patientPackages/{docId} {
-      allow read:          if isManager() || isSecretary();
-      allow write:         if isManager() || isSecretary();
+      allow read:          if isManager() || isSecretary() || isPhysio();
+      allow write:         if isManager() || isSecretary() || isPhysio();
     }
 
     // ── Daily Check-ins ───────────────────────────────────────────────────────

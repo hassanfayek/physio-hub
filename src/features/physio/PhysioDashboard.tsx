@@ -1119,6 +1119,7 @@ export default function PhysioDashboard() {
                     lastName={physio.lastName}
                     isManager={isManager}
                     isSecretary={isSecretary}
+                    onViewPatient={(id) => setViewingPatientId(id)}
                   />
                 )}
                 {activeTab === "team"      && isManager && <TeamTab />}

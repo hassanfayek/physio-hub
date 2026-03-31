@@ -22,13 +22,14 @@ import { updateSessionPackage } from "../../services/priceService";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface DayViewProps {
-  date:          string;  // "YYYY-MM-DD"
-  settings:      ClinicSettings;
-  patients:      Patient[];
-  physios:       Physiotherapist[];
-  currentPhysio: { uid: string; firstName: string; lastName: string };
-  isManager:     boolean;
-  onBack?:       () => void;
+  date:            string;  // "YYYY-MM-DD"
+  settings:        ClinicSettings;
+  patients:        Patient[];
+  physios:         Physiotherapist[];
+  currentPhysio:   { uid: string; firstName: string; lastName: string };
+  isManager:       boolean;
+  onBack?:         () => void;
+  onViewPatient?:  (patientId: string) => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ export default function DayView({
   currentPhysio,
   isManager,
   onBack,
+  onViewPatient,
 }: DayViewProps) {
   const [appointments,  setAppointments]  = useState<Appointment[]>([]);
   const [loading,       setLoading]       = useState(true);
@@ -294,6 +296,8 @@ export default function DayView({
           font-size: 11px; font-weight: 600;
         }
         .dv-appt-patient { font-size: 13.5px; font-weight: 500; color: #1a1a1a; }
+        .dv-appt-patient-link { cursor: pointer; color: #2E8BC0; text-decoration: underline; text-underline-offset: 2px; }
+        .dv-appt-patient-link:hover { color: #0C3C60; }
         .dv-appt-physio  { font-size: 12px; color: #9a9590; }
         .dv-appt-session { font-size: 11px; color: #5BC0BE; font-weight: 500; margin-top: 1px; }
         .dv-appt-del {
@@ -527,7 +531,11 @@ export default function DayView({
                                   {initials}
                                 </div>
                                 <div>
-                                  <div className="dv-appt-patient">{a.patientName || "Walk-in"}</div>
+                                  {onViewPatient && a.patientId ? (
+                                    <div className="dv-appt-patient dv-appt-patient-link" onClick={() => onViewPatient(a.patientId)}>{a.patientName || "Walk-in"}</div>
+                                  ) : (
+                                    <div className="dv-appt-patient">{a.patientName || "Walk-in"}</div>
+                                  )}
                                   {a.patientPhone && (
                                     <div className="dv-appt-physio" style={{ color: "#5BC0BE" }}>{a.patientPhone}</div>
                                   )}
