@@ -31,6 +31,7 @@ import type { PatientProfile } from "../../services/authService";
 import { collection, query, where, onSnapshot as fsOnSnapshot } from "firebase/firestore";
 import { db } from "../../firebase";
 import { Check, Clock } from "lucide-react";
+import { subscribeToPatientPackages, subscribeToSessionPrices, type SessionPackage } from "../../services/priceService";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -126,6 +127,10 @@ export default function AppointmentsPage() {
   const [cancelling,        setCancelling]        = useState(false);
   const [cancelError,       setCancelError]       = useState<string | null>(null);
 
+  // ── Package exhaustion check ───────────────────────────────────────────────
+  const [packages,          setPackages]          = useState<SessionPackage[]>([]);
+  const [packagedSessionIds, setPackagedSessionIds] = useState<Set<string>>(new Set());
+
   // ── Load clinic settings (realtime) ──────────────────────────────────────
   useEffect(() => subscribeToClinicSettings(setClinicSettings), []);
 
@@ -192,6 +197,19 @@ export default function AppointmentsPage() {
     );
   }, [patient?.uid]);
 
+  // ── Subscribe to packages + session prices for exhaustion check ─────────
+  useEffect(() => {
+    if (!patient?.uid) return;
+    return subscribeToPatientPackages(patient.uid, setPackages);
+  }, [patient?.uid]);
+
+  useEffect(() => {
+    if (!patient?.uid) return;
+    return subscribeToSessionPrices(patient.uid, (prices) => {
+      setPackagedSessionIds(new Set(prices.filter((p) => p.packageId).map((p) => p.appointmentId)));
+    });
+  }, [patient?.uid]);
+
   // ── Live clock — re-filters upcoming list every minute ───────────────────
   const [currentHour, setCurrentHour] = useState(new Date().getHours());
   useEffect(() => {
@@ -215,6 +233,21 @@ export default function AppointmentsPage() {
       available: (slotCounts[h] ?? 0) < clinicSettings.maxPatientsPerHour,
     });
   }
+
+  // ── Package exhaustion: find active package where sessionsUsed >= packageSize ─
+  // sessionsUsed is incremented when a session price is linked to the package.
+  // We also count upcoming (scheduled/in_progress) appointments already linked
+  // to this package to prevent booking beyond the limit.
+  const exhaustedPackage: SessionPackage | null = (() => {
+    const active = packages.filter((p) => p.active);
+    if (!active.length) return null;
+    // Count upcoming appointments that consume from a package
+    const upcomingPackaged = upcoming.filter((a) => packagedSessionIds.has(a.id)).length;
+    for (const pkg of active) {
+      if (pkg.sessionsUsed + upcomingPackaged >= pkg.packageSize) return pkg;
+    }
+    return null;
+  })();
 
   // ── Book appointment ──────────────────────────────────────────────────────
   const handleBook = async () => {
@@ -351,6 +384,12 @@ export default function AppointmentsPage() {
           background: #fff5f3; border: 1px solid #fecaca;
           border-radius: 10px; padding: 12px 14px;
           font-size: 13px; color: #b91c1c; margin-bottom: 12px;
+        }
+        .ap-pkg-exhausted {
+          display: flex; align-items: flex-start; gap: 8px;
+          background: #fefce8; border: 1px solid #fde68a;
+          border-radius: 10px; padding: 12px 14px;
+          font-size: 13px; color: #92400e; margin-bottom: 12px; line-height: 1.5;
         }
 
         .ap-select {
@@ -563,7 +602,16 @@ export default function AppointmentsPage() {
 
         {bookError && <div className="ap-book-error">{bookError}</div>}
 
-        <button className="ap-book-btn" disabled={selectedSlot === null || booking || !selectedPhysio || physios.length === 0} onClick={handleBook}>
+        {exhaustedPackage && (
+          <div className="ap-pkg-exhausted">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            Your {exhaustedPackage.packageSize}-session package is fully used ({exhaustedPackage.sessionsUsed}/{exhaustedPackage.packageSize} sessions). Please contact the clinic to renew or add a new package.
+          </div>
+        )}
+
+        <button className="ap-book-btn" disabled={selectedSlot === null || booking || !selectedPhysio || physios.length === 0 || !!exhaustedPackage} onClick={handleBook}>
           {booking
             ? "Booking…"
             : selectedSlot !== null
