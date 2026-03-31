@@ -94,7 +94,7 @@ export default function PatientPricingSection({
   const [deletingSp,         setDeletingSp]         = useState(false);
 
   // ── Package form ────────────────────────────────────────────────────────────
-  const EMPTY_PKG = { packageSize: 6, priceMode: "per" as "per" | "total", pricePerSession: "", totalPrice: "", discountType: "none" as "none" | "pct" | "fixed", discountValue: "", startDate: new Date().toISOString().slice(0, 10), paidAmount: "", notes: "", active: true };
+  const EMPTY_PKG = { packageSize: 6, priceMode: "per" as "per" | "total", pricePerSession: "", totalPrice: "", discountType: "none" as "none" | "pct" | "fixed", discountValue: "", startDate: new Date().toISOString().slice(0, 10), paidAmount: "", notes: "", active: true, sessionsUsed: "0" };
   const [showPkgForm,   setShowPkgForm]   = useState(false);
   const [editPkg,       setEditPkg]       = useState<SessionPackage | null>(null);
   const [pkgForm,       setPkgForm]       = useState({ ...EMPTY_PKG, packageSize: 6 as number });
@@ -295,7 +295,7 @@ export default function PatientPricingSection({
   };
 
   const openEditPkg = (pkg: SessionPackage) => {
-    setPkgForm({ packageSize: pkg.packageSize, priceMode: "per", pricePerSession: String(pkg.pricePerSession), totalPrice: String(pkg.totalAmount), discountType: "none", discountValue: "", startDate: pkg.startDate, paidAmount: String(pkg.paidAmount), notes: pkg.notes, active: pkg.active });
+    setPkgForm({ packageSize: pkg.packageSize, priceMode: "per", pricePerSession: String(pkg.pricePerSession), totalPrice: String(pkg.totalAmount), discountType: "none", discountValue: "", startDate: pkg.startDate, paidAmount: String(pkg.paidAmount), notes: pkg.notes, active: pkg.active, sessionsUsed: String(pkg.sessionsUsed) });
     setEditPkg(pkg); setPkgError(null); setShowPkgForm(true);
   };
 
@@ -313,7 +313,7 @@ export default function PatientPricingSection({
       totalAmount,
       paidAmount:      isNaN(paid) ? 0 : paid,
       startDate:       pkgForm.startDate,
-      sessionsUsed:    editPkg ? editPkg.sessionsUsed : 0,
+      sessionsUsed:    editPkg ? (parseInt(pkgForm.sessionsUsed, 10) || 0) : 0,
       active:          pkgForm.active,
       notes:           `${pkgForm.notes.trim()}${pkgForm.discountType !== "none" ? ` [Discount: ${pkgForm.discountType === "pct" ? pkgForm.discountValue + "%" : fmt(parseFloat(pkgForm.discountValue) || 0) + " off"}]` : ""}`.trim(),
     };
@@ -1134,12 +1134,28 @@ export default function PatientPricingSection({
               <input className="pps-input" type="text" placeholder="Any notes about this package..." value={pkgForm.notes} onChange={(e) => setPkgForm({ ...pkgForm, notes: e.target.value })} />
             </div>
             {editPkg && (
-              <div className="pps-field">
-                <div className="pps-checkbox-row" onClick={() => setPkgForm({ ...pkgForm, active: !pkgForm.active })}>
-                  <input type="checkbox" checked={pkgForm.active} readOnly />
-                  <label>Package is Active</label>
+              <>
+                <div className="pps-field">
+                  <label className="pps-label">Sessions Used (manually correct if needed)</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input className="pps-input" type="number" min="0" max={pkgForm.packageSize} step="1"
+                      value={pkgForm.sessionsUsed}
+                      onChange={(e) => {
+                        const v = Math.min(pkgForm.packageSize, Math.max(0, parseInt(e.target.value, 10) || 0));
+                        setPkgForm({ ...pkgForm, sessionsUsed: String(v), active: v < pkgForm.packageSize });
+                      }}
+                      style={{ maxWidth: 100 }}
+                    />
+                    <span style={{ fontSize: 13, color: "#9a9590" }}>/ {pkgForm.packageSize} sessions</span>
+                  </div>
                 </div>
-              </div>
+                <div className="pps-field">
+                  <div className="pps-checkbox-row" onClick={() => setPkgForm({ ...pkgForm, active: !pkgForm.active })}>
+                    <input type="checkbox" checked={pkgForm.active} readOnly />
+                    <label>Package is Active</label>
+                  </div>
+                </div>
+              </>
             )}
             {pkgError && <div className="pps-modal-error">{pkgError}</div>}
             <div className="pps-modal-actions">
