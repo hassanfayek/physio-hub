@@ -55,10 +55,7 @@ export default function PatientPricingSection({
   patientName,
 }: PatientPricingSectionProps) {
 
-  // ── Inner tab ───────────────────────────────────────────────────────────────
-  const [innerTab, setInnerTab] = useState<"billing" | "sessions" | "packages">("billing");
-
-  // ── Billing entries ─────────────────────────────────────────────────────────
+// ── Billing entries ─────────────────────────────────────────────────────────
   const [entries,  setEntries]  = useState<BillingEntry[]>([]);
   const [entryLoading, setEntryLoading] = useState(true);
 
