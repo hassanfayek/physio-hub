@@ -83,7 +83,8 @@ export default function DayView({
     apptId: string,
     status: Appointment["status"],
     patientName: string,
-    prevStatus?: Appointment["status"]
+    prevStatus?: Appointment["status"],
+    patientId?: string
   ) => {
     setUpdatingId(apptId);
     await updateAppointmentStatus(apptId, status);
@@ -91,21 +92,30 @@ export default function DayView({
     // Auto-sync package sessionsUsed when marking completed
     if (status === "completed" && prevStatus !== "completed") {
       try {
+        // First try: find via session price record linked to a package
+        let packageId: string | undefined;
         const spSnap = await getDocs(
           query(collection(db, "patientSessionPrices"), where("appointmentId", "==", apptId))
         );
         if (!spSnap.empty) {
-          const packageId = spSnap.docs[0].data().packageId as string | undefined;
-          if (packageId) {
-            const pkgSnap = await getDoc(doc(db, "patientPackages", packageId));
-            if (pkgSnap.exists()) {
-              const pkg = pkgSnap.data();
-              const sessionsUsed = (pkg.sessionsUsed as number) + 1;
-              await updateSessionPackage(packageId, {
-                sessionsUsed,
-                active: sessionsUsed < (pkg.packageSize as number),
-              });
-            }
+          packageId = spSnap.docs[0].data().packageId as string | undefined;
+        }
+        // Fallback: find the patient's single active package
+        if (!packageId && patientId) {
+          const pkgQ = await getDocs(
+            query(collection(db, "patientPackages"), where("patientId", "==", patientId), where("active", "==", true))
+          );
+          if (pkgQ.size === 1) packageId = pkgQ.docs[0].id;
+        }
+        if (packageId) {
+          const pkgSnap = await getDoc(doc(db, "patientPackages", packageId));
+          if (pkgSnap.exists()) {
+            const pkg = pkgSnap.data();
+            const sessionsUsed = (pkg.sessionsUsed as number) + 1;
+            await updateSessionPackage(packageId, {
+              sessionsUsed,
+              active: sessionsUsed < (pkg.packageSize as number),
+            });
           }
         }
       } catch { /* non-critical */ }
@@ -114,20 +124,27 @@ export default function DayView({
     // Auto-decrement if un-completing a previously completed session
     if (prevStatus === "completed" && status !== "completed") {
       try {
+        let packageId: string | undefined;
         const spSnap = await getDocs(
           query(collection(db, "patientSessionPrices"), where("appointmentId", "==", apptId))
         );
         if (!spSnap.empty) {
-          const packageId = spSnap.docs[0].data().packageId as string | undefined;
-          if (packageId) {
-            const pkgSnap = await getDoc(doc(db, "patientPackages", packageId));
-            if (pkgSnap.exists()) {
-              const pkg = pkgSnap.data();
-              await updateSessionPackage(packageId, {
-                sessionsUsed: Math.max(0, (pkg.sessionsUsed as number) - 1),
-                active: true,
-              });
-            }
+          packageId = spSnap.docs[0].data().packageId as string | undefined;
+        }
+        if (!packageId && patientId) {
+          const pkgQ = await getDocs(
+            query(collection(db, "patientPackages"), where("patientId", "==", patientId), where("active", "==", true))
+          );
+          if (pkgQ.size === 1) packageId = pkgQ.docs[0].id;
+        }
+        if (packageId) {
+          const pkgSnap = await getDoc(doc(db, "patientPackages", packageId));
+          if (pkgSnap.exists()) {
+            const pkg = pkgSnap.data();
+            await updateSessionPackage(packageId, {
+              sessionsUsed: Math.max(0, (pkg.sessionsUsed as number) - 1),
+              active: true,
+            });
           }
         }
       } catch { /* non-critical */ }
@@ -559,7 +576,8 @@ export default function DayView({
                                         a.id,
                                         e.target.value as Appointment["status"],
                                         a.patientName,
-                                        a.status
+                                        a.status,
+                                        a.patientId
                                       )
                                     }
                                   >

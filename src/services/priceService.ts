@@ -291,12 +291,19 @@ export function subscribeToPatientPackages(
 ): () => void {
   const q = query(
     collection(db, "patientPackages"),
-    where("patientId", "==", patientId),
-    orderBy("createdAt", "desc")
+    where("patientId", "==", patientId)
   );
   return onSnapshot(
     q,
-    (snap) => onData(snap.docs.map((d) => docToPackage(d.id, d.data()))),
+    (snap) => {
+      const pkgs = snap.docs.map((d) => docToPackage(d.id, d.data()));
+      pkgs.sort((a, b) => {
+        const ta = a.createdAt?.toMillis() ?? 0;
+        const tb = b.createdAt?.toMillis() ?? 0;
+        return tb - ta;
+      });
+      onData(pkgs);
+    },
     (err)  => onError?.(err)
   );
 }
