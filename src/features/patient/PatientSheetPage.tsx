@@ -13,10 +13,10 @@ import type { PhysioProfile } from "../../services/authService";
 import ExerciseProgram        from "./ExerciseProgram";
 import JointAssessmentSheet  from "./JointAssessmentSheet";
 import PatientPricingSection from "./PatientPricingSection";
-import { subscribeToBillingSettings } from "../../services/priceService";
+import { subscribeToBillingSettings, updateSessionPackage } from "../../services/priceService";
 import {
   collection, addDoc, deleteDoc, updateDoc, doc, setDoc, query, where, orderBy,
-  onSnapshot, serverTimestamp, type Timestamp,
+  onSnapshot, getDocs, serverTimestamp, type Timestamp,
 } from "firebase/firestore";
 import {
   subscribeToPatientAllAppointments,
@@ -697,12 +697,35 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     setEditingTypeId(null);
   };
 
+  const syncPackageForAppt = async (apptId: string, newStatus: string, prevStatus: string) => {
+    const wasCompleted = prevStatus === "completed";
+    const isCompleted  = newStatus  === "completed";
+    if (wasCompleted === isCompleted) return;
+    try {
+      const spSnap = await getDocs(query(collection(db, "patientSessionPrices"), where("appointmentId", "==", apptId)));
+      if (spSnap.empty) return;
+      const packageId = spSnap.docs[0].data().packageId as string | undefined;
+      if (!packageId) return;
+      const pkgSnap = await getDocs(query(collection(db, "patientPackages"), where("__name__", "==", packageId)));
+      if (pkgSnap.empty) return;
+      const pkg = pkgSnap.docs[0].data();
+      if (isCompleted) {
+        const sessionsUsed = (pkg.sessionsUsed as number) + 1;
+        await updateSessionPackage(packageId, { sessionsUsed, active: sessionsUsed < (pkg.packageSize as number) });
+      } else {
+        await updateSessionPackage(packageId, { sessionsUsed: Math.max(0, (pkg.sessionsUsed as number) - 1), active: true });
+      }
+    } catch { /* non-critical */ }
+  };
+
   const handleUpdateStatus = async (
     apptId: string,
-    status: "completed" | "cancelled" | "scheduled" | "in_progress" | "rescheduled"
+    status: "completed" | "cancelled" | "scheduled" | "in_progress" | "rescheduled",
+    prevStatus?: string
   ) => {
     setUpdatingStatusId(apptId);
     await updateAppointmentStatus(apptId, status);
+    if (prevStatus !== undefined) await syncPackageForAppt(apptId, status, prevStatus);
     setUpdatingStatusId(null);
   };
 
@@ -2943,7 +2966,8 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                               onChange={(e) =>
                                 handleUpdateStatus(
                                   appt.id,
-                                  e.target.value as "completed" | "cancelled" | "scheduled" | "in_progress" | "rescheduled"
+                                  e.target.value as "completed" | "cancelled" | "scheduled" | "in_progress" | "rescheduled",
+                                  appt.status ?? "scheduled"
                                 )
                               }
                             >

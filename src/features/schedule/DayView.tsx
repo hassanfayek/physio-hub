@@ -15,6 +15,9 @@ import {
 } from "../../services/appointmentService";
 import type { Patient, Physiotherapist } from "../../services/patientService";
 import AppointmentModal from "../../components/AppointmentModal";
+import { getDocs, query, collection, where } from "firebase/firestore";
+import { db } from "../../firebase";
+import { updateSessionPackage } from "../../services/priceService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,10 +82,65 @@ export default function DayView({
   const handleStatusUpdate = async (
     apptId: string,
     status: Appointment["status"],
-    patientName: string
+    patientName: string,
+    prevStatus?: Appointment["status"]
   ) => {
     setUpdatingId(apptId);
     await updateAppointmentStatus(apptId, status);
+
+    // Auto-sync package sessionsUsed when marking completed
+    if (status === "completed" && prevStatus !== "completed") {
+      try {
+        const spSnap = await getDocs(
+          query(collection(db, "patientSessionPrices"), where("appointmentId", "==", apptId))
+        );
+        if (!spSnap.empty) {
+          const spData = spSnap.docs[0].data();
+          const packageId = spData.packageId as string | undefined;
+          if (packageId) {
+            const pkgSnap = await getDocs(
+              query(collection(db, "patientPackages"), where("__name__", "==", packageId))
+            );
+            if (!pkgSnap.empty) {
+              const pkg = pkgSnap.docs[0].data();
+              const sessionsUsed = (pkg.sessionsUsed as number) + 1;
+              const packageSize  = pkg.packageSize as number;
+              await updateSessionPackage(packageId, {
+                sessionsUsed,
+                active: sessionsUsed < packageSize,
+              });
+            }
+          }
+        }
+      } catch { /* non-critical — pricing update failed silently */ }
+    }
+
+    // Auto-decrement if un-completing a previously completed session
+    if (prevStatus === "completed" && status !== "completed") {
+      try {
+        const spSnap = await getDocs(
+          query(collection(db, "patientSessionPrices"), where("appointmentId", "==", apptId))
+        );
+        if (!spSnap.empty) {
+          const spData = spSnap.docs[0].data();
+          const packageId = spData.packageId as string | undefined;
+          if (packageId) {
+            const pkgSnap = await getDocs(
+              query(collection(db, "patientPackages"), where("__name__", "==", packageId))
+            );
+            if (!pkgSnap.empty) {
+              const pkg = pkgSnap.docs[0].data();
+              const sessionsUsed = Math.max(0, (pkg.sessionsUsed as number) - 1);
+              await updateSessionPackage(packageId, {
+                sessionsUsed,
+                active: true,
+              });
+            }
+          }
+        }
+      } catch { /* non-critical */ }
+    }
+
     setUpdatingId(null);
     const label = status === "completed" ? "Completed"
                 : status === "cancelled" ? "Cancelled"
@@ -508,7 +566,8 @@ export default function DayView({
                                       handleStatusUpdate(
                                         a.id,
                                         e.target.value as Appointment["status"],
-                                        a.patientName
+                                        a.patientName,
+                                        a.status
                                       )
                                     }
                                   >
