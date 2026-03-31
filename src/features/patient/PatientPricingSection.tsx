@@ -98,6 +98,7 @@ export default function PatientPricingSection({
   const [showPkgForm,   setShowPkgForm]   = useState(false);
   const [editPkg,       setEditPkg]       = useState<SessionPackage | null>(null);
   const [pkgForm,       setPkgForm]       = useState({ ...EMPTY_PKG, packageSize: 6 as number });
+  const [customSizeMode, setCustomSizeMode] = useState(false);
   const [pkgSaving,     setPkgSaving]     = useState(false);
   const [pkgError,      setPkgError]      = useState<string | null>(null);
   const [deletingPkgId, setDeletingPkgId] = useState<string | null>(null);
@@ -291,6 +292,7 @@ export default function PatientPricingSection({
 
   const openAddPkg = () => {
     setPkgForm({ ...EMPTY_PKG, packageSize: 6 });
+    setCustomSizeMode(false);
     setEditPkg(null); setPkgError(null); setShowPkgForm(true);
   };
 
@@ -492,7 +494,8 @@ export default function PatientPricingSection({
         .pps-checkbox-row:hover { border-color: #2E8BC0; }
         .pps-checkbox-row input { width: 16px; height: 16px; cursor: pointer; accent-color: #2E8BC0; }
         .pps-checkbox-row label { font-size: 14px; color: #1a1a1a; cursor: pointer; }
-        .pps-pkg-size-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .pps-pkg-size-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        .pps-pkg-custom-input { width: 100%; padding: 6px 8px; border: 1.5px solid #2E8BC0; border-radius: 8px; font-size: 15px; font-weight: 700; color: #2E8BC0; text-align: center; outline: none; font-family: inherit; background: #EAF5FC; }
         .pps-pkg-size-opt { padding: 10px; border-radius: 10px; border: 1.5px solid #e5e0d8; text-align: center; cursor: pointer; transition: all 0.15s; font-family: 'Outfit', sans-serif; }
         .pps-pkg-size-opt:hover { border-color: #2E8BC0; color: #2E8BC0; }
         .pps-pkg-size-opt.selected { border-color: #2E8BC0; background: #EAF5FC; color: #2E8BC0; font-weight: 700; }
@@ -870,18 +873,28 @@ export default function PatientPricingSection({
 
                       <div className="pps-pkg-actions">
                         <button className="pps-edit-btn" style={{ flex: 1, justifyContent: "center" }} onClick={() => openEditPkg(pkg)}>Edit</button>
-                        {(isManager || isSecretary) && pkg.active && (
-                          <button
-                            className="pps-pkg-use-btn"
-                            style={{ flex: "none", padding: "7px 12px" }}
-                            disabled={remaining === 0}
-                            onClick={async () => {
-                              await updateSessionPackage(pkg.id, { sessionsUsed: pkg.sessionsUsed + 1, active: pkg.sessionsUsed + 1 < pkg.packageSize });
-                              showToast(`Session used — ${remaining - 1} remaining`);
-                            }}
-                          >
-                            Use Session
-                          </button>
+                        {(isManager || isSecretary) && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#f5f3ef", borderRadius: 8, padding: "3px 6px" }}>
+                            <button
+                              style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: pkg.sessionsUsed > 0 ? "#e8e3dc" : "#f0ede8", color: pkg.sessionsUsed > 0 ? "#1a1a1a" : "#c0bbb4", fontSize: 16, cursor: pkg.sessionsUsed > 0 ? "pointer" : "not-allowed", fontFamily: "inherit", fontWeight: 700 }}
+                              disabled={pkg.sessionsUsed === 0}
+                              onClick={async () => {
+                                const n = Math.max(0, pkg.sessionsUsed - 1);
+                                await updateSessionPackage(pkg.id, { sessionsUsed: n, active: true });
+                                showToast(`Sessions used: ${n}/${pkg.packageSize}`);
+                              }}
+                            >−</button>
+                            <span style={{ fontSize: 13, fontWeight: 700, minWidth: 32, textAlign: "center", color: "#1a1a1a" }}>{pkg.sessionsUsed}/{pkg.packageSize}</span>
+                            <button
+                              style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: remaining > 0 ? "#1a3a2a" : "#f0ede8", color: remaining > 0 ? "#fff" : "#c0bbb4", fontSize: 16, cursor: remaining > 0 ? "pointer" : "not-allowed", fontFamily: "inherit", fontWeight: 700 }}
+                              disabled={remaining === 0}
+                              onClick={async () => {
+                                const n = Math.min(pkg.packageSize, pkg.sessionsUsed + 1);
+                                await updateSessionPackage(pkg.id, { sessionsUsed: n, active: n < pkg.packageSize });
+                                showToast(n < pkg.packageSize ? `Sessions used: ${n}/${pkg.packageSize}` : `Package complete — all ${pkg.packageSize} sessions used`);
+                              }}
+                            >+</button>
+                          </div>
                         )}
                         {(isManager || isSecretary) && (
                           <button className="pps-del-btn" onClick={() => setDeletingPkgId(pkg.id)} disabled={deletingPkg && deletingPkgId === pkg.id}>
@@ -1044,13 +1057,34 @@ export default function PatientPricingSection({
                   {PACKAGE_SIZES.map((size) => (
                     <div
                       key={size}
-                      className={`pps-pkg-size-opt ${pkgForm.packageSize === size ? "selected" : ""}`}
-                      onClick={() => setPkgForm({ ...pkgForm, packageSize: size })}
+                      className={`pps-pkg-size-opt ${!customSizeMode && pkgForm.packageSize === size ? "selected" : ""}`}
+                      onClick={() => { setCustomSizeMode(false); setPkgForm({ ...pkgForm, packageSize: size }); }}
                     >
                       <div className="pps-pkg-size-opt-label">{size}</div>
                       <div className="pps-pkg-size-opt-sub">sessions</div>
                     </div>
                   ))}
+                  <div
+                    className={`pps-pkg-size-opt ${customSizeMode ? "selected" : ""}`}
+                    onClick={() => { setCustomSizeMode(true); setPkgForm({ ...pkgForm, packageSize: customSizeMode ? pkgForm.packageSize : 0 }); }}
+                  >
+                    {customSizeMode ? (
+                      <input
+                        className="pps-pkg-custom-input"
+                        type="number" min="1" step="1"
+                        placeholder="?"
+                        value={pkgForm.packageSize || ""}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => setPkgForm({ ...pkgForm, packageSize: Math.max(1, parseInt(e.target.value, 10) || 0) })}
+                        autoFocus
+                      />
+                    ) : (
+                      <>
+                        <div className="pps-pkg-size-opt-label" style={{ fontSize: 15 }}>Custom</div>
+                        <div className="pps-pkg-size-opt-sub">sessions</div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
