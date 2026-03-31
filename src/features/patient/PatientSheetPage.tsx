@@ -16,7 +16,7 @@ import PatientPricingSection from "./PatientPricingSection";
 import { subscribeToBillingSettings, updateSessionPackage } from "../../services/priceService";
 import {
   collection, addDoc, deleteDoc, updateDoc, doc, setDoc, query, where, orderBy,
-  onSnapshot, getDocs, serverTimestamp, type Timestamp,
+  onSnapshot, getDocs, getDoc, serverTimestamp, type Timestamp,
 } from "firebase/firestore";
 import {
   subscribeToPatientAllAppointments,
@@ -706,9 +706,9 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       if (spSnap.empty) return;
       const packageId = spSnap.docs[0].data().packageId as string | undefined;
       if (!packageId) return;
-      const pkgSnap = await getDocs(query(collection(db, "patientPackages"), where("__name__", "==", packageId)));
-      if (pkgSnap.empty) return;
-      const pkg = pkgSnap.docs[0].data();
+      const pkgSnap = await getDoc(doc(db, "patientPackages", packageId));
+      if (!pkgSnap.exists()) return;
+      const pkg = pkgSnap.data();
       if (isCompleted) {
         const sessionsUsed = (pkg.sessionsUsed as number) + 1;
         await updateSessionPackage(packageId, { sessionsUsed, active: sessionsUsed < (pkg.packageSize as number) });

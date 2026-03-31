@@ -15,7 +15,7 @@ import {
 } from "../../services/appointmentService";
 import type { Patient, Physiotherapist } from "../../services/patientService";
 import AppointmentModal from "../../components/AppointmentModal";
-import { getDocs, query, collection, where } from "firebase/firestore";
+import { getDocs, getDoc, query, collection, where, doc } from "firebase/firestore";
 import { db } from "../../firebase";
 import { updateSessionPackage } from "../../services/priceService";
 
@@ -95,24 +95,20 @@ export default function DayView({
           query(collection(db, "patientSessionPrices"), where("appointmentId", "==", apptId))
         );
         if (!spSnap.empty) {
-          const spData = spSnap.docs[0].data();
-          const packageId = spData.packageId as string | undefined;
+          const packageId = spSnap.docs[0].data().packageId as string | undefined;
           if (packageId) {
-            const pkgSnap = await getDocs(
-              query(collection(db, "patientPackages"), where("__name__", "==", packageId))
-            );
-            if (!pkgSnap.empty) {
-              const pkg = pkgSnap.docs[0].data();
+            const pkgSnap = await getDoc(doc(db, "patientPackages", packageId));
+            if (pkgSnap.exists()) {
+              const pkg = pkgSnap.data();
               const sessionsUsed = (pkg.sessionsUsed as number) + 1;
-              const packageSize  = pkg.packageSize as number;
               await updateSessionPackage(packageId, {
                 sessionsUsed,
-                active: sessionsUsed < packageSize,
+                active: sessionsUsed < (pkg.packageSize as number),
               });
             }
           }
         }
-      } catch { /* non-critical — pricing update failed silently */ }
+      } catch { /* non-critical */ }
     }
 
     // Auto-decrement if un-completing a previously completed session
@@ -122,17 +118,13 @@ export default function DayView({
           query(collection(db, "patientSessionPrices"), where("appointmentId", "==", apptId))
         );
         if (!spSnap.empty) {
-          const spData = spSnap.docs[0].data();
-          const packageId = spData.packageId as string | undefined;
+          const packageId = spSnap.docs[0].data().packageId as string | undefined;
           if (packageId) {
-            const pkgSnap = await getDocs(
-              query(collection(db, "patientPackages"), where("__name__", "==", packageId))
-            );
-            if (!pkgSnap.empty) {
-              const pkg = pkgSnap.docs[0].data();
-              const sessionsUsed = Math.max(0, (pkg.sessionsUsed as number) - 1);
+            const pkgSnap = await getDoc(doc(db, "patientPackages", packageId));
+            if (pkgSnap.exists()) {
+              const pkg = pkgSnap.data();
               await updateSessionPackage(packageId, {
-                sessionsUsed,
+                sessionsUsed: Math.max(0, (pkg.sessionsUsed as number) - 1),
                 active: true,
               });
             }
