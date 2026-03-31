@@ -662,7 +662,7 @@ export default function PatientPricingSection({
                         <td>
                           <div className="pps-action-row">
                             <button className="pps-edit-btn" onClick={() => openEditBilling(entry)}>Edit</button>
-                            {isManager && (
+                            {(isManager || isSecretary) && (
                               <button className="pps-del-btn" onClick={() => setDeletingEntryId(entry.id)} disabled={deletingEntry && deletingEntryId === entry.id}>
                                 <Trash2 size={12} strokeWidth={2} />
                               </button>
@@ -761,7 +761,7 @@ export default function PatientPricingSection({
                               <button className="pps-set-price-btn" onClick={() => openSessionPrice(appt)}>
                                 {sp ? "Edit" : "Set Price"}
                               </button>
-                              {sp && isManager && (
+                              {sp && (isManager || isSecretary) && (
                                 <button className="pps-del-btn" onClick={() => setDeletingSpId(sp.id)} disabled={deletingSp && deletingSpId === sp.id}>
                                   <Trash2 size={12} strokeWidth={2} />
                                 </button>
@@ -869,7 +869,7 @@ export default function PatientPricingSection({
 
                       <div className="pps-pkg-actions">
                         <button className="pps-edit-btn" style={{ flex: 1, justifyContent: "center" }} onClick={() => openEditPkg(pkg)}>Edit</button>
-                        {isManager && pkg.active && (
+                        {(isManager || isSecretary) && pkg.active && (
                           <button
                             className="pps-pkg-use-btn"
                             style={{ flex: "none", padding: "7px 12px" }}
@@ -882,7 +882,7 @@ export default function PatientPricingSection({
                             Use Session
                           </button>
                         )}
-                        {isManager && (
+                        {(isManager || isSecretary) && (
                           <button className="pps-del-btn" onClick={() => setDeletingPkgId(pkg.id)} disabled={deletingPkg && deletingPkgId === pkg.id}>
                             <Trash2 size={12} strokeWidth={2} />
                           </button>
