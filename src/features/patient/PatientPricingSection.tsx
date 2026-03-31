@@ -369,6 +369,11 @@ export default function PatientPricingSection({
         .pps-add-btn:hover { background: #0C3C60; }
 
         /* Inner tabs */
+        .pps-section { margin-bottom: 32px; }
+        .pps-section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid #f0ede8; flex-wrap: wrap; }
+        .pps-section-title { display: flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 700; color: #1a1a1a; font-family: 'Outfit', sans-serif; }
+        .pps-section-meta { font-size: 12px; color: #9a9590; }
+        .pps-section-empty { display: flex; align-items: center; gap: 8px; padding: 18px 16px; background: #fafaf8; border-radius: 12px; border: 1.5px dashed #e5e0d8; font-size: 13px; color: #c0bbb4; }
         .pps-inner-tabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
         .pps-inner-tab {
           display: inline-flex; align-items: center; gap: 6px;
@@ -577,16 +582,6 @@ export default function PatientPricingSection({
                 }
               </button>
             )}
-            {innerTab === "billing" && (
-              <button className="pps-add-btn" onClick={openAddBilling}>
-                <Plus size={13} strokeWidth={2.5} /> Add Entry
-              </button>
-            )}
-            {innerTab === "packages" && (
-              <button className="pps-add-btn" onClick={openAddPkg}>
-                <Plus size={13} strokeWidth={2.5} /> Add Package
-              </button>
-            )}
           </div>
         </div>
 
@@ -598,317 +593,192 @@ export default function PatientPricingSection({
           </div>
         )}
 
-        {/* Inner tabs */}
-        <div className="pps-inner-tabs">
-          <button className={`pps-inner-tab ${innerTab === "billing" ? "active" : ""}`} onClick={() => setInnerTab("billing")}>
-            <DollarSign size={14} strokeWidth={2} /> Billing Entries
-          </button>
-          <button className={`pps-inner-tab ${innerTab === "sessions" ? "active" : ""}`} onClick={() => setInnerTab("sessions")}>
-            <ClipboardList size={14} strokeWidth={2} /> Session Pricing
-          </button>
-          <button className={`pps-inner-tab ${innerTab === "packages" ? "active" : ""}`} onClick={() => setInnerTab("packages")}>
-            <Package size={14} strokeWidth={2} /> Packages
-          </button>
+        {/* ── UNIFIED PRICING VIEW ── */}
+
+        {/* ── PACKAGES SECTION ── */}
+        <div className="pps-section">
+          <div className="pps-section-header">
+            <div className="pps-section-title"><Package size={15} strokeWidth={2} /> Packages</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span className="pps-section-meta">{activePackages.length} active · {activePackages.reduce((s, p) => s + (p.packageSize - p.sessionsUsed), 0)} sessions remaining</span>
+              <button className="pps-add-btn" onClick={openAddPkg}><Plus size={13} strokeWidth={2.5} /> Add Package</button>
+            </div>
+          </div>
+          {pkgLoading ? (
+            <div style={{ height: 80, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "ppsShimmer 1.4s ease infinite", borderRadius: 14 }} />
+          ) : packages.length === 0 ? (
+            <div className="pps-section-empty"><Package size={22} strokeWidth={1.5} /> No packages yet</div>
+          ) : (
+            <div className="pps-pkg-grid">
+              {packages.map((pkg) => {
+                const pct = Math.min(100, (pkg.sessionsUsed / pkg.packageSize) * 100);
+                const remaining = pkg.packageSize - pkg.sessionsUsed;
+                const balanceDue = pkg.totalAmount - pkg.paidAmount;
+                return (
+                  <div key={pkg.id} className={`pps-pkg-card ${pkg.active ? "active-pkg" : "inactive-pkg"}`}>
+                    <div className="pps-pkg-card-header">
+                      <div className="pps-pkg-size">{pkg.packageSize} <span>sessions</span></div>
+                      {pkg.active ? <span className="pps-pkg-active-badge">Active</span> : <span className="pps-pkg-inactive-badge">Completed</span>}
+                    </div>
+                    <div className="pps-pkg-progress-wrap">
+                      <div className="pps-pkg-progress-label"><span>{pkg.sessionsUsed} used</span><span>{remaining} left</span></div>
+                      <div className="pps-pkg-progress-track"><div className="pps-pkg-progress-fill" style={{ width: `${pct}%` }} /></div>
+                    </div>
+                    <div className="pps-pkg-stats">
+                      <div className="pps-pkg-stat"><div className="pps-pkg-stat-label">Per Session</div><div className="pps-pkg-stat-value">{fmt(pkg.pricePerSession)}</div></div>
+                      <div className="pps-pkg-stat"><div className="pps-pkg-stat-label">Total</div><div className="pps-pkg-stat-value">{fmt(pkg.totalAmount)}</div></div>
+                      <div className="pps-pkg-stat"><div className="pps-pkg-stat-label">Paid</div><div className="pps-pkg-stat-value" style={{ color: "#1b4332" }}>{fmt(pkg.paidAmount)}</div></div>
+                      <div className="pps-pkg-stat"><div className="pps-pkg-stat-label">Balance</div><div className="pps-pkg-stat-value" style={{ color: balanceDue > 0 ? "#b91c1c" : "#1b4332" }}>{fmt(balanceDue)}</div></div>
+                    </div>
+                    {pkg.notes && <div className="pps-pkg-notes">{pkg.notes}</div>}
+                    <div style={{ fontSize: 11, color: "#c0bbb4", marginBottom: 10 }}>Started {pkg.startDate}</div>
+                    <div className="pps-pkg-actions">
+                      <button className="pps-edit-btn" style={{ flex: 1, justifyContent: "center" }} onClick={() => openEditPkg(pkg)}>Edit</button>
+                      {(isManager || isSecretary) && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#f5f3ef", borderRadius: 8, padding: "3px 6px" }}>
+                          <button style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: pkg.sessionsUsed > 0 ? "#e8e3dc" : "#f0ede8", color: pkg.sessionsUsed > 0 ? "#1a1a1a" : "#c0bbb4", fontSize: 16, cursor: pkg.sessionsUsed > 0 ? "pointer" : "not-allowed", fontFamily: "inherit", fontWeight: 700 }}
+                            disabled={pkg.sessionsUsed === 0}
+                            onClick={async () => { const n = Math.max(0, pkg.sessionsUsed - 1); await updateSessionPackage(pkg.id, { sessionsUsed: n, active: true }); showToast(`Sessions used: ${n}/${pkg.packageSize}`); }}>−</button>
+                          <span style={{ fontSize: 13, fontWeight: 700, minWidth: 32, textAlign: "center", color: "#1a1a1a" }}>{pkg.sessionsUsed}/{pkg.packageSize}</span>
+                          <button style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: remaining > 0 ? "#1a3a2a" : "#f0ede8", color: remaining > 0 ? "#fff" : "#c0bbb4", fontSize: 16, cursor: remaining > 0 ? "pointer" : "not-allowed", fontFamily: "inherit", fontWeight: 700 }}
+                            disabled={remaining === 0}
+                            onClick={async () => { const n = Math.min(pkg.packageSize, pkg.sessionsUsed + 1); await updateSessionPackage(pkg.id, { sessionsUsed: n, active: n < pkg.packageSize }); showToast(n < pkg.packageSize ? `Sessions used: ${n}/${pkg.packageSize}` : `Package complete — all ${pkg.packageSize} sessions used`); }}>+</button>
+                        </div>
+                      )}
+                      {(isManager || isSecretary) && (
+                        <button className="pps-del-btn" onClick={() => setDeletingPkgId(pkg.id)} disabled={deletingPkg && deletingPkgId === pkg.id}><Trash2 size={12} strokeWidth={2} /></button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* ── BILLING TAB ── */}
-        {innerTab === "billing" && (
-          <>
-            <div className="pps-summary">
-              <div className="pps-card accent-blue">
-                <div className="pps-card-label">Total Billed</div>
-                <div className="pps-card-value">{fmt(totalBilled)}</div>
-                <div className="pps-card-sub">{entries.length} entr{entries.length !== 1 ? "ies" : "y"}</div>
-              </div>
-              <div className="pps-card accent-green">
-                <div className="pps-card-label">Total Paid</div>
-                <div className="pps-card-value" style={{ color: "#1b4332" }}>{fmt(totalPaid)}</div>
-                <div className="pps-card-sub">{entries.filter((e) => e.paid).length} paid</div>
-              </div>
-              <div className="pps-card accent-red">
-                <div className="pps-card-label">Balance Due</div>
-                <div className="pps-card-value" style={{ color: balance > 0 ? "#b91c1c" : "#1b4332" }}>{fmt(balance)}</div>
-                <div className="pps-card-sub">{entries.filter((e) => !e.paid).length} unpaid</div>
-              </div>
-            </div>
-
-            {entryLoading ? (
-              <div style={{ height: 80, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "ppsShimmer 1.4s ease infinite", borderRadius: 14 }} />
-            ) : entries.length === 0 ? (
-              <div className="pps-empty">
-                <div className="pps-empty-icon"><DollarSign size={36} strokeWidth={1.5} /></div>
-                <div>No billing entries yet.</div>
-                <div style={{ fontSize: 12, marginTop: 4 }}>Click "Add Entry" to record a charge.</div>
-              </div>
-            ) : (
-              <div className="pps-table-wrap">
-                <table className="pps-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th><th>Description</th><th>Amount</th><th>Status</th><th>Paid On</th><th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entries.map((entry) => (
-                      <tr key={entry.id}>
-                        <td style={{ whiteSpace: "nowrap", color: "#5a5550" }}>{entry.date}</td>
+        {/* ── SESSION PRICING SECTION ── */}
+        <div className="pps-section">
+          <div className="pps-section-header">
+            <div className="pps-section-title"><ClipboardList size={15} strokeWidth={2} /> Session Charges</div>
+            <span className="pps-section-meta">{completedAppts.length} sessions · {fmt(sessionTotal)} billed · {fmt(sessionPaid)} paid</span>
+          </div>
+          {apptLoading ? (
+            <div style={{ height: 80, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "ppsShimmer 1.4s ease infinite", borderRadius: 14 }} />
+          ) : completedAppts.length === 0 ? (
+            <div className="pps-section-empty"><ClipboardList size={22} strokeWidth={1.5} /> No completed sessions yet</div>
+          ) : (
+            <div className="pps-table-wrap">
+              <table className="pps-table">
+                <thead>
+                  <tr><th>Date</th><th>Session Type</th><th>Physiotherapist</th><th>Price</th><th>Status</th><th>Package</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  {completedAppts.map((appt) => {
+                    const sp = sessionPriceMap.get(appt.id);
+                    const pkg = sp?.packageId ? packages.find((p) => p.id === sp.packageId) : null;
+                    return (
+                      <tr key={appt.id}>
+                        <td style={{ whiteSpace: "nowrap", color: "#5a5550" }}>{appt.date}</td>
+                        <td><div className="pps-desc">{appt.sessionType || "—"}</div></td>
+                        <td style={{ color: "#5a5550", fontSize: 13 }}>{appt.physioName || "—"}</td>
                         <td>
-                          <div className="pps-desc">{entry.description}</div>
-                          {entry.notes && <div className="pps-notes">{entry.notes}</div>}
+                          {sp ? <span className="pps-amount">{fmt(sp.amount)}</span> : <span className="pps-no-price">Not set</span>}
+                          {sp?.notes && <div className="pps-notes">{sp.notes}</div>}
                         </td>
-                        <td><span className="pps-amount">{fmt(entry.amount)}</span></td>
                         <td>
-                          <button className={`pps-paid-badge ${entry.paid ? "paid" : "unpaid"}`} onClick={() => handleToggleBillingPaid(entry)}>
-                            {entry.paid ? <><Check size={10} strokeWidth={3} /> Paid</> : <><X size={10} strokeWidth={3} /> Unpaid</>}
-                          </button>
+                          {sp ? (
+                            <button className={`pps-paid-badge ${sp.paid ? "paid" : "unpaid"}`} onClick={async () => {
+                              const paid = !sp.paid;
+                              const paidDate = paid ? (sp.paidDate || new Date().toISOString().slice(0, 10)) : "";
+                              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                              const { id: _id, createdAt: _ca, ...spRest } = sp;
+                              await setSessionPrice({ ...spRest, paid, paidDate });
+                              showToast(paid ? "Marked as paid" : "Marked as unpaid");
+                            }}>
+                              {sp.paid ? <><Check size={10} strokeWidth={3} /> Paid</> : <><X size={10} strokeWidth={3} /> Unpaid</>}
+                            </button>
+                          ) : <span style={{ color: "#c0bbb4", fontSize: 12 }}>—</span>}
                         </td>
-                        <td style={{ color: "#9a9590", fontSize: 12 }}>{entry.paidDate || "—"}</td>
+                        <td>{pkg ? <span className="pps-pkg-badge">{pkg.packageSize}-session pkg</span> : <span style={{ color: "#c0bbb4", fontSize: 12 }}>—</span>}</td>
                         <td>
                           <div className="pps-action-row">
-                            <button className="pps-edit-btn" onClick={() => openEditBilling(entry)}>Edit</button>
-                            {(isManager || isSecretary) && (
-                              <button className="pps-del-btn" onClick={() => setDeletingEntryId(entry.id)} disabled={deletingEntry && deletingEntryId === entry.id}>
-                                <Trash2 size={12} strokeWidth={2} />
-                              </button>
+                            <button className="pps-set-price-btn" onClick={() => openSessionPrice(appt)}>{sp ? "Edit" : "Set Price"}</button>
+                            {sp && (isManager || isSecretary) && (
+                              <button className="pps-del-btn" onClick={() => setDeletingSpId(sp.id)} disabled={deletingSp && deletingSpId === sp.id}><Trash2 size={12} strokeWidth={2} /></button>
                             )}
                           </div>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td colSpan={2} style={{ fontWeight: 600, fontSize: 13, color: "#5a5550" }}>Total</td>
-                      <td><span className="pps-amount">{fmt(totalBilled)}</span></td>
-                      <td><span style={{ fontSize: 12, color: "#1b4332", fontWeight: 600 }}>{fmt(totalPaid)} paid</span></td>
-                      <td /><td><span style={{ fontSize: 12, color: balance > 0 ? "#b91c1c" : "#1b4332", fontWeight: 700 }}>{balance > 0 ? `${fmt(balance)} due` : "✓ Settled"}</span></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ── SESSIONS TAB ── */}
-        {innerTab === "sessions" && (
-          <>
-            <div className="pps-summary">
-              <div className="pps-card accent-blue">
-                <div className="pps-card-label">Sessions Done</div>
-                <div className="pps-card-value">{completedAppts.length}</div>
-                <div className="pps-card-sub">{sessionPrices.length} priced</div>
-              </div>
-              <div className="pps-card accent-green">
-                <div className="pps-card-label">Session Revenue</div>
-                <div className="pps-card-value" style={{ color: "#1b4332" }}>{fmt(sessionTotal)}</div>
-                <div className="pps-card-sub">{fmt(sessionPaid)} collected</div>
-              </div>
-              <div className="pps-card accent-red">
-                <div className="pps-card-label">Session Balance</div>
-                <div className="pps-card-value" style={{ color: sessionTotal - sessionPaid > 0 ? "#b91c1c" : "#1b4332" }}>
-                  {fmt(sessionTotal - sessionPaid)}
-                </div>
-                <div className="pps-card-sub">{sessionPrices.filter((sp) => !sp.paid).length} unpaid sessions</div>
-              </div>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={3} style={{ fontWeight: 600, fontSize: 13, color: "#5a5550" }}>Total</td>
+                    <td><span className="pps-amount">{fmt(sessionTotal)}</span></td>
+                    <td><span style={{ fontSize: 12, color: "#1b4332", fontWeight: 600 }}>{fmt(sessionPaid)} paid</span></td>
+                    <td /><td><span style={{ fontSize: 12, color: sessionTotal - sessionPaid > 0 ? "#b91c1c" : "#1b4332", fontWeight: 700 }}>{sessionTotal - sessionPaid > 0 ? `${fmt(sessionTotal - sessionPaid)} due` : "✓ Settled"}</span></td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
+          )}
+        </div>
 
-            {apptLoading ? (
-              <div style={{ height: 80, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "ppsShimmer 1.4s ease infinite", borderRadius: 14 }} />
-            ) : completedAppts.length === 0 ? (
-              <div className="pps-empty">
-                <div className="pps-empty-icon"><ClipboardList size={36} strokeWidth={1.5} /></div>
-                <div>No completed sessions yet.</div>
-                <div style={{ fontSize: 12, marginTop: 4 }}>Completed sessions will appear here for pricing.</div>
-              </div>
-            ) : (
-              <div className="pps-table-wrap">
-                <table className="pps-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th><th>Time</th><th>Session Type</th><th>Physiotherapist</th><th>Price</th><th>Status</th><th>Package</th><th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {completedAppts.map((appt) => {
-                      const sp = sessionPriceMap.get(appt.id);
-                      const pkg = sp?.packageId ? packages.find((p) => p.id === sp.packageId) : null;
-                      return (
-                        <tr key={appt.id}>
-                          <td style={{ whiteSpace: "nowrap", color: "#5a5550" }}>{appt.date}</td>
-                          <td style={{ whiteSpace: "nowrap" }}>{fmtHour12(appt.hour)}</td>
-                          <td><div className="pps-desc">{appt.sessionType || "—"}</div></td>
-                          <td style={{ color: "#5a5550", fontSize: 13 }}>{appt.physioName || "—"}</td>
-                          <td>
-                            {sp ? <span className="pps-amount">{fmt(sp.amount)}</span> : <span className="pps-no-price">Not set</span>}
-                            {sp?.notes && <div className="pps-notes">{sp.notes}</div>}
-                          </td>
-                          <td>
-                            {sp ? (
-                              <button className={`pps-paid-badge ${sp.paid ? "paid" : "unpaid"}`} onClick={async () => {
-                                const paid = !sp.paid;
-                                const paidDate = paid ? (sp.paidDate || new Date().toISOString().slice(0, 10)) : "";
-                                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                                const { id: _id, createdAt: _ca, ...spRest } = sp;
-                                await setSessionPrice({ ...spRest, paid, paidDate });
-                                showToast(paid ? "Marked as paid" : "Marked as unpaid");
-                              }}>
-                                {sp.paid ? <><Check size={10} strokeWidth={3} /> Paid</> : <><X size={10} strokeWidth={3} /> Unpaid</>}
-                              </button>
-                            ) : <span style={{ color: "#c0bbb4", fontSize: 12 }}>—</span>}
-                          </td>
-                          <td>
-                            {pkg ? <span className="pps-pkg-badge">{pkg.packageSize}-session pkg</span> : <span style={{ color: "#c0bbb4", fontSize: 12 }}>—</span>}
-                          </td>
-                          <td>
-                            <div className="pps-action-row">
-                              <button className="pps-set-price-btn" onClick={() => openSessionPrice(appt)}>
-                                {sp ? "Edit" : "Set Price"}
-                              </button>
-                              {sp && (isManager || isSecretary) && (
-                                <button className="pps-del-btn" onClick={() => setDeletingSpId(sp.id)} disabled={deletingSp && deletingSpId === sp.id}>
-                                  <Trash2 size={12} strokeWidth={2} />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td colSpan={4} style={{ fontWeight: 600, fontSize: 13, color: "#5a5550" }}>Total</td>
-                      <td><span className="pps-amount">{fmt(sessionTotal)}</span></td>
-                      <td><span style={{ fontSize: 12, color: "#1b4332", fontWeight: 600 }}>{fmt(sessionPaid)} paid</span></td>
-                      <td /><td><span style={{ fontSize: 12, color: sessionTotal - sessionPaid > 0 ? "#b91c1c" : "#1b4332", fontWeight: 700 }}>{sessionTotal - sessionPaid > 0 ? `${fmt(sessionTotal - sessionPaid)} due` : "✓ Settled"}</span></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ── PACKAGES TAB ── */}
-        {innerTab === "packages" && (
-          <>
-            <div className="pps-summary">
-              <div className="pps-card accent-purple">
-                <div className="pps-card-label">Active Packages</div>
-                <div className="pps-card-value">{activePackages.length}</div>
-                <div className="pps-card-sub">{packages.length} total</div>
-              </div>
-              <div className="pps-card accent-blue">
-                <div className="pps-card-label">Sessions Remaining</div>
-                <div className="pps-card-value">{activePackages.reduce((s, p) => s + (p.packageSize - p.sessionsUsed), 0)}</div>
-                <div className="pps-card-sub">across active packages</div>
-              </div>
-              <div className="pps-card accent-green">
-                <div className="pps-card-label">Packages Revenue</div>
-                <div className="pps-card-value">{fmt(packages.reduce((s, p) => s + p.paidAmount, 0))}</div>
-                <div className="pps-card-sub">of {fmt(packages.reduce((s, p) => s + p.totalAmount, 0))} total</div>
-              </div>
+        {/* ── BILLING ENTRIES SECTION ── */}
+        <div className="pps-section">
+          <div className="pps-section-header">
+            <div className="pps-section-title"><DollarSign size={15} strokeWidth={2} /> Billing Entries</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span className="pps-section-meta">{entries.length} entr{entries.length !== 1 ? "ies" : "y"} · {fmt(totalBilled)} billed · {fmt(totalPaid)} paid</span>
+              <button className="pps-add-btn" onClick={openAddBilling}><Plus size={13} strokeWidth={2.5} /> Add Entry</button>
             </div>
-
-            {pkgLoading ? (
-              <div style={{ height: 80, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "ppsShimmer 1.4s ease infinite", borderRadius: 14 }} />
-            ) : packages.length === 0 ? (
-              <div className="pps-empty">
-                <div className="pps-empty-icon"><Package size={36} strokeWidth={1.5} /></div>
-                <div>No session packages yet.</div>
-                <div style={{ fontSize: 12, marginTop: 4 }}>Click "Add Package" to create a 6, 12, or 24-session bundle.</div>
-              </div>
-            ) : (
-              <div className="pps-pkg-grid">
-                {packages.map((pkg) => {
-                  const pct = Math.min(100, (pkg.sessionsUsed / pkg.packageSize) * 100);
-                  const remaining = pkg.packageSize - pkg.sessionsUsed;
-                  const balanceDue = pkg.totalAmount - pkg.paidAmount;
-                  return (
-                    <div key={pkg.id} className={`pps-pkg-card ${pkg.active ? "active-pkg" : "inactive-pkg"}`}>
-                      <div className="pps-pkg-card-header">
-                        <div className="pps-pkg-size">
-                          {pkg.packageSize} <span>sessions</span>
+          </div>
+          {entryLoading ? (
+            <div style={{ height: 80, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "ppsShimmer 1.4s ease infinite", borderRadius: 14 }} />
+          ) : entries.length === 0 ? (
+            <div className="pps-section-empty"><DollarSign size={22} strokeWidth={1.5} /> No billing entries yet</div>
+          ) : (
+            <div className="pps-table-wrap">
+              <table className="pps-table">
+                <thead>
+                  <tr><th>Date</th><th>Description</th><th>Amount</th><th>Status</th><th>Paid On</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  {entries.map((entry) => (
+                    <tr key={entry.id}>
+                      <td style={{ whiteSpace: "nowrap", color: "#5a5550" }}>{entry.date}</td>
+                      <td><div className="pps-desc">{entry.description}</div>{entry.notes && <div className="pps-notes">{entry.notes}</div>}</td>
+                      <td><span className="pps-amount">{fmt(entry.amount)}</span></td>
+                      <td>
+                        <button className={`pps-paid-badge ${entry.paid ? "paid" : "unpaid"}`} onClick={() => handleToggleBillingPaid(entry)}>
+                          {entry.paid ? <><Check size={10} strokeWidth={3} /> Paid</> : <><X size={10} strokeWidth={3} /> Unpaid</>}
+                        </button>
+                      </td>
+                      <td style={{ color: "#9a9590", fontSize: 12 }}>{entry.paidDate || "—"}</td>
+                      <td>
+                        <div className="pps-action-row">
+                          <button className="pps-edit-btn" onClick={() => openEditBilling(entry)}>Edit</button>
+                          {(isManager || isSecretary) && (
+                            <button className="pps-del-btn" onClick={() => setDeletingEntryId(entry.id)} disabled={deletingEntry && deletingEntryId === entry.id}><Trash2 size={12} strokeWidth={2} /></button>
+                          )}
                         </div>
-                        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                          {pkg.active
-                            ? <span className="pps-pkg-active-badge">Active</span>
-                            : <span className="pps-pkg-inactive-badge">Completed</span>
-                          }
-                        </div>
-                      </div>
-
-                      <div className="pps-pkg-progress-wrap">
-                        <div className="pps-pkg-progress-label">
-                          <span>{pkg.sessionsUsed} used</span>
-                          <span>{remaining} left</span>
-                        </div>
-                        <div className="pps-pkg-progress-track">
-                          <div className="pps-pkg-progress-fill" style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-
-                      <div className="pps-pkg-stats">
-                        <div className="pps-pkg-stat">
-                          <div className="pps-pkg-stat-label">Per Session</div>
-                          <div className="pps-pkg-stat-value">{fmt(pkg.pricePerSession)}</div>
-                        </div>
-                        <div className="pps-pkg-stat">
-                          <div className="pps-pkg-stat-label">Total</div>
-                          <div className="pps-pkg-stat-value">{fmt(pkg.totalAmount)}</div>
-                        </div>
-                        <div className="pps-pkg-stat">
-                          <div className="pps-pkg-stat-label">Paid</div>
-                          <div className="pps-pkg-stat-value" style={{ color: "#1b4332" }}>{fmt(pkg.paidAmount)}</div>
-                        </div>
-                        <div className="pps-pkg-stat">
-                          <div className="pps-pkg-stat-label">Balance</div>
-                          <div className="pps-pkg-stat-value" style={{ color: balanceDue > 0 ? "#b91c1c" : "#1b4332" }}>{fmt(balanceDue)}</div>
-                        </div>
-                      </div>
-
-                      {pkg.notes && <div className="pps-pkg-notes">{pkg.notes}</div>}
-                      <div style={{ fontSize: 11, color: "#c0bbb4", marginBottom: 10 }}>Started {pkg.startDate}</div>
-
-                      <div className="pps-pkg-actions">
-                        <button className="pps-edit-btn" style={{ flex: 1, justifyContent: "center" }} onClick={() => openEditPkg(pkg)}>Edit</button>
-                        {(isManager || isSecretary) && (
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#f5f3ef", borderRadius: 8, padding: "3px 6px" }}>
-                            <button
-                              style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: pkg.sessionsUsed > 0 ? "#e8e3dc" : "#f0ede8", color: pkg.sessionsUsed > 0 ? "#1a1a1a" : "#c0bbb4", fontSize: 16, cursor: pkg.sessionsUsed > 0 ? "pointer" : "not-allowed", fontFamily: "inherit", fontWeight: 700 }}
-                              disabled={pkg.sessionsUsed === 0}
-                              onClick={async () => {
-                                const n = Math.max(0, pkg.sessionsUsed - 1);
-                                await updateSessionPackage(pkg.id, { sessionsUsed: n, active: true });
-                                showToast(`Sessions used: ${n}/${pkg.packageSize}`);
-                              }}
-                            >−</button>
-                            <span style={{ fontSize: 13, fontWeight: 700, minWidth: 32, textAlign: "center", color: "#1a1a1a" }}>{pkg.sessionsUsed}/{pkg.packageSize}</span>
-                            <button
-                              style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: remaining > 0 ? "#1a3a2a" : "#f0ede8", color: remaining > 0 ? "#fff" : "#c0bbb4", fontSize: 16, cursor: remaining > 0 ? "pointer" : "not-allowed", fontFamily: "inherit", fontWeight: 700 }}
-                              disabled={remaining === 0}
-                              onClick={async () => {
-                                const n = Math.min(pkg.packageSize, pkg.sessionsUsed + 1);
-                                await updateSessionPackage(pkg.id, { sessionsUsed: n, active: n < pkg.packageSize });
-                                showToast(n < pkg.packageSize ? `Sessions used: ${n}/${pkg.packageSize}` : `Package complete — all ${pkg.packageSize} sessions used`);
-                              }}
-                            >+</button>
-                          </div>
-                        )}
-                        {(isManager || isSecretary) && (
-                          <button className="pps-del-btn" onClick={() => setDeletingPkgId(pkg.id)} disabled={deletingPkg && deletingPkgId === pkg.id}>
-                            <Trash2 size={12} strokeWidth={2} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={2} style={{ fontWeight: 600, fontSize: 13, color: "#5a5550" }}>Total</td>
+                    <td><span className="pps-amount">{fmt(totalBilled)}</span></td>
+                    <td><span style={{ fontSize: 12, color: "#1b4332", fontWeight: 600 }}>{fmt(totalPaid)} paid</span></td>
+                    <td /><td><span style={{ fontSize: 12, color: balance > 0 ? "#b91c1c" : "#1b4332", fontWeight: 700 }}>{balance > 0 ? `${fmt(balance)} due` : "✓ Settled"}</span></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Billing Add/Edit Modal ── */}
