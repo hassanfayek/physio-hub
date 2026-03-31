@@ -51,6 +51,7 @@ const fmt = (n: number) =>
 export default function PatientPricingSection({
   patientId,
   isManager,
+  isSecretary,
   patientName,
 }: PatientPricingSectionProps) {
 
