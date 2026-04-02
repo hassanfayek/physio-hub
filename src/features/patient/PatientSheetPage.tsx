@@ -512,34 +512,6 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     if (previewDoc?.id === document.id) setPreviewDoc(null);
   };
 
-  const handleSaveDiagnosis = async () => {
-    if (!patientId) return;
-    setDiagSaving(true);
-    await setDoc(doc(db, "patientDiagnosis", patientId), {
-      ...diagDraft,
-      updatedAt: serverTimestamp(),
-    });
-    setDiagData(diagDraft);
-    setDiagEditing(false);
-    setDiagSaving(false);
-    setDiagSaved(true);
-    setTimeout(() => setDiagSaved(false), 2500);
-  };
-
-  const handleSaveAssessment = async () => {
-    if (!patientId) return;
-    setAsmSaving(true);
-    await setDoc(doc(db, "patientAssessments", patientId), {
-      ...asmDraft,
-      updatedAt: serverTimestamp(),
-    });
-    setAssessment(asmDraft);
-    setAsmEditing(false);
-    setAsmSaving(false);
-    setAsmSaved(true);
-    setTimeout(() => setAsmSaved(false), 2500);
-  };
-
   const handleSaveCombined = async () => {
     if (!patientId) return;
     setDiagSaving(true);
@@ -609,10 +581,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
 
   // ── PT Assessment state (editable by canEdit) ─────────────────────────────
   const [assessment,    setAssessment]   = useState<PTAssessment>(EMPTY_ASSESSMENT);
-  const [asmEditing,    setAsmEditing]   = useState(false);
   const [asmDraft,      setAsmDraft]     = useState<PTAssessment>(EMPTY_ASSESSMENT);
-  const [asmSaving,     setAsmSaving]    = useState(false);
-  const [asmSaved,      setAsmSaved]     = useState(false);
 
   // ── Extended patient profile state ────────────────────────────────────────
   const [extProfile,    setExtProfile]   = useState<PatientExtProfile>(EMPTY_EXT);
