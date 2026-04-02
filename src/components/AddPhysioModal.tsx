@@ -71,6 +71,7 @@ export default function AddPhysioModal({ onClose, onCreated }: AddPhysioModalPro
       phone:           phone.trim(),
       clinicName:      clinicName.trim() || "Physio+ Clinic",
       specializations: specializations.split(",").map((s) => s.trim()).filter(Boolean),
+      rank,
     });
 
     setLoading(false);

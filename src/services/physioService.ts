@@ -22,6 +22,7 @@ export interface CreatePhysioPayload {
   phone:           string;
   clinicName:      string;
   specializations: string[];
+  rank:            string;
 }
 
 export interface CreatePhysioResult {
@@ -87,6 +88,7 @@ export async function createPhysio(
       phone:           payload.phone,
       clinicName:      payload.clinicName,
       specializations: payload.specializations,
+      rank:            payload.rank || "junior",
       createdAt:       serverTimestamp(),
     });
 
