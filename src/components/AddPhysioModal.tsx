@@ -28,7 +28,7 @@ export default function AddPhysioModal({ onClose, onCreated }: AddPhysioModalPro
   const [lastName,        setLastName]        = useState("");
   const [email,           setEmail]           = useState("");
   const [rank,            setRank]            = useState("junior");
-  const [licenseNumber,   setLicenseNumber]   = useState("");
+  const [licenseNumber] = useState("");
   const [phone,           setPhone]           = useState("");
   const [clinicName,      setClinicName]      = useState("");
   const [specializations, setSpecializations] = useState("");
@@ -345,17 +345,10 @@ export default function AddPhysioModal({ onClose, onCreated }: AddPhysioModalPro
                     </select>
                   </div>
 
-                  <div className="aph-grid2">
-                    <div className="aph-field">
-                      <label className="aph-label">License Number</label>
-                      <input className="aph-input" placeholder="PT-12345" value={licenseNumber}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => setLicenseNumber(e.target.value)} />
-                    </div>
-                    <div className="aph-field">
-                      <label className="aph-label">Phone</label>
-                      <input className="aph-input" type="tel" placeholder="+20 100 000 0000" value={phone}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => setPhone(e.target.value)} />
-                    </div>
+                  <div className="aph-field">
+                    <label className="aph-label">Phone</label>
+                    <input className="aph-input" type="tel" placeholder="+20 100 000 0000" value={phone}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setPhone(e.target.value)} />
                   </div>
 
                   <div className="aph-field">

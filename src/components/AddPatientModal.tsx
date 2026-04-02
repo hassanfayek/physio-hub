@@ -327,7 +327,7 @@ export default function AddPatientModal({
                   </div>
                   <div className="apm-field">
                     <label className="apm-label">Phone</label>
-                    <input className="apm-input" type="tel" placeholder="+971 50 000 0000" value={phone}
+                    <input className="apm-input" type="tel" placeholder="+20 100 000 0000" value={phone}
                       onChange={(e: ChangeEvent<HTMLInputElement>) => setPhone(e.target.value)} />
                   </div>
                 </div>

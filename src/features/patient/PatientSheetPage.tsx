@@ -1804,16 +1804,18 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                 </div>
               </div>
 
+              {/* Phone — visible to all staff */}
+              <div className="ps-profile-card">
+                <div className="ps-profile-key">Phone</div>
+                <div className="ps-profile-val">{patient?.phone || <span className="ps-profile-val empty">Not recorded</span>}</div>
+              </div>
+
               {/* Contact info — manager only */}
               {isManager && (
                 <>
                   <div className="ps-profile-card">
                     <div className="ps-profile-key">Email</div>
                     <div className="ps-profile-val">{patient?.email || <span className="ps-profile-val empty">—</span>}</div>
-                  </div>
-                  <div className="ps-profile-card">
-                    <div className="ps-profile-key">Phone</div>
-                    <div className="ps-profile-val">{extProfile.phone || <span className="ps-profile-val empty">Not recorded</span>}</div>
                   </div>
                 </>
               )}
