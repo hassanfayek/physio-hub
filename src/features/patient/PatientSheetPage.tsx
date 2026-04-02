@@ -540,6 +540,21 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     setTimeout(() => setAsmSaved(false), 2500);
   };
 
+  const handleSaveCombined = async () => {
+    if (!patientId) return;
+    setDiagSaving(true);
+    await Promise.all([
+      setDoc(doc(db, "patientDiagnosis", patientId), { ...diagDraft, updatedAt: serverTimestamp() }),
+      setDoc(doc(db, "patientAssessments", patientId), { ...asmDraft, updatedAt: serverTimestamp() }),
+    ]);
+    setDiagData(diagDraft);
+    setAssessment(asmDraft);
+    setDiagEditing(false);
+    setDiagSaving(false);
+    setDiagSaved(true);
+    setTimeout(() => setDiagSaved(false), 2500);
+  };
+
   // Load physio roster only when the current user is a manager (for assignment dropdown)
   useEffect(() => {
     if (user?.role !== "clinic_manager") return;
@@ -619,8 +634,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
 
   const allSections = [
     { id: "profile",           label: "Patient Profile" },
-    { id: "diagnosis",         label: "Diagnosis" },
-    { id: "assessment",        label: "PT Assessment",    physioOnly: true },
+    { id: "diagnosis",         label: "Diagnosis & Assessment", physioOnly: true },
     { id: "notes",             label: "Treatment Program", physioOnly: true },
     { id: "session-notes",     label: "Session Notes",     physioOnly: true },
     { id: "documents",         label: "Documents" },
@@ -1969,13 +1983,13 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         </>
       )}
 
-      {/* ── DIAGNOSIS (unchanged) ── */}
-      {activeSection === "diagnosis" && (
+      {/* ── DIAGNOSIS & ASSESSMENT (combined) ── */}
+      {activeSection === "diagnosis" && role !== "patient" && (
         <>
           {/* Toolbar */}
           <div className="ps-edit-toolbar">
             <div>
-              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 500, color: "#1a1a1a" }}>Patient Diagnosis</div>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 500, color: "#1a1a1a" }}>Diagnosis & Assessment</div>
               <div style={{ fontSize: 13, color: "#9a9590", marginTop: 2 }}>
                 {diagEditing ? "Editing mode — make changes and save" : "View mode"}
               </div>
@@ -1988,19 +2002,19 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                 </span>
               )}
               {canEdit && !diagEditing && (
-                <button className="ps-edit-btn" onClick={() => { setDiagDraft(diagData); setDiagEditing(true); }}>
+                <button className="ps-edit-btn" onClick={() => { setDiagDraft(diagData); setAsmDraft(assessment); setDiagEditing(true); }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                   </svg>
-                  Edit Diagnosis
+                  Edit
                 </button>
               )}
               {diagEditing && (
                 <>
                   <span className="ps-edit-badge">Editing</span>
-                  <button className="ps-cancel-btn" onClick={() => { setDiagEditing(false); setDiagDraft(diagData); }}>Cancel</button>
-                  <button className="ps-save-btn" disabled={diagSaving} onClick={handleSaveDiagnosis}>
+                  <button className="ps-cancel-btn" onClick={() => { setDiagEditing(false); setDiagDraft(diagData); setAsmDraft(assessment); }}>Cancel</button>
+                  <button className="ps-save-btn" disabled={diagSaving} onClick={handleSaveCombined}>
                     {diagSaving
                       ? <><span className="ps-senior-spinner" /> Saving…</>
                       : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Changes</>
@@ -2013,55 +2027,128 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
 
           {/* READ MODE */}
           {!diagEditing && (
-            <div className="ps-diag-grid">
-              <div className="ps-diag-card accent full">
-                <div className="ps-diag-label">Primary Diagnosis</div>
-                <div className="ps-diag-value" style={{ fontSize: 16, fontWeight: 600 }}>
-                  {diagData.primaryDiagnosis || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>Not recorded</span>}
+            <>
+              {/* ── Diagnosis ── */}
+              <div className="ps-asm-read-card" style={{ marginBottom: 10 }}>
+                <div className="ps-asm-section-title">Diagnosis</div>
+                <div className="ps-diag-grid" style={{ marginTop: 8 }}>
+                  <div className="ps-diag-card accent full">
+                    <div className="ps-diag-label">Primary Diagnosis</div>
+                    <div className="ps-diag-value" style={{ fontSize: 16, fontWeight: 600 }}>
+                      {diagData.primaryDiagnosis || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>Not recorded</span>}
+                    </div>
+                  </div>
+                  <div className="ps-diag-card">
+                    <div className="ps-diag-label">ICD-10 Code</div>
+                    <div className="ps-diag-value">
+                      {diagData.icdCode
+                        ? <span className="ps-icd-badge">{diagData.icdCode}</span>
+                        : <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}
+                    </div>
+                  </div>
+                  <div className="ps-diag-card">
+                    <div className="ps-diag-label">Onset Date</div>
+                    <div className="ps-diag-value">{diagData.onsetDate || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}</div>
+                  </div>
+                  <div className="ps-diag-card full">
+                    <div className="ps-diag-label">Mechanism of Injury</div>
+                    <div className="ps-diag-value">{diagData.mechanism || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}</div>
+                  </div>
+                  <div className="ps-diag-card">
+                    <div className="ps-diag-label">Surgery Date</div>
+                    <div className="ps-diag-value">{diagData.surgeryDate || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}</div>
+                  </div>
+                  <div className="ps-diag-card">
+                    <div className="ps-diag-label">Surgeon</div>
+                    <div className="ps-diag-value">{diagData.surgeon || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}</div>
+                  </div>
+                  {diagData.contraindications && (
+                    <div className="ps-diag-card full">
+                      <div className="ps-diag-label">Contraindications & Precautions</div>
+                      <ul className="ps-contra-list" style={{ marginTop: 4 }}>
+                        {diagData.contraindications.split("\n").filter(Boolean).map((c, i) => (
+                          <li key={i} className="ps-contra-item">
+                            <div className="ps-contra-dot" />{c}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="ps-diag-card">
-                <div className="ps-diag-label">ICD-10 Code</div>
-                <div className="ps-diag-value">
-                  {diagData.icdCode
-                    ? <span className="ps-icd-badge">{diagData.icdCode}</span>
-                    : <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}
-                </div>
-              </div>
-              <div className="ps-diag-card">
-                <div className="ps-diag-label">Onset Date</div>
-                <div className="ps-diag-value">{diagData.onsetDate || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}</div>
-              </div>
-              <div className="ps-diag-card full">
-                <div className="ps-diag-label">Mechanism of Injury</div>
-                <div className="ps-diag-value">{diagData.mechanism || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}</div>
-              </div>
-              <div className="ps-diag-card">
-                <div className="ps-diag-label">Surgery Date</div>
-                <div className="ps-diag-value">{diagData.surgeryDate || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}</div>
-              </div>
-              <div className="ps-diag-card">
-                <div className="ps-diag-label">Surgeon</div>
-                <div className="ps-diag-value">{diagData.surgeon || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}</div>
-              </div>
-              {diagData.contraindications && (
-                <div className="ps-diag-card full">
-                  <div className="ps-diag-label">Contraindications & Precautions</div>
-                  <ul className="ps-contra-list" style={{ marginTop: 4 }}>
-                    {diagData.contraindications.split("\n").filter(Boolean).map((c, i) => (
-                      <li key={i} className="ps-contra-item">
-                        <div className="ps-contra-dot" />{c}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+
+              {/* ── PT Assessment read cards ── */}
+              {(() => {
+                const asmSections = [
+                  {
+                    title: "Subjective (Patient History)",
+                    rows: [
+                      ["Chief Complaints",      assessment.subjectiveComplaints],
+                      ["Pain Location",         assessment.painLocation],
+                      ["Pain Score (NRS 0–10)", assessment.painScore],
+                      ["Aggravating Factors",   assessment.aggravatingFactors],
+                      ["Relieving Factors",     assessment.relievingFactors],
+                      ["Medical History",       assessment.medicalHistory],
+                      ["Current Medications",   assessment.medications],
+                    ],
+                  },
+                  {
+                    title: "Objective (Physical Findings)",
+                    rows: [
+                      ["Posture / Observation",  assessment.postureObservation],
+                      ["Range of Motion",        assessment.rangeOfMotion],
+                      ["Muscle Strength (MMT)",  assessment.muscleStrength],
+                      ["Special Tests",          assessment.specialTests],
+                      ["Functional Limitations", assessment.functionalLimits],
+                    ],
+                  },
+                  {
+                    title: "Goals & Treatment Plan",
+                    rows: [
+                      ["Short-Term Goals",    assessment.shortTermGoals],
+                      ["Long-Term Goals",     assessment.longTermGoals],
+                      ["Treatment Approach",  assessment.treatmentApproach],
+                    ],
+                  },
+                  {
+                    title: "Sign Off",
+                    rows: [
+                      ["Assessed By",     assessment.assessorName],
+                      ["Assessment Date", assessment.assessmentDate],
+                    ],
+                  },
+                ];
+                const hasAnyData = asmSections.some((s) => s.rows.some(([, v]) => v));
+                if (!hasAnyData) return (
+                  <div className="ps-asm-empty">
+                    No PT assessment recorded yet.{canEdit ? ' Click "Edit" to begin.' : ""}
+                  </div>
+                );
+                return asmSections.map((sec) => {
+                  const filledRows = sec.rows.filter(([, v]) => v);
+                  if (!filledRows.length) return null;
+                  return (
+                    <div key={sec.title} className="ps-asm-read-card">
+                      <div className="ps-asm-section-title">{sec.title}</div>
+                      {filledRows.map(([k, v]) => (
+                        <div key={k} className="ps-asm-read-row">
+                          <span className="ps-asm-key">{k}</span>
+                          <span className="ps-asm-val">{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                });
+              })()}
+            </>
           )}
 
           {/* EDIT MODE */}
           {diagEditing && (
             <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 14, padding: 16 }}>
+
+              {/* Diagnosis fields */}
+              <div className="ps-asm-section-title">Diagnosis</div>
               <div className="ps-field-group">
                 <label className="ps-field-label">Primary Diagnosis</label>
                 <input className="ps-field-input" value={diagDraft.primaryDiagnosis}
@@ -2102,11 +2189,87 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                     placeholder="e.g. Mr. David Chan, FRCS" />
                 </div>
               </div>
-              <div className="ps-field-group" style={{ marginBottom: 0 }}>
+              <div className="ps-field-group">
                 <label className="ps-field-label">Contraindications & Precautions (one per line)</label>
                 <textarea className="ps-field-textarea" value={diagDraft.contraindications}
                   onChange={(e) => setDiagDraft({ ...diagDraft, contraindications: e.target.value })}
                   placeholder="Avoid full weight-bearing until week 12&#10;No return to sport until cleared&#10;Avoid deep knee flexion beyond 90°" />
+              </div>
+
+              {/* Subjective */}
+              <div className="ps-asm-section-title" style={{ marginTop: 12 }}>Subjective (Patient History)</div>
+              {([
+                ["subjectiveComplaints", "Chief Complaints / Reason for Referral", true],
+                ["painLocation",         "Pain Location",                           false],
+                ["painScore",            "Pain Score (NRS 0–10)",                  false],
+                ["aggravatingFactors",   "Aggravating Factors",                     true],
+                ["relievingFactors",     "Relieving Factors",                       true],
+                ["medicalHistory",       "Relevant Medical History",                true],
+                ["medications",          "Current Medications",                     true],
+              ] as [keyof PTAssessment, string, boolean][]).map(([field, label, multi]) => (
+                <div key={field} className="ps-field-group">
+                  <label className="ps-field-label">{label}</label>
+                  {multi
+                    ? <textarea className="ps-field-textarea" value={asmDraft[field] as string}
+                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
+                    : <input className="ps-field-input" value={asmDraft[field] as string}
+                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
+                  }
+                </div>
+              ))}
+
+              {/* Objective */}
+              <div className="ps-asm-section-title" style={{ marginTop: 12 }}>Objective (Physical Findings)</div>
+              {([
+                ["postureObservation", "Posture & Observation",   true],
+                ["rangeOfMotion",      "Range of Motion (ROM)",   true],
+                ["muscleStrength",     "Muscle Strength (MMT)",   true],
+                ["specialTests",       "Special Tests",           true],
+                ["functionalLimits",   "Functional Limitations",  true],
+              ] as [keyof PTAssessment, string, boolean][]).map(([field, label, multi]) => (
+                <div key={field} className="ps-field-group">
+                  <label className="ps-field-label">{label}</label>
+                  {multi
+                    ? <textarea className="ps-field-textarea" value={asmDraft[field] as string}
+                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
+                    : <input className="ps-field-input" value={asmDraft[field] as string}
+                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
+                  }
+                </div>
+              ))}
+
+              {/* Goals & Plan */}
+              <div className="ps-asm-section-title" style={{ marginTop: 12 }}>Goals & Treatment Plan</div>
+              {([
+                ["shortTermGoals",    "Short-Term Goals (0–4 weeks)", true],
+                ["longTermGoals",     "Long-Term Goals",              true],
+                ["treatmentApproach", "Treatment Approach & Plan",    true],
+              ] as [keyof PTAssessment, string, boolean][]).map(([field, label, multi]) => (
+                <div key={field} className="ps-field-group">
+                  <label className="ps-field-label">{label}</label>
+                  {multi
+                    ? <textarea className="ps-field-textarea" value={asmDraft[field] as string}
+                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
+                    : <input className="ps-field-input" value={asmDraft[field] as string}
+                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
+                  }
+                </div>
+              ))}
+
+              {/* Sign off */}
+              <div className="ps-asm-section-title" style={{ marginTop: 12 }}>Sign Off</div>
+              <div className="ps-field-row-2">
+                <div className="ps-field-group" style={{ marginBottom: 0 }}>
+                  <label className="ps-field-label">Assessed By</label>
+                  <input className="ps-field-input" value={asmDraft.assessorName}
+                    onChange={(e) => setAsmDraft({ ...asmDraft, assessorName: e.target.value })}
+                    placeholder="Physiotherapist name" />
+                </div>
+                <div className="ps-field-group" style={{ marginBottom: 0 }}>
+                  <label className="ps-field-label">Assessment Date</label>
+                  <input type="date" className="ps-field-input" value={asmDraft.assessmentDate}
+                    onChange={(e) => setAsmDraft({ ...asmDraft, assessmentDate: e.target.value })} />
+                </div>
               </div>
             </div>
           )}
@@ -2385,190 +2548,6 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         </>
       )}
 
-      {/* ── PT ASSESSMENT ── */}
-      {activeSection === "assessment" && role !== "patient" && (
-        <>
-          <div className="ps-edit-toolbar">
-            <div>
-              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 500, color: "#1a1a1a" }}>Physical Therapy Assessment</div>
-              <div style={{ fontSize: 13, color: "#9a9590", marginTop: 2 }}>
-                {asmEditing ? "Editing mode — complete the assessment form" : "Professional PT assessment record"}
-              </div>
-            </div>
-            <div className="ps-edit-toolbar-right">
-              {asmSaved && !asmEditing && (
-                <span className="ps-sn-success">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  Saved
-                </span>
-              )}
-              {canEdit && !asmEditing && (
-                <button className="ps-edit-btn" onClick={() => { setAsmDraft(assessment); setAsmEditing(true); }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                  </svg>
-                  {assessment.subjectiveComplaints ? "Edit Assessment" : "Create Assessment"}
-                </button>
-              )}
-              {asmEditing && (
-                <>
-                  <span className="ps-edit-badge">Editing</span>
-                  <button className="ps-cancel-btn" onClick={() => { setAsmEditing(false); setAsmDraft(assessment); }}>Cancel</button>
-                  <button className="ps-save-btn" disabled={asmSaving} onClick={handleSaveAssessment}>
-                    {asmSaving
-                      ? <><span className="ps-senior-spinner" /> Saving…</>
-                      : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Assessment</>
-                    }
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* READ MODE */}
-          {!asmEditing && !assessment.subjectiveComplaints && (
-            <div className="ps-asm-empty">
-              No assessment recorded yet.{canEdit ? ' Click "Create Assessment" to begin.' : ""}
-            </div>
-          )}
-          {!asmEditing && assessment.subjectiveComplaints && (() => {
-            const sections = [
-              {
-                title: "Subjective (Patient History)",
-                rows: [
-                  ["Chief Complaints",      assessment.subjectiveComplaints],
-                  ["Pain Location",         assessment.painLocation],
-                  ["Pain Score (NRS 0–10)", assessment.painScore],
-                  ["Aggravating Factors",   assessment.aggravatingFactors],
-                  ["Relieving Factors",     assessment.relievingFactors],
-                  ["Medical History",       assessment.medicalHistory],
-                  ["Current Medications",   assessment.medications],
-                ],
-              },
-              {
-                title: "Objective (Physical Findings)",
-                rows: [
-                  ["Posture / Observation",  assessment.postureObservation],
-                  ["Range of Motion",        assessment.rangeOfMotion],
-                  ["Muscle Strength (MMT)",  assessment.muscleStrength],
-                  ["Special Tests",          assessment.specialTests],
-                  ["Functional Limitations", assessment.functionalLimits],
-                ],
-              },
-              {
-                title: "Assessment & Plan",
-                rows: [
-                  ["Short-Term Goals",    assessment.shortTermGoals],
-                  ["Long-Term Goals",     assessment.longTermGoals],
-                  ["Treatment Approach",  assessment.treatmentApproach],
-                  ["Precautions",         assessment.precautions],
-                ],
-              },
-              {
-                title: "Sign Off",
-                rows: [
-                  ["Assessed By",       assessment.assessorName],
-                  ["Assessment Date",   assessment.assessmentDate],
-                ],
-              },
-            ];
-            return sections.map((sec) => (
-              <div key={sec.title} className="ps-asm-read-card">
-                <div className="ps-asm-section-title">{sec.title}</div>
-                {sec.rows.filter(([, v]) => v).map(([k, v]) => (
-                  <div key={k} className="ps-asm-read-row">
-                    <span className="ps-asm-key">{k}</span>
-                    <span className="ps-asm-val">{v}</span>
-                  </div>
-                ))}
-              </div>
-            ));
-          })()}
-
-          {/* EDIT MODE */}
-          {asmEditing && (
-            <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 14, padding: 16 }}>
-              {/* Subjective */}
-              <div className="ps-asm-section-title">Subjective (Patient History)</div>
-              {([
-                ["subjectiveComplaints", "Chief Complaints / Reason for Referral", true],
-                ["painLocation",         "Pain Location",                           false],
-                ["painScore",            "Pain Score (NRS 0–10)",                  false],
-                ["aggravatingFactors",   "Aggravating Factors",                     true],
-                ["relievingFactors",     "Relieving Factors",                       true],
-                ["medicalHistory",       "Relevant Medical History",                true],
-                ["medications",          "Current Medications",                     true],
-              ] as [keyof PTAssessment, string, boolean][]).map(([field, label, multi]) => (
-                <div key={field} className="ps-field-group">
-                  <label className="ps-field-label">{label}</label>
-                  {multi
-                    ? <textarea className="ps-field-textarea" value={asmDraft[field] as string}
-                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
-                    : <input className="ps-field-input" value={asmDraft[field] as string}
-                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
-                  }
-                </div>
-              ))}
-
-              {/* Objective */}
-              <div className="ps-asm-section-title">Objective (Physical Findings)</div>
-              {([
-                ["postureObservation", "Posture & Observation",   true],
-                ["rangeOfMotion",      "Range of Motion (ROM)",   true],
-                ["muscleStrength",     "Muscle Strength (MMT)",   true],
-                ["specialTests",       "Special Tests",           true],
-                ["functionalLimits",   "Functional Limitations",  true],
-              ] as [keyof PTAssessment, string, boolean][]).map(([field, label, multi]) => (
-                <div key={field} className="ps-field-group">
-                  <label className="ps-field-label">{label}</label>
-                  {multi
-                    ? <textarea className="ps-field-textarea" value={asmDraft[field] as string}
-                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
-                    : <input className="ps-field-input" value={asmDraft[field] as string}
-                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
-                  }
-                </div>
-              ))}
-
-              {/* Assessment & Plan */}
-              <div className="ps-asm-section-title">Assessment & Plan</div>
-              {([
-                ["shortTermGoals",    "Short-Term Goals (0–4 weeks)", true],
-                ["longTermGoals",     "Long-Term Goals",              true],
-                ["treatmentApproach", "Treatment Approach & Plan",    true],
-                ["precautions",       "Precautions",                  true],
-              ] as [keyof PTAssessment, string, boolean][]).map(([field, label, multi]) => (
-                <div key={field} className="ps-field-group">
-                  <label className="ps-field-label">{label}</label>
-                  {multi
-                    ? <textarea className="ps-field-textarea" value={asmDraft[field] as string}
-                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
-                    : <input className="ps-field-input" value={asmDraft[field] as string}
-                        onChange={(e) => setAsmDraft({ ...asmDraft, [field]: e.target.value })} />
-                  }
-                </div>
-              ))}
-
-              {/* Sign off */}
-              <div className="ps-asm-section-title">Sign Off</div>
-              <div className="ps-field-row-2">
-                <div className="ps-field-group" style={{ marginBottom: 0 }}>
-                  <label className="ps-field-label">Assessed By</label>
-                  <input className="ps-field-input" value={asmDraft.assessorName}
-                    onChange={(e) => setAsmDraft({ ...asmDraft, assessorName: e.target.value })}
-                    placeholder="Physiotherapist name" />
-                </div>
-                <div className="ps-field-group" style={{ marginBottom: 0 }}>
-                  <label className="ps-field-label">Assessment Date</label>
-                  <input type="date" className="ps-field-input" value={asmDraft.assessmentDate}
-                    onChange={(e) => setAsmDraft({ ...asmDraft, assessmentDate: e.target.value })} />
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
 
       {/* ── DOCUMENTS — live Firebase Storage ── */}
       {activeSection === "documents" && (
