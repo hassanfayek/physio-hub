@@ -13,15 +13,16 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { type ReactNode } from "react";
 
+import { lazy, Suspense } from "react";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import LoginPage    from "./features/auth/LoginPage";
 import RegisterPage from "./features/auth/RegisterPage";
 import logo from "./assets/physio-logo.svg";
 
-// Lazy-import dashboards to keep the auth bundle lean
-import PatientDashboard from "./features/patient/PatientDashboard";
-import PhysioDashboard  from "./features/physio/PhysioDashboard";
+// Truly lazy-load the heavy dashboards — they ship in separate JS chunks
+const PatientDashboard = lazy(() => import("./features/patient/PatientDashboard"));
+const PhysioDashboard  = lazy(() => import("./features/physio/PhysioDashboard"));
 
 // ─── Loading screen (shown while Firebase resolves auth state) ────────────────
 
@@ -162,34 +163,36 @@ function PublicRoute({ children }: { children: ReactNode }) {
 
 function AppRoutes() {
   return (
-    <Routes>
-      {/* Public */}
-      <Route path="/" element={
-        <PublicRoute><LoginPage /></PublicRoute>
-      } />
+    <Suspense fallback={<LoadingScreen />}>
+      <Routes>
+        {/* Public */}
+        <Route path="/" element={
+          <PublicRoute><LoginPage /></PublicRoute>
+        } />
 
-      {/* Staff registration — protected, only accessible when already logged in as staff */}
-      <Route path="/register" element={
-        <ProtectedRoute requiredRole="physiotherapist">
-          <RegisterPage />
-        </ProtectedRoute>
-      } />
+        {/* Staff registration — protected, only accessible when already logged in as staff */}
+        <Route path="/register" element={
+          <ProtectedRoute requiredRole="physiotherapist">
+            <RegisterPage />
+          </ProtectedRoute>
+        } />
 
-      {/* Protected */}
-      <Route path="/patient" element={
-        <ProtectedRoute requiredRole="patient">
-          <PatientDashboard />
-        </ProtectedRoute>
-      } />
-      <Route path="/physio" element={
-        <ProtectedRoute requiredRole="physiotherapist">
-          <PhysioDashboard />
-        </ProtectedRoute>
-      } />
+        {/* Protected */}
+        <Route path="/patient" element={
+          <ProtectedRoute requiredRole="patient">
+            <PatientDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/physio" element={
+          <ProtectedRoute requiredRole="physiotherapist">
+            <PhysioDashboard />
+          </ProtectedRoute>
+        } />
 
-      {/* Fallback */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 
