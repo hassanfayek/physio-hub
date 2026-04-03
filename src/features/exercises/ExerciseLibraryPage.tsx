@@ -162,7 +162,7 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} noValidate>
+        <form onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
           <div className="el-modal-body">
 
             {error && <div className="el-error-box">{error}</div>}
@@ -686,14 +686,17 @@ export default function ExerciseLibraryPage({
           position: fixed; inset: 0; z-index: 1000;
           background: rgba(10,15,10,0.55); backdrop-filter: blur(4px);
           display: flex; align-items: center; justify-content: center;
-          padding: 24px; animation: elOverlayIn 0.2s ease both;
+          overflow-y: auto; padding: 24px;
+          animation: elOverlayIn 0.2s ease both;
         }
         @keyframes elOverlayIn { from { opacity:0; } to { opacity:1; } }
 
         .el-modal {
           background: #fff; border-radius: 24px;
-          width: 100%; max-width: 520px; max-height: 90vh;
-          overflow: hidden; display: flex; flex-direction: column;
+          width: 100%; max-width: 520px;
+          max-height: min(90vh, 100%);
+          display: flex; flex-direction: column;
+          overflow: hidden; flex-shrink: 0;
           box-shadow: 0 24px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.04);
           animation: elModalIn 0.25s cubic-bezier(0.16,1,0.3,1) both;
           font-family: 'Outfit', sans-serif;
@@ -728,7 +731,8 @@ export default function ExerciseLibraryPage({
 
         .el-modal-body {
           padding: 18px 24px; overflow-y: auto;
-          display: flex; flex-direction: column; gap: 14px; flex: 1;
+          display: flex; flex-direction: column; gap: 14px;
+          flex: 1; min-height: 0;
         }
         .el-modal-ft {
           padding: 14px 24px 20px;
