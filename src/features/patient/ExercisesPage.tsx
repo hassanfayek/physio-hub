@@ -156,8 +156,6 @@ export default function ExercisesPage() {
   const [exercises,  setExercises]  = useState<PatientExercise[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState<string | null>(null);
-  // Issue 2: Clinic / Home tab state
-  const [activeTab,  setActiveTab]  = useState<"clinic" | "home">("clinic");
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const resetDoneRef = useRef(false);  // ensure daily reset only runs once per session
 
@@ -198,12 +196,9 @@ export default function ExercisesPage() {
     setTogglingId(null);
   };
 
-  // ── Derived ───────────────────────────────────────────────────────────────
-  // Issue 2: filter by programType (default "clinic" when field absent)
-  const clinicExercises = exercises.filter((e) => (e.programType ?? "clinic") === "clinic");
-  const homeExercises   = exercises.filter((e) => (e.programType ?? "clinic") === "home");
-  const tabExercises    = activeTab === "clinic" ? clinicExercises : homeExercises;
-  const completedCount  = exercises.filter((e) => e.completed ?? false).length;
+  // Patients see only home program exercises
+  const tabExercises   = exercises.filter((e) => (e.programType ?? "clinic") === "home");
+  const completedCount = tabExercises.filter((e) => e.completed ?? false).length;
 
   return (
     <>
@@ -409,25 +404,6 @@ export default function ExercisesPage() {
           );
         })()}
 
-        {/* Issue 2: Clinic / Home tabs */}
-        {!loading && (
-          <div className="ep-prog-tabs">
-            <button
-              className={`ep-prog-tab ${activeTab === "clinic" ? "active" : ""}`}
-              onClick={() => setActiveTab("clinic")}
-            >
-              Clinic Exercises
-              <span className="ep-prog-tab-count">{clinicExercises.length}</span>
-            </button>
-            <button
-              className={`ep-prog-tab ${activeTab === "home" ? "active" : ""}`}
-              onClick={() => setActiveTab("home")}
-            >
-              Home Program
-              <span className="ep-prog-tab-count">{homeExercises.length}</span>
-            </button>
-          </div>
-        )}
 
         {/* Error */}
         {error && <div className="ep-error">{error}</div>}
@@ -439,22 +415,12 @@ export default function ExercisesPage() {
           </div>
         ) : tabExercises.length === 0 ? (
           <div className="ep-empty">
-            <div className="ep-empty-icon">{exercises.length === 0 ? "🏋️" : activeTab === "home" ? "🏠" : "🏥"}</div>
+            <div className="ep-empty-icon">🏠</div>
             <div className="ep-empty-title">
-              {exercises.length === 0
-                ? "No exercises assigned yet"
-                : activeTab === "home"
-                  ? "No home program yet"
-                  : "No clinic exercises yet"
-              }
+              No home program yet
             </div>
             <div className="ep-empty-sub">
-              {exercises.length === 0
-                ? "Your physiotherapist hasn't assigned any exercises yet. Check back after your next session."
-                : activeTab === "home"
-                  ? "Your physiotherapist hasn't assigned any home exercises yet."
-                  : "No exercises assigned for clinic sessions yet."
-              }
+              Your physiotherapist hasn't assigned any home exercises yet. Check back after your next session.
             </div>
           </div>
         ) : (

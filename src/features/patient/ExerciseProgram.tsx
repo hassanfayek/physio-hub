@@ -284,8 +284,11 @@ export default function ExerciseProgram({
     showToast(`"${rec.exerciseName}" removed`);
   };
 
-  const completedCount = exercises.filter((e) => e.completed).length;
-  const totalCount     = exercises.length;
+  const visibleExercises = viewerRole === "patient"
+    ? exercises.filter((e) => (e.programType ?? "clinic") === "home")
+    : exercises;
+  const completedCount = visibleExercises.filter((e) => e.completed).length;
+  const totalCount     = visibleExercises.length;
 
   return (
     <>
@@ -678,7 +681,7 @@ export default function ExerciseProgram({
                   </div>
                 </div>
               )
-              : exercises.map((rec) => (
+              : visibleExercises.map((rec) => (
                 <div key={rec.id} className={`ep-ex-card ${(rec.completed ?? false) ? "completed" : ""}`}>
 
                   {/* Checkbox */}

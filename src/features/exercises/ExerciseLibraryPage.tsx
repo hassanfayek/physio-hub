@@ -35,6 +35,7 @@ type ModalMode = "add" | "edit" | "assign";
 interface ExerciseFormState {
   name:            string;
   category:        string;
+  equipment:       string;
   description:     string;
   defaultSets:     string;
   defaultReps:     string;
@@ -44,7 +45,7 @@ interface ExerciseFormState {
 }
 
 const BLANK_FORM: ExerciseFormState = {
-  name: "", category: "", description: "",
+  name: "", category: "", equipment: "", description: "",
   defaultSets: "3", defaultReps: "10", defaultHoldTime: "0",
   notes: "", mediaUrl: "",
 };
@@ -52,6 +53,12 @@ const BLANK_FORM: ExerciseFormState = {
 const CATEGORIES = [
   "Shoulder", "Knee", "Hip", "Spine", "Ankle & Foot",
   "Elbow & Wrist", "Neck", "Core", "Balance", "Cardio", "Other",
+];
+
+const EQUIPMENT_TYPES = [
+  "Bodyweight", "Resistance Bands", "Free Weights", "Machine",
+  "Swiss Ball", "TRX / Suspension", "Foam Roller", "Balance Board",
+  "Parallel Bars", "Pool / Hydrotherapy", "Other",
 ];
 
 // ─── Media helper ─────────────────────────────────────────────────────────────
@@ -82,6 +89,7 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
       ? {
           name:            initial.name,
           category:        initial.category,
+          equipment:       initial.equipment,
           description:     initial.description,
           defaultSets:     String(initial.defaultSets),
           defaultReps:     String(initial.defaultReps),
@@ -115,6 +123,7 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
     const payload = {
       name:            form.name.trim(),
       category:        form.category,
+      equipment:       form.equipment,
       description:     form.description.trim(),
       defaultSets:     Math.max(1, parseInt(form.defaultSets) || 3),
       defaultReps:     Math.max(1, parseInt(form.defaultReps) || 10),
@@ -168,6 +177,14 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
               <select className="el-select" value={form.category} onChange={set("category")}>
                 <option value="">— Select category —</option>
                 {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div className="el-field">
+              <label className="el-label">Equipment</label>
+              <select className="el-select" value={form.equipment} onChange={set("equipment")}>
+                <option value="">— Select equipment —</option>
+                {EQUIPMENT_TYPES.map((e) => <option key={e} value={e}>{e}</option>)}
               </select>
             </div>
 
@@ -419,8 +436,9 @@ export default function ExerciseLibraryPage({
   const [exercises,   setExercises]   = useState<LibraryExercise[]>([]);
   const [patients,    setPatients]    = useState<Patient[]>([]);
   const [loading,     setLoading]     = useState(true);
-  const [search,      setSearch]      = useState("");
-  const [filterCat,   setFilterCat]   = useState("");
+  const [search,         setSearch]         = useState("");
+  const [filterCat,      setFilterCat]      = useState("");
+  const [filterEquipment,setFilterEquipment]= useState("");
   const [modal,       setModal]       = useState<ModalMode | null>(null);
   const [editTarget,  setEditTarget]  = useState<LibraryExercise | null>(null);
   const [assignTarget,setAssignTarget]= useState<LibraryExercise | null>(null);
@@ -473,10 +491,12 @@ export default function ExerciseLibraryPage({
     const matchSearch = ex.name.toLowerCase().includes(search.toLowerCase()) ||
                         ex.description.toLowerCase().includes(search.toLowerCase());
     const matchCat    = !filterCat || ex.category === filterCat;
-    return matchSearch && matchCat;
+    const matchEquip  = !filterEquipment || ex.equipment === filterEquipment;
+    return matchSearch && matchCat && matchEquip;
   });
 
-  const categories = Array.from(new Set(exercises.map((e) => e.category).filter(Boolean)));
+  const categories       = Array.from(new Set(exercises.map((e) => e.category).filter(Boolean)));
+  const usedEquipment    = Array.from(new Set(exercises.map((e) => e.equipment).filter(Boolean)));
 
   return (
     <>
@@ -521,6 +541,24 @@ export default function ExerciseLibraryPage({
           background-repeat: no-repeat; background-position: right 10px center;
         }
         .el-cat-filter:focus { border-color: #2E8BC0; }
+
+        /* Equipment filter chips */
+        .el-chip-row {
+          display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+        }
+        .el-chip-label {
+          font-size: 11px; font-weight: 600; color: #9a9590;
+          text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap;
+          margin-right: 2px;
+        }
+        .el-chip {
+          padding: 5px 12px; border-radius: 100px; border: 1.5px solid #e5e0d8;
+          background: #fff; font-family: 'Outfit', sans-serif;
+          font-size: 12.5px; font-weight: 500; color: #5a5550;
+          cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        }
+        .el-chip:hover { border-color: #B3DEF0; color: #2E8BC0; background: #EAF5FC; }
+        .el-chip.active { border-color: #2E8BC0; color: #2E8BC0; background: #D6EEF8; }
 
         /* Add button */
         .el-add-btn {
@@ -841,6 +879,22 @@ export default function ExerciseLibraryPage({
               {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
+          {usedEquipment.length > 0 && (
+            <div className="el-chip-row">
+              <span className="el-chip-label">Equipment:</span>
+              <button
+                className={`el-chip${filterEquipment === "" ? " active" : ""}`}
+                onClick={() => setFilterEquipment("")}
+              >All</button>
+              {usedEquipment.map((eq) => (
+                <button
+                  key={eq}
+                  className={`el-chip${filterEquipment === eq ? " active" : ""}`}
+                  onClick={() => setFilterEquipment(filterEquipment === eq ? "" : eq)}
+                >{eq}</button>
+              ))}
+            </div>
+          )}
         </div>
 
         {!loading && (
@@ -900,6 +954,11 @@ export default function ExerciseLibraryPage({
                         <div className="el-card-top">
                           <span className="el-card-name">{ex.name}</span>
                           {ex.category && <span className="el-card-cat">{ex.category}</span>}
+                          {ex.equipment && (
+                            <span className="el-card-cat" style={{ background: "#f3f4f6", color: "#374151" }}>
+                              {ex.equipment}
+                            </span>
+                          )}
                         </div>
 
                         {ex.description && (

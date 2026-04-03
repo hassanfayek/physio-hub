@@ -25,6 +25,7 @@ export interface LibraryExercise {
   id:           string;
   name:         string;
   category:     string;
+  equipment:    string;
   description:  string;
   defaultSets:  number;
   defaultReps:  number;
@@ -55,6 +56,7 @@ export interface PatientExercise {
 export interface CreateExercisePayload {
   name:            string;
   category:        string;
+  equipment:       string;
   description:     string;
   defaultSets:     number;
   defaultReps:     number;
@@ -91,6 +93,7 @@ function docToLibraryExercise(id: string, data: Record<string, unknown>): Librar
     id,
     name:            (data.name            as string)  ?? "",
     category:        (data.category        as string)  ?? "",
+    equipment:       (data.equipment       as string)  ?? "",
     description:     (data.description     as string)  ?? "",
     defaultSets:     (data.defaultSets     as number)  ?? 3,
     defaultReps:     (data.defaultReps     as number)  ?? 10,
