@@ -8,6 +8,7 @@
 // CSS prefix: ep-  (exercise program — no collision with ps- classes)
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X, Home, Heart, Plus, Check, Pencil, Trash2, Play } from "lucide-react";
 import {
   subscribeToPatientExercises,
@@ -102,7 +103,7 @@ function LibraryPicker({ patientId, viewerUid, onClose, onAdded }: LibraryPicker
     onAdded(ex.name);
   };
 
-  return (
+  return createPortal(
     <div className="ep-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="ep-picker-modal" role="dialog" aria-modal="true">
 
@@ -192,7 +193,8 @@ function LibraryPicker({ patientId, viewerUid, onClose, onAdded }: LibraryPicker
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
