@@ -5,6 +5,7 @@
 // CSS prefix: el-  (exercise library)
 
 import React, { useState, useEffect, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { X, Check } from "lucide-react";
 import {
   subscribeToExerciseLibrary,
@@ -148,7 +149,7 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
     }
   };
 
-  return (
+  return createPortal(
     <div className="el-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="el-modal" role="dialog" aria-modal="true">
 
@@ -250,7 +251,8 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
         </form>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -311,7 +313,7 @@ function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps
     setSelected(null);
   };
 
-  return (
+  return createPortal(
     <div className="el-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="el-modal" role="dialog" aria-modal="true">
 
@@ -421,7 +423,8 @@ function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
