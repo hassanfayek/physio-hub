@@ -244,8 +244,8 @@ export default function AddPatientModal({
         @keyframes apmSpin { to { transform: rotate(360deg); } }
 
         @media (max-width: 520px) {
-          .apm-overlay { padding: 0; align-items: flex-end; }
-          .apm-modal { border-radius: 22px 22px 0 0; max-width: 100%; }
+          .apm-overlay { padding: 0; align-items: flex-start; }
+          .apm-modal { border-radius: 0 0 22px 22px; max-width: 100%; }
           .apm-grid2 { grid-template-columns: 1fr; }
         }
       `}</style>

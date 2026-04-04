@@ -834,22 +834,21 @@ export default function ExerciseLibraryPage({
         }
         @keyframes elSpin { to { transform: rotate(360deg); } }
 
-        /* ── Mobile: bottom-sheet modal ── */
+        /* ── Mobile: top-sheet modal ── */
         @media (max-width: 540px) {
           .el-overlay {
-            align-items: flex-end;
+            align-items: flex-start;
             padding: 0;
           }
           .el-modal {
             max-width: 100%;
             max-height: 92dvh;
-            border-radius: 22px 22px 0 0;
+            border-radius: 0 0 22px 22px;
             width: 100%;
           }
           .el-modal-hd  { padding: 20px 18px 0; }
           .el-modal-body { padding: 14px 18px; }
-          .el-modal-ft  { padding: 12px 18px calc(12px + env(safe-area-inset-bottom)); }
-          .el-modal-ft  { flex-direction: column-reverse; }
+          .el-modal-ft  { padding: 12px 18px 16px; flex-direction: column-reverse; }
           .el-btn-cancel, .el-btn-primary { width: 100%; justify-content: center; }
         }
 

@@ -293,9 +293,9 @@ export default function AppointmentModal({
         .am-submit { min-height: 48px; }
 
         @media (max-width: 520px) {
-          .am-overlay { padding: 0; align-items: flex-end; }
+          .am-overlay { padding: 0; align-items: flex-start; }
           .am-modal {
-            border-radius: 22px 22px 0 0; max-width: 100%;
+            border-radius: 0 0 22px 22px; max-width: 100%;
             max-height: 92vh; overflow-y: auto;
           }
           @keyframes amModalIn {

@@ -238,8 +238,8 @@ export default function AddPhysioModal({ onClose, onCreated }: AddPhysioModalPro
         @keyframes aphSpin { to { transform: rotate(360deg); } }
 
         @media (max-width: 520px) {
-          .aph-overlay { padding: 0; align-items: flex-end; }
-          .aph-modal   { border-radius: 22px 22px 0 0; max-width: 100%; max-height: 96vh; }
+          .aph-overlay { padding: 0; align-items: flex-start; }
+          .aph-modal   { border-radius: 0 0 22px 22px; max-width: 100%; max-height: 96vh; }
           .aph-grid2   { grid-template-columns: 1fr; }
         }
       `}</style>

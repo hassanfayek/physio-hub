@@ -428,14 +428,14 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
         /* Add Patient Modal */
         .pt-modal-overlay {
           position: fixed; inset: 0; background: rgba(0,0,0,0.4);
-          display: flex; align-items: flex-end; justify-content: center;
+          display: flex; align-items: flex-start; justify-content: center;
           z-index: 300; backdrop-filter: blur(3px);
         }
         @media (min-width: 480px) {
           .pt-modal-overlay { align-items: center; }
         }
         .pt-modal {
-          background: #fff; border-radius: 20px 20px 0 0; padding: 24px;
+          background: #fff; border-radius: 0 0 20px 20px; padding: 24px;
           width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto;
           box-shadow: 0 24px 80px rgba(0,0,0,0.18);
           animation: ptModalIn 0.22s cubic-bezier(0.16,1,0.3,1) both;

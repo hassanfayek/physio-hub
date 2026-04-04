@@ -61,6 +61,7 @@ function LibraryPicker({ patientId, viewerUid, onClose, onAdded }: LibraryPicker
   const [loading,      setLoading]      = useState(true);
   const [search,       setSearch]       = useState("");
   const [adding,       setAdding]       = useState<string | null>(null);
+  const [addedIds,     setAddedIds]     = useState<Set<string>>(new Set());
   const [error,        setError]        = useState<string | null>(null);
   const [programType,  setProgramType]  = useState<"clinic" | "home">("clinic");
 
@@ -100,6 +101,7 @@ function LibraryPicker({ patientId, viewerUid, onClose, onAdded }: LibraryPicker
     });
     setAdding(null);
     if ("error" in result && result.error) { setError(result.error); return; }
+    setAddedIds((prev) => new Set(prev).add(ex.id));
     onAdded(ex.name);
   };
 
@@ -173,16 +175,17 @@ function LibraryPicker({ patientId, viewerUid, onClose, onAdded }: LibraryPicker
                 </div>
               </div>
               <button
-                className="ep-picker-add-btn"
+                className={`ep-picker-add-btn${addedIds.has(ex.id) ? " added" : ""}`}
                 disabled={adding === ex.id}
                 onClick={() => handleAdd(ex)}
                 title={`Add to ${programType === "home" ? "Home" : "Clinic"} Program`}
               >
                 {adding === ex.id
-                  ? <span className="ep-mini-spin" />
-                  : <Plus size={13} strokeWidth={2.5} />
+                  ? <><span className="ep-mini-spin" /> Adding…</>
+                  : addedIds.has(ex.id)
+                    ? <><Check size={13} strokeWidth={2.5} /> Added</>
+                    : <><Plus size={13} strokeWidth={2.5} /> Add</>
                 }
-                {adding === ex.id ? "Adding…" : "Add"}
               </button>
             </div>
           ))}
@@ -564,8 +567,9 @@ export default function ExerciseProgram({
           font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 500;
           color: #2E8BC0; cursor: pointer; transition: all 0.15s; flex-shrink: 0;
         }
-        .ep-picker-add-btn:hover:not(:disabled) { background: #D6EEF8; border-color: #2E8BC0; }
+        .ep-picker-add-btn:hover:not(:disabled):not(.added) { background: #D6EEF8; border-color: #2E8BC0; }
         .ep-picker-add-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .ep-picker-add-btn.added { background: #d1fae5; border-color: #6ee7b7; color: #065f46; cursor: default; }
 
         .ep-picker-ft {
           padding: 12px 20px 18px; flex-shrink: 0; border-top: 1px solid #f0ede8;
@@ -609,13 +613,13 @@ export default function ExerciseProgram({
         .ep-edit-cancel { min-height: 40px; }
 
         @media (max-width: 520px) {
-          .ep-overlay { padding: 0; align-items: flex-end; }
+          .ep-overlay { padding: 0; align-items: flex-start; }
           .ep-picker-modal {
-            border-radius: 22px 22px 0 0; max-width: 100%;
-            max-height: 90vh;
+            border-radius: 0 0 22px 22px; max-width: 100%;
+            max-height: 92dvh;
           }
           @keyframes epModalIn {
-            from { opacity:0; transform: translateY(100%); }
+            from { opacity:0; transform: translateY(-100%); }
             to   { opacity:1; transform: translateY(0); }
           }
           .ep-picker-hd { padding: 16px 16px 0; }
@@ -829,8 +833,7 @@ export default function ExerciseProgram({
           viewerUid={viewerUid}
           onClose={() => setShowPicker(false)}
           onAdded={(name) => {
-            setShowPicker(false);
-            showToast(`✓ "${name}" added to exercise program`);
+            showToast(`✓ "${name}" added`);
           }}
         />
       )}
