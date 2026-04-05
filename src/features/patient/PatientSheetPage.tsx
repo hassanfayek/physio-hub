@@ -591,31 +591,33 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
 
   // ── Permission logic ───────────────────────────────────────────────────────
   const role = user?.role ?? "patient";
+  const isManager   = role === "clinic_manager";
+  const isSecretary = role === "secretary";
 
-  // canEdit:
-  //   clinic_manager            → always true
-  //   senior physiotherapist    → true (assigned senior editor for this patient)
-  //   any other physio          → false (view-only)
-  //   patient                   → false (view-only)
+  // canEdit: full clinical editing rights (profile + clinical sections)
+  //   clinic_manager + secretary  → always true for non-clinical sections
+  //   senior physiotherapist      → true (clinical + profile)
   const canEdit: boolean =
     role === "clinic_manager" ||
     (role === "physiotherapist" &&
       !!patient?.seniorEditorId &&
       (user as PhysioProfile).uid === patient.seniorEditorId);
 
+  // canEditProfile: can edit patient profile & manage documents (non-clinical)
+  const canEditProfile: boolean = canEdit || isSecretary;
+
   // canViewPatient: true for any physio assigned to this patient in any role
   const myUid = (user as PhysioProfile)?.uid ?? "";
   const canViewPatient: boolean =
     role === "clinic_manager" ||
     role === "patient" ||
+    role === "secretary" ||
     (role === "physiotherapist" && !!(
       (patient?.seniorEditorId && patient.seniorEditorId === myUid) ||
       (patient?.juniorId        && patient.juniorId        === myUid) ||
       (patient?.traineeId       && patient.traineeId       === myUid) ||
       (patient?.physioId        && patient.physioId        === myUid)
     ));
-
-  const isManager = role === "clinic_manager";
 
   // ── Diagnosis state (editable by canEdit) ─────────────────────────────────
   const [diagData,     setDiagData]     = useState<DiagnosisData>(EMPTY_DIAGNOSIS);
@@ -636,7 +638,8 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
   const [extSaved,      setExtSaved]     = useState(false);
 
   // ── Local UI state (unchanged) ─────────────────────────────────────────────
-  const [activeSection, setActiveSection] = useState<string>(initialSection ?? "diagnosis");
+  const defaultSection = initialSection ?? (user?.role === "secretary" ? "profile" : "diagnosis");
+  const [activeSection, setActiveSection] = useState<string>(defaultSection);
 
   // ── Live documents state ──────────────────────────────────────────────────
   const [patientDocs,   setPatientDocs]   = useState<PatientDocument[]>([]);
@@ -662,15 +665,15 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     { id: "pricing",           label: "Price Sheet",       billingOnly: true },
   ];
   // Filter sections by role:
-  //   physioOnly  → hidden from patients
-  //   managerOnly → only clinic_manager + the patient themselves can see
-  //   billingOnly → only clinic_manager; secretary only when secretaryCanView === true
+  //   physioOnly  → hidden from patients and secretaries (clinical data)
+  //   managerOnly → clinic_manager + secretary + patient
+  //   billingOnly → clinic_manager; secretary only when secretaryCanView === true
   const sections = allSections.filter((sec) => {
-    if (sec.physioOnly  && role === "patient")        return false;
+    if (sec.physioOnly  && (role === "patient" || isSecretary)) return false;
     if (sec.managerOnly && role === "physiotherapist") return false;
     if (sec.billingOnly) {
       if (role === "clinic_manager") return true;
-      if (role === "secretary") return secretaryCanViewPricing;
+      if (isSecretary) return secretaryCanViewPricing;
       return false;
     }
     return true;
@@ -1723,7 +1726,16 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       )}
 
       {/* ── Read-only banner for non-editors ── */}
-      {!canEdit && <ReadOnlyBanner role={role} />}
+      {!canEdit && !isSecretary && <ReadOnlyBanner role={role} />}
+      {isSecretary && (
+        <div className="ps-readonly-banner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          Secretary access — you can edit the patient profile and manage documents. Clinical sections are view-only.
+        </div>
+      )}
 
       {/* ── Access guard for unassigned physios ── */}
       {role === "physiotherapist" && patient && !canViewPatient && (
@@ -1777,7 +1789,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                   Saved
                 </span>
               )}
-              {canEdit && !extEditing && (
+              {canEditProfile && !extEditing && (
                 <button className="ps-edit-btn" onClick={() => { setExtDraft(extProfile); setExtEditing(true); }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -2687,7 +2699,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                         >
                           ⬇
                         </a>
-                        {(canEdit || user?.uid === document.uploadedBy) && (
+                        {(canEditProfile || user?.uid === document.uploadedBy) && (
                           <>
                             <button
                               className="ps-doc-edit-btn"
