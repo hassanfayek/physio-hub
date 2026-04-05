@@ -388,6 +388,16 @@ export default function ExerciseProgram({
           transition: color 0.15s;
         }
         .ep-watch-btn:hover { color: #2E8BC0; }
+        .ep-video-wrap {
+          width: 100%; border-radius: 10px; overflow: hidden;
+          position: relative; padding-top: 56.25%;
+          margin-top: 8px;
+        }
+        .ep-video-wrap iframe {
+          position: absolute; inset: 0;
+          width: 100%; height: 100%;
+          border: none; display: block;
+        }
         .ep-completed-tag {
           display: inline-flex; align-items: center; gap: 4px;
           font-size: 11.5px; font-weight: 600; color: #2E8BC0;
@@ -744,26 +754,24 @@ export default function ExerciseProgram({
                     )}
 
                     {rec.videoId && (
-                      <div style={{ marginTop: 10, borderRadius: 10, overflow: "hidden", aspectRatio: "16/9" }}>
-                        {openVideoId === rec.id ? (
-                          <>
+                      openVideoId === rec.id ? (
+                        <>
+                          <div className="ep-video-wrap">
                             <iframe
-                              width="100%" height="100%"
                               src={`https://www.youtube.com/embed/${rec.videoId}?autoplay=1`}
                               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                               allowFullScreen
-                              style={{ border: "none", display: "block" }}
                             />
-                            <button className="ep-watch-btn" style={{ marginTop: 6 }} onClick={() => setOpenVideoId(null)}>
-                              <Play size={12} strokeWidth={2} /> Hide Video
-                            </button>
-                          </>
-                        ) : (
-                          <button className="ep-watch-btn" onClick={() => setOpenVideoId(rec.id)}>
-                            <Play size={12} strokeWidth={2} /> Watch Video
+                          </div>
+                          <button className="ep-watch-btn" style={{ marginTop: 6 }} onClick={() => setOpenVideoId(null)}>
+                            <Play size={12} strokeWidth={2} /> Hide Video
                           </button>
-                        )}
-                      </div>
+                        </>
+                      ) : (
+                        <button className="ep-watch-btn" onClick={() => setOpenVideoId(rec.id)}>
+                          <Play size={12} strokeWidth={2} /> Watch Video
+                        </button>
+                      )
                     )}
 
                     <div className="ep-ex-footer">

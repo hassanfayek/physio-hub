@@ -610,7 +610,19 @@ export default function ExerciseLibraryPage({
         .el-card {
           background: #fff; border: 1.5px solid #e5e0d8; border-radius: 14px;
           padding: 14px 14px; display: flex; align-items: flex-start; gap: 12px;
+          flex-wrap: wrap;
           transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .el-video-wrap {
+          width: 100%; flex-basis: 100%;
+          border-radius: 10px; overflow: hidden;
+          position: relative; padding-top: 56.25%; /* 16:9 */
+          margin-top: 10px;
+        }
+        .el-video-wrap iframe {
+          position: absolute; inset: 0;
+          width: 100%; height: 100%;
+          border: none; display: block;
         }
         .el-card:hover { border-color: #B3DEF0; box-shadow: 0 2px 12px rgba(46,139,192,0.07); }
 
@@ -1038,18 +1050,17 @@ export default function ExerciseLibraryPage({
                             </button>
                           )}
                         </div>
-                        {openVideoId === ex.id && ex.videoId && (
-                          <div style={{ marginTop: 10, borderRadius: 10, overflow: "hidden", aspectRatio: "16/9" }}>
-                            <iframe
-                              width="100%" height="100%"
-                              src={`https://www.youtube.com/embed/${ex.videoId}`}
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              allowFullScreen
-                              style={{ border: "none", display: "block" }}
-                            />
-                          </div>
-                        )}
                       </div>
+
+                      {openVideoId === ex.id && ex.videoId && (
+                        <div className="el-video-wrap">
+                          <iframe
+                            src={`https://www.youtube.com/embed/${ex.videoId}`}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        </div>
+                      )}
 
                       {/* Actions */}
                       <div className="el-card-actions">
