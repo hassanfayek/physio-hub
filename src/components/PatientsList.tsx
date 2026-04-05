@@ -100,7 +100,7 @@ export default function PatientsList({
           !q ||
           `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
           p.email.toLowerCase().includes(q) ||
-          p.condition.toLowerCase().includes(q);
+          (p.occupation ?? "").toLowerCase().includes(q);
         const matchStatus = status === "all" || p.status === status;
         return matchSearch && matchStatus;
       })
@@ -109,7 +109,7 @@ export default function PatientsList({
         if (sortKey === "name") {
           cmp = `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
         } else if (sortKey === "condition") {
-          cmp = a.condition.localeCompare(b.condition);
+          cmp = (a.occupation ?? "").localeCompare(b.occupation ?? "");
         } else if (sortKey === "status") {
           cmp = a.status.localeCompare(b.status);
         } else {
@@ -583,8 +583,8 @@ export default function PatientsList({
                           </div>
                         </td>
                         <td>
-                          <span className="pl-condition" title={patient.condition}>
-                            {patient.condition}
+                          <span className="pl-condition" title={patient.occupation ?? ""}>
+                            {patient.occupation || "—"}
                           </span>
                         </td>
                         <td>

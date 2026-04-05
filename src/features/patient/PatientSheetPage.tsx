@@ -634,7 +634,6 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
   const [snNotes,         setSnNotes]         = useState("");
   const [snSaving,        setSnSaving]        = useState(false);
   const [snError,         setSnError]         = useState<string | null>(null);
-  const [snSuccess,       setSnSuccess]       = useState(false);
 
   // ── Treatment Program state (physio/manager only) ─────────────────────────
   const [treatmentEntries, setTreatmentEntries] = useState<TreatmentEntry[]>([]);
@@ -878,8 +877,6 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         createdAt:     serverTimestamp(),
       });
       setSnNotes("");
-      setSnSuccess(true);
-      setTimeout(() => setSnSuccess(false), 2500);
     } catch (e) {
       setSnError("Failed to save. Please try again.");
     }
@@ -1667,13 +1664,13 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         const lastName  = patient?.lastName  ?? "";
         const initials  = `${firstName[0] ?? ""}${lastName[0] ?? ""}` || "P";
         const fullName  = firstName ? `${firstName} ${lastName}`.trim() : "Patient";
-        const condition = patient?.condition ?? "";
+        const occupation = patient?.occupation ?? "";
         return (
           <div className="ps-patient-header">
             <div className="ps-patient-avatar">{initials}</div>
             <div className="ps-patient-info">
               <div className="ps-patient-name">{fullName}</div>
-              {condition && <div className="ps-patient-condition">{condition}</div>}
+              {occupation && <div className="ps-patient-condition">{occupation}</div>}
               <div className="ps-patient-physio">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>

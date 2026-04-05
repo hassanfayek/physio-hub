@@ -359,7 +359,7 @@ function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps
                   <div className="el-patient-avatar">{p.firstName[0]}{p.lastName[0]}</div>
                   <div>
                     <div className="el-patient-name">{p.firstName} {p.lastName}</div>
-                    <div className="el-patient-cond">{p.condition || "—"}</div>
+                    <div className="el-patient-cond">{p.occupation || "—"}</div>
                   </div>
                   {selected?.uid === p.uid && (
                     <Check className="el-patient-check" size={16} strokeWidth={2.5} />
