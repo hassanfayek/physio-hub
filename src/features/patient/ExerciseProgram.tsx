@@ -97,6 +97,7 @@ function LibraryPicker({ patientId, viewerUid, onClose, onAdded }: LibraryPicker
       notes:        ex.notes,
       createdBy:    viewerUid,
       mediaUrl:     ex.mediaUrl,
+      videoId:      ex.videoId,
       programType,
     });
     setAdding(null);
@@ -216,6 +217,7 @@ export default function ExerciseProgram({
   const resetDoneRef = useRef(false);
   const [removingId,   setRemovingId]   = useState<string | null>(null);
   const [editingId,    setEditingId]    = useState<string | null>(null);
+  const [openVideoId,  setOpenVideoId]  = useState<string | null>(null);
   const [editVals,     setEditVals]     = useState<{ sets: string; reps: string; holdTime: string; notes: string }>({ sets: "", reps: "", holdTime: "", notes: "" });
   const [editSaving,   setEditSaving]   = useState(false);
   const [editError,    setEditError]    = useState<string | null>(null);
@@ -741,8 +743,32 @@ export default function ExerciseProgram({
                       <div className="ep-ex-notes">{rec.notes}</div>
                     )}
 
+                    {rec.videoId && (
+                      <div style={{ marginTop: 10, borderRadius: 10, overflow: "hidden", aspectRatio: "16/9" }}>
+                        {openVideoId === rec.id ? (
+                          <>
+                            <iframe
+                              width="100%" height="100%"
+                              src={`https://www.youtube.com/embed/${rec.videoId}?autoplay=1`}
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              style={{ border: "none", display: "block" }}
+                            />
+                            <button className="ep-watch-btn" style={{ marginTop: 6 }} onClick={() => setOpenVideoId(null)}>
+                              <Play size={12} strokeWidth={2} /> Hide Video
+                            </button>
+                          </>
+                        ) : (
+                          <button className="ep-watch-btn" onClick={() => setOpenVideoId(rec.id)}>
+                            <Play size={12} strokeWidth={2} /> Watch Video
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     <div className="ep-ex-footer">
-                      {rec.mediaUrl && (
+                      {/* legacy mediaUrl fallback for exercises without videoId */}
+                      {!rec.videoId && rec.mediaUrl && (
                         <button
                           className="ep-watch-btn"
                           onClick={() => window.open(rec.mediaUrl, "_blank", "noopener,noreferrer")}

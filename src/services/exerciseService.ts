@@ -32,6 +32,7 @@ export interface LibraryExercise {
   defaultHoldTime: number;
   notes:        string;
   mediaUrl:     string;
+  videoId:      string;   // YouTube video ID (e.g. "dQw4w9WgXcQ")
   createdAt:    Timestamp | null;
 }
 
@@ -50,6 +51,7 @@ export interface PatientExercise {
   completedAt:   Timestamp | null;
   lastResetDate: string;   // YYYY-MM-DD of last completion reset
   mediaUrl:      string;
+  videoId:       string;
   programType:   "clinic" | "home";
 }
 
@@ -63,6 +65,7 @@ export interface CreateExercisePayload {
   defaultHoldTime: number;
   notes:           string;
   mediaUrl:        string;
+  videoId:         string;
 }
 
 export interface AssignExercisePayload {
@@ -75,6 +78,7 @@ export interface AssignExercisePayload {
   notes:        string;
   createdBy:    string;
   mediaUrl:     string;
+  videoId:      string;
   programType?: "clinic" | "home";  // optional, defaults to "clinic"
 }
 
@@ -100,6 +104,7 @@ function docToLibraryExercise(id: string, data: Record<string, unknown>): Librar
     defaultHoldTime: (data.defaultHoldTime as number)  ?? 0,
     notes:           (data.notes           as string)  ?? "",
     mediaUrl:        (data.mediaUrl        as string)  ?? "",
+    videoId:         (data.videoId         as string)  ?? "",
     createdAt:       (data.createdAt       as Timestamp | null) ?? null,
   };
 }
@@ -120,6 +125,7 @@ function docToPatientExercise(id: string, data: Record<string, unknown>): Patien
     completedAt:   (data.completedAt   as Timestamp | null) ?? null,
     lastResetDate: (data.lastResetDate as string) ?? "",
     mediaUrl:      (data.mediaUrl      as string)  ?? "",
+    videoId:       (data.videoId       as string)  ?? "",
     programType:  ((data.programType as string) === "home" ? "home" : "clinic") as "clinic" | "home",
   };
 }
@@ -192,6 +198,7 @@ export async function assignExerciseToPatient(
       notes:        payload.notes,
       createdBy:    payload.createdBy,
       mediaUrl:     payload.mediaUrl,
+      videoId:      payload.videoId,
       programType:  payload.programType ?? "clinic",
       completed:    false,
       completedAt:  null,

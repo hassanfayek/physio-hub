@@ -43,12 +43,13 @@ interface ExerciseFormState {
   defaultHoldTime: string;
   notes:           string;
   mediaUrl:        string;
+  videoId:         string;
 }
 
 const BLANK_FORM: ExerciseFormState = {
   name: "", category: "", equipment: "", description: "",
   defaultSets: "3", defaultReps: "10", defaultHoldTime: "0",
-  notes: "", mediaUrl: "",
+  notes: "", mediaUrl: "", videoId: "",
 };
 
 const CATEGORIES = [
@@ -75,6 +76,16 @@ function youTubeThumb(url: string) {
   return m ? `https://img.youtube.com/vi/${m[1]}/hqdefault.jpg` : null;
 }
 
+// Accepts a raw video ID, full youtube.com URL, or youtu.be URL — returns bare ID
+function extractYouTubeId(raw: string): string {
+  if (!raw) return "";
+  const m = raw.match(/(?:v=|youtu\.be\/|embed\/)([^&?/\s]{11})/);
+  if (m) return m[1];
+  // If it's already an 11-char ID (no slashes/dots)
+  if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
+  return raw;
+}
+
 // ─── Add / Edit Modal ────────────────────────────────────────────────────────
 
 interface ExerciseModalProps {
@@ -97,6 +108,7 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
           defaultHoldTime: String(initial.defaultHoldTime),
           notes:           initial.notes,
           mediaUrl:        initial.mediaUrl,
+          videoId:         initial.videoId,
         }
       : BLANK_FORM
   );
@@ -131,6 +143,7 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
       defaultHoldTime: Math.max(0, parseInt(form.defaultHoldTime) || 0),
       notes:           form.notes.trim(),
       mediaUrl:        form.mediaUrl.trim(),
+      videoId:         extractYouTubeId(form.videoId.trim()),
     };
 
     const result = mode === "add"
@@ -215,13 +228,22 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
             </div>
 
             <div className="el-field">
-              <label className="el-label">Media URL (YouTube, video, or image)</label>
-              <input className="el-input" value={form.mediaUrl} onChange={set("mediaUrl")} placeholder="https://…" />
-              {form.mediaUrl && (
-                <div className="el-media-preview">
-                  {isImage(form.mediaUrl) && <img src={form.mediaUrl} alt="preview" className="el-preview-img" />}
-                  {isYouTube(form.mediaUrl) && youTubeThumb(form.mediaUrl) && <img src={youTubeThumb(form.mediaUrl)!} alt="YouTube thumbnail" className="el-preview-img" />}
-                  <a href={form.mediaUrl} target="_blank" rel="noopener noreferrer" className="el-preview-link">Open link ↗</a>
+              <label className="el-label">YouTube Video ID or URL</label>
+              <input
+                className="el-input"
+                value={form.videoId}
+                onChange={set("videoId")}
+                placeholder="e.g. dQw4w9WgXcQ or https://youtube.com/watch?v=…"
+              />
+              {form.videoId && extractYouTubeId(form.videoId) && (
+                <div style={{ marginTop: 8, borderRadius: 10, overflow: "hidden", aspectRatio: "16/9" }}>
+                  <iframe
+                    width="100%" height="100%"
+                    src={`https://www.youtube.com/embed/${extractYouTubeId(form.videoId)}`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    style={{ border: "none", display: "block" }}
+                  />
                 </div>
               )}
             </div>
@@ -303,6 +325,7 @@ function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps
       notes:        notes.trim(),
       createdBy:    physioId,
       mediaUrl:     exercise.mediaUrl,
+      videoId:      exercise.videoId,
     });
 
     setSaving(false);
@@ -447,6 +470,7 @@ export default function ExerciseLibraryPage({
   const [assignTarget,setAssignTarget]= useState<LibraryExercise | null>(null);
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
   const [toast,       setToast]       = useState<string | null>(null);
+  const [openVideoId, setOpenVideoId] = useState<string | null>(null);
 
   // Realtime: exercise library
   useEffect(() => {
@@ -1002,18 +1026,29 @@ export default function ExerciseLibraryPage({
                               Hold: <span className="el-card-meta-val">&nbsp;{ex.defaultHoldTime}s</span>
                             </div>
                           )}
-                          {ex.mediaUrl && (
+                          {ex.videoId && (
                             <button
                               className="el-media-link-btn"
-                              onClick={() => window.open(ex.mediaUrl, "_blank", "noopener,noreferrer")}
+                              onClick={() => setOpenVideoId(openVideoId === ex.id ? null : ex.id)}
                             >
                               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                <polygon points="5 3 19 12 5 21 5 3"/>
                               </svg>
-                              View Media
+                              {openVideoId === ex.id ? "Hide Video" : "Watch Video"}
                             </button>
                           )}
                         </div>
+                        {openVideoId === ex.id && ex.videoId && (
+                          <div style={{ marginTop: 10, borderRadius: 10, overflow: "hidden", aspectRatio: "16/9" }}>
+                            <iframe
+                              width="100%" height="100%"
+                              src={`https://www.youtube.com/embed/${ex.videoId}`}
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              style={{ border: "none", display: "block" }}
+                            />
+                          </div>
+                        )}
                       </div>
 
                       {/* Actions */}
