@@ -376,11 +376,10 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     setDocsLoading(true);
     const q = query(
       collection(db, "patientDocuments"),
-      where("patientId", "==", patientId),
-      orderBy("createdAt", "desc")
+      where("patientId", "==", patientId)
     );
     return onSnapshot(q, (snap) => {
-      setPatientDocs(snap.docs.map((d) => ({
+      const docs = snap.docs.map((d) => ({
         id:          d.id,
         patientId:   (d.data().patientId   as string) ?? "",
         uploadedBy:  (d.data().uploadedBy  as string) ?? "",
@@ -391,9 +390,15 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         downloadUrl: (d.data().downloadUrl as string) ?? "",
         storagePath: (d.data().storagePath as string) ?? "",
         createdAt:   (d.data().createdAt   as Timestamp | null) ?? null,
-      })));
+      }));
+      docs.sort((a, b) => {
+        const ta = a.createdAt?.toMillis() ?? 0;
+        const tb = b.createdAt?.toMillis() ?? 0;
+        return tb - ta;
+      });
+      setPatientDocs(docs);
       setDocsLoading(false);
-    }, () => setDocsLoading(false));
+    }, (err) => { console.error("patientDocuments subscription error:", err); setDocsLoading(false); });
   }, [patientId]);
 
   // Load diagnosis from Firestore (stored in patients/{id}/diagnosis sub-doc)
