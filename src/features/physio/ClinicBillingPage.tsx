@@ -56,10 +56,12 @@ export default function ClinicBillingPage() {
   const thisMonth  = today.slice(0, 7);  // "YYYY-MM"
 
   // ── Period selector ──────────────────────────────────────────────────────
-  const [period,      setPeriod]      = useState<"day" | "week" | "month">("day");
+  const [period,      setPeriod]      = useState<"day" | "week" | "month" | "custom">("day");
   const [selectedDay,   setSelectedDay]   = useState(today);
   const [selectedWeek,  setSelectedWeek]  = useState<[string, string]>([weekStart, weekEnd]);
   const [selectedMonth, setSelectedMonth] = useState(thisMonth);
+  const [customFrom,    setCustomFrom]    = useState(today);
+  const [customTo,      setCustomTo]      = useState(today);
 
   // ── Source data ─────────────────────────────────────────────────────────
   const [billingEntries,  setBillingEntries]  = useState<RawBillingEntry[]>([]);
@@ -147,14 +149,15 @@ export default function ClinicBillingPage() {
 
   // ── Filter by current period ─────────────────────────────────────────────
   const inPeriod = (date: string): boolean => {
-    if (period === "day")   return isInDay(date, selectedDay);
-    if (period === "week")  return isInWeek(date, selectedWeek[0], selectedWeek[1]);
+    if (period === "day")    return isInDay(date, selectedDay);
+    if (period === "week")   return isInWeek(date, selectedWeek[0], selectedWeek[1]);
+    if (period === "custom") return date >= customFrom && date <= customTo;
     return isInMonth(date, selectedMonth);
   };
 
-  const filteredEntries  = useMemo(() => billingEntries.filter((e) => inPeriod(e.date)),       [billingEntries, period, selectedDay, selectedWeek, selectedMonth]);
-  const filteredSessions = useMemo(() => sessionPrices.filter((s) => inPeriod(s.date)),        [sessionPrices, period, selectedDay, selectedWeek, selectedMonth]);
-  const filteredPackages = useMemo(() => packages.filter((p) => inPeriod(p.startDate)),        [packages, period, selectedDay, selectedWeek, selectedMonth]);
+  const filteredEntries  = useMemo(() => billingEntries.filter((e) => inPeriod(e.date)),   [billingEntries, period, selectedDay, selectedWeek, selectedMonth, customFrom, customTo]);
+  const filteredSessions = useMemo(() => sessionPrices.filter((s) => inPeriod(s.date)),   [sessionPrices,  period, selectedDay, selectedWeek, selectedMonth, customFrom, customTo]);
+  const filteredPackages = useMemo(() => packages.filter((p) => inPeriod(p.startDate)),   [packages,       period, selectedDay, selectedWeek, selectedMonth, customFrom, customTo]);
 
   // ── Aggregates ────────────────────────────────────────────────────────────
   const entryTotal    = filteredEntries.reduce((s, e) => s + e.amount, 0);
@@ -211,8 +214,9 @@ export default function ClinicBillingPage() {
   };
 
   const periodLabel = (): string => {
-    if (period === "day")   return new Date(selectedDay + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    if (period === "week")  return `${selectedWeek[0]} → ${selectedWeek[1]}`;
+    if (period === "day")    return new Date(selectedDay + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    if (period === "week")   return `${selectedWeek[0]} → ${selectedWeek[1]}`;
+    if (period === "custom") return customFrom === customTo ? customFrom : `${customFrom} → ${customTo}`;
     return monthLabel(selectedMonth);
   };
 
@@ -251,6 +255,19 @@ export default function ClinicBillingPage() {
           cursor: pointer; transition: all 0.15s; white-space: nowrap;
         }
         .cb-today-btn:hover { background: #D6EEF8; }
+        .cb-custom-row {
+          display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+          background: #f5f3ef; border-radius: 11px; padding: 8px 12px;
+          border: 1.5px solid #e5e0d8; margin-bottom: 4px;
+        }
+        .cb-custom-label { font-size: 12px; font-weight: 600; color: #5a5550; white-space: nowrap; }
+        .cb-date-input {
+          padding: 5px 10px; border-radius: 8px; border: 1.5px solid #e5e0d8;
+          font-family: 'Outfit', sans-serif; font-size: 13px; color: #1a1a1a;
+          background: #fff; cursor: pointer; outline: none;
+        }
+        .cb-date-input:focus { border-color: #2E8BC0; }
+        .cb-custom-sep { font-size: 13px; color: #9a9590; font-weight: 500; }
 
         /* KPI cards */
         .cb-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
@@ -344,17 +361,19 @@ export default function ClinicBillingPage() {
         {/* Period selector */}
         <div className="cb-period-bar">
           <div className="cb-period-tabs">
-            {(["day", "week", "month"] as const).map((p) => (
+            {(["day", "week", "month", "custom"] as const).map((p) => (
               <button key={p} className={`cb-period-tab ${period === p ? "active" : ""}`} onClick={() => setPeriod(p)}>
-                {p.charAt(0).toUpperCase() + p.slice(1)}
+                {p === "custom" ? "Custom" : p.charAt(0).toUpperCase() + p.slice(1)}
               </button>
             ))}
           </div>
-          <div className="cb-period-nav">
-            <button className="cb-nav-btn" onClick={() => shift(-1)}>‹</button>
-            <div className="cb-period-label">{periodLabel()}</div>
-            <button className="cb-nav-btn" onClick={() => shift(1)}>›</button>
-          </div>
+          {period !== "custom" && (
+            <div className="cb-period-nav">
+              <button className="cb-nav-btn" onClick={() => shift(-1)}>‹</button>
+              <div className="cb-period-label">{periodLabel()}</div>
+              <button className="cb-nav-btn" onClick={() => shift(1)}>›</button>
+            </div>
+          )}
           {!isToday && period === "day" && (
             <button className="cb-today-btn" onClick={() => setSelectedDay(today)}>Today</button>
           )}
@@ -365,6 +384,35 @@ export default function ClinicBillingPage() {
             <button className="cb-today-btn" onClick={() => setSelectedMonth(thisMonth)}>This Month</button>
           )}
         </div>
+        {period === "custom" && (
+          <div className="cb-custom-row" style={{ marginBottom: 20 }}>
+            <span className="cb-custom-label">From</span>
+            <input
+              type="date"
+              className="cb-date-input"
+              value={customFrom}
+              max={customTo}
+              onChange={(e) => setCustomFrom(e.target.value)}
+            />
+            <span className="cb-custom-sep">→</span>
+            <span className="cb-custom-label">To</span>
+            <input
+              type="date"
+              className="cb-date-input"
+              value={customTo}
+              min={customFrom}
+              onChange={(e) => setCustomTo(e.target.value)}
+            />
+            <span style={{ fontSize: 12, color: "#9a9590", marginLeft: 4 }}>
+              {(() => {
+                const d1 = new Date(customFrom + "T00:00:00");
+                const d2 = new Date(customTo   + "T00:00:00");
+                const days = Math.round((d2.getTime() - d1.getTime()) / 86400000) + 1;
+                return days > 0 ? `${days} day${days !== 1 ? "s" : ""}` : "";
+              })()}
+            </span>
+          </div>
+        )}
 
         {loading ? (
           <>

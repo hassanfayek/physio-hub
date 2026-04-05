@@ -12,10 +12,6 @@ import PatientSheetPage from "../patient/PatientSheetPage";
 import SchedulePage        from "../schedule/SchedulePage";
 import ExerciseLibraryPage from "../exercises/ExerciseLibraryPage";
 import {
-  subscribeToDashboardStats,
-  type DashboardStats,
-} from "../../services/dashboardService";
-import {
   subscribeToAppointmentsByDay,
   toDateStr,
   fmtHour12,
@@ -23,7 +19,7 @@ import {
 } from "../../services/appointmentService";
 import type { PhysioProfile } from "../../services/authService";
 import logo from "../../assets/physio-logo.svg";
-import { subscribeToPhysiotherapists, type Physiotherapist } from "../../services/patientService";
+import { subscribeToPhysiotherapists, subscribeToPhysioPatients, subscribeToAllPatients, type Physiotherapist, type Patient } from "../../services/patientService";
 import { registerSecretary } from "../../services/authService";
 import { subscribeToSecretaries, deleteSecretary, type Secretary } from "../../services/secretaryService";
 import AddPhysioModal from "../../components/AddPhysioModal";
@@ -524,6 +520,7 @@ function apptDisplayStatus(status: string): { label: string; color: string; text
 interface OverviewTabProps {
   physio:          PhysioProfile;
   isManager:       boolean;
+  isSenior?:       boolean;
   isSecretary?:    boolean;
   onViewPatient?:  (patientId: string) => void;
 }
@@ -532,20 +529,35 @@ function OverviewTab({ physio, isManager, isSecretary = false, onViewPatient }: 
   const hour     = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
-  const [stats,        setStats]        = useState<DashboardStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
+  const [patients,     setPatients]     = useState<Patient[]>([]);
+  const [patientsLoading, setPatientsLoading] = useState(true);
 
   const [todayAppts,  setTodayAppts]  = useState<Appointment[]>([]);
   const [apptLoading, setApptLoading] = useState(true);
 
+  // Live patient subscription — covers all roles (physioId, seniorEditorId, etc.)
   useEffect(() => {
-    const unsubscribe = subscribeToDashboardStats(
-      (isManager || isSecretary) ? "__all__" : physio.uid,
-      (data) => { setStats(data); setStatsLoading(false); },
-      ()     => setStatsLoading(false)
-    );
-    return () => unsubscribe();
+    setPatientsLoading(true);
+    const unsub = (isManager || isSecretary)
+      ? subscribeToAllPatients(
+          (data) => { setPatients(data); setPatientsLoading(false); },
+          ()     => setPatientsLoading(false)
+        )
+      : subscribeToPhysioPatients(
+          physio.uid,
+          (data) => { setPatients(data); setPatientsLoading(false); },
+          ()     => setPatientsLoading(false)
+        );
+    return () => unsub();
   }, [physio.uid, isManager, isSecretary]);
+
+  // Derive stats from live patient list
+  const stats = {
+    totalPatients:      patients.length,
+    activePatients:     patients.filter((p) => p.status === "active").length,
+    onHoldPatients:     patients.filter((p) => p.status === "on_hold").length,
+    dischargedPatients: patients.filter((p) => p.status === "discharged").length,
+  };
 
   useEffect(() => {
     setApptLoading(true);
@@ -613,14 +625,14 @@ function OverviewTab({ physio, isManager, isSecretary = false, onViewPatient }: 
 
       <div className="ph-ov-grid">
         {[
-          { label: "Total Patients",  value: statsLoading ? "…" : String(stats?.totalPatients      ?? 0), sub: "registered",      accent: true  },
-          { label: "Active Patients", value: statsLoading ? "…" : String(stats?.activePatients     ?? 0), sub: "in rehabilitation", accent: false },
-          { label: "On Hold",         value: statsLoading ? "…" : String(stats?.onHoldPatients     ?? 0), sub: "paused",          accent: false },
-          { label: "Discharged",      value: statsLoading ? "…" : String(stats?.dischargedPatients ?? 0), sub: "completed",       accent: false },
+          { label: "Total Patients",  value: patientsLoading ? "…" : String(stats.totalPatients),      sub: "registered",       accent: true  },
+          { label: "Active Patients", value: patientsLoading ? "…" : String(stats.activePatients),     sub: "in rehabilitation", accent: false },
+          { label: "On Hold",         value: patientsLoading ? "…" : String(stats.onHoldPatients),     sub: "paused",           accent: false },
+          { label: "Discharged",      value: patientsLoading ? "…" : String(stats.dischargedPatients), sub: "completed",        accent: false },
         ].map((s) => (
           <div key={s.label} className={`ph-ov-stat ${s.accent ? "accent" : ""}`}>
             <div className="ph-ov-stat-label">{s.label}</div>
-            <div className={`ph-ov-stat-val ${statsLoading ? "loading" : ""}`}>{s.value}</div>
+            <div className={`ph-ov-stat-val ${patientsLoading ? "loading" : ""}`}>{s.value}</div>
             <div className="ph-ov-stat-sub">{s.sub}</div>
           </div>
         ))}
@@ -672,7 +684,7 @@ function OverviewTab({ physio, isManager, isSecretary = false, onViewPatient }: 
                   }}>
                     {label}
                   </span>
-                  {isManager && a.patientId && onViewPatient && (
+                  {a.patientId && onViewPatient && (
                     <button
                       onClick={() => onViewPatient(a.patientId)}
                       style={{
@@ -690,6 +702,89 @@ function OverviewTab({ physio, isManager, isSecretary = false, onViewPatient }: 
           </div>
         )}
       </div>
+
+      {/* My Patients — live list (hidden for manager who sees clinic-wide data) */}
+      {!isManager && !isSecretary && (
+        <div className="ph-ov-card">
+          <div className="ph-ov-card-title">
+            My Patients {!patientsLoading && patients.length > 0 && (
+              <span style={{ marginLeft: 6, fontWeight: 400, color: "#9a9590", textTransform: "none", letterSpacing: 0 }}>
+                ({patients.length})
+              </span>
+            )}
+          </div>
+          {patientsLoading ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[1,2,3].map((n) => (
+                <div key={n} style={{ height: 48, borderRadius: 10, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "phShimmer 1.4s ease infinite" }} />
+              ))}
+            </div>
+          ) : patients.length === 0 ? (
+            <div className="ph-ov-empty">No patients assigned yet.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {[...patients]
+                .sort((a, b) => {
+                  const order = { active: 0, on_hold: 1, discharged: 2 };
+                  const diff = (order[a.status] ?? 3) - (order[b.status] ?? 3);
+                  if (diff !== 0) return diff;
+                  return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+                })
+                .map((p) => {
+                  const statusStyle: Record<string, { bg: string; text: string; label: string }> = {
+                    active:     { bg: "#e6f4ea", text: "#2d7a3a", label: "Active" },
+                    on_hold:    { bg: "#fff3e0", text: "#b45309", label: "On Hold" },
+                    discharged: { bg: "#f0ede8", text: "#9a9590", label: "Discharged" },
+                  };
+                  const ss = statusStyle[p.status] ?? statusStyle.active;
+                  const role = p.physioId === physio.uid ? "" : p.seniorEditorId === physio.uid ? "Senior Editor" : "";
+                  return (
+                    <div key={p.uid} style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "10px 14px", borderRadius: 10,
+                      background: "#f5f3ef", border: "1px solid #e5e0d8",
+                      flexWrap: "wrap",
+                    }}>
+                      <div style={{
+                        width: 34, height: 34, borderRadius: "50%",
+                        background: "#2E8BC0", display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 13, fontWeight: 700, color: "#fff", flexShrink: 0,
+                      }}>
+                        {p.firstName[0]}{p.lastName[0]}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 120 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>
+                          {p.firstName} {p.lastName}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#9a9590" }}>
+                          {p.phone || "No phone"}{role ? ` · ${role}` : ""}
+                        </div>
+                      </div>
+                      <span style={{
+                        fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 100,
+                        background: ss.bg, color: ss.text, whiteSpace: "nowrap", flexShrink: 0,
+                      }}>
+                        {ss.label}
+                      </span>
+                      {onViewPatient && (
+                        <button
+                          onClick={() => onViewPatient(p.uid)}
+                          style={{
+                            fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100,
+                            background: "transparent", border: "1px solid #2E8BC0", color: "#2E8BC0",
+                            cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                          }}
+                        >
+                          View Sheet
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -1107,7 +1202,7 @@ export default function PhysioDashboard() {
               </>
             ) : (
               <>
-                {activeTab === "overview"  && <OverviewTab physio={physio} isManager={isManager} isSecretary={isSecretary} onViewPatient={(id) => setViewingPatientId(id)} />}
+                {activeTab === "overview"  && <OverviewTab physio={physio} isManager={isManager} isSenior={isSenior} isSecretary={isSecretary} onViewPatient={(id) => setViewingPatientId(id)} />}
                 {activeTab === "patients"  && (
                   <PatientsTab
                     physioId={physio.uid}
