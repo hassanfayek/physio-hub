@@ -32,7 +32,21 @@ import {
 
 // ─── Static mock data (unchanged from original) ───────────────────────────────
 
-type DocType = "mri" | "xray" | "report" | "referral";
+type DocType = "mri" | "xray" | "sonar" | "ct" | "report" | "bloodwork" | "referral" | "letter" | "other";
+
+const DOC_TYPE_LABELS: Record<DocType, string> = {
+  mri:       "MRI",
+  xray:      "X-Ray",
+  sonar:     "Sonography",
+  ct:        "CT Scan",
+  report:    "Report",
+  bloodwork: "Blood Work",
+  referral:  "Referral",
+  letter:    "Letter",
+  other:     "Other",
+};
+
+const ALL_DOC_TYPES: DocType[] = ["mri","xray","sonar","ct","report","bloodwork","referral","letter","other"];
 
 // Live document stored in Firestore (replaces static MedicalDoc)
 interface PatientDocument {
@@ -58,25 +72,34 @@ function fmtBytes(bytes: number): string {
 
 function guessDocType(fileName: string): DocType {
   const lower = fileName.toLowerCase();
-  if (lower.includes("mri"))                         return "mri";
+  if (lower.includes("mri"))                            return "mri";
   if (lower.includes("xray") || lower.includes("x-ray")) return "xray";
-  if (lower.includes("referral"))                    return "referral";
+  if (lower.includes("sonar") || lower.includes("ultrasound") || lower.includes("echo")) return "sonar";
+  if (lower.includes("ct") || lower.includes("scan"))  return "ct";
+  if (lower.includes("blood") || lower.includes("lab")) return "bloodwork";
+  if (lower.includes("referral"))                       return "referral";
+  if (lower.includes("letter"))                         return "letter";
   return "report";
 }
 
 function docTypeIcon(type: DocType): string {
   const icons: Record<DocType, string> = {
-    mri: "🩻", xray: "🩻", report: "📄", referral: "📋",
+    mri: "🧠", xray: "🩻", sonar: "〰️", ct: "🔬",
+    report: "📄", bloodwork: "🩸", referral: "📋", letter: "✉️", other: "📁",
   };
-  return icons[type] ?? "📄";
+  return icons[type] ?? "📁";
 }
 
-
 const DOC_COLORS: Record<DocType, { bg: string; text: string }> = {
-  mri:      { bg: "#dbeafe", text: "#1e40af" },
-  xray:     { bg: "#ede9fe", text: "#5b21b6" },
-  report:   { bg: "#fef3c7", text: "#92400e" },
-  referral: { bg: "#d1fae5", text: "#065f46" },
+  mri:       { bg: "#dbeafe", text: "#1e40af" },
+  xray:      { bg: "#ede9fe", text: "#5b21b6" },
+  sonar:     { bg: "#d1fae5", text: "#065f46" },
+  ct:        { bg: "#ccfbf1", text: "#0f766e" },
+  report:    { bg: "#fef3c7", text: "#92400e" },
+  bloodwork: { bg: "#ffe4e6", text: "#9f1239" },
+  referral:  { bg: "#f0fdf4", text: "#166534" },
+  letter:    { bg: "#f5f3ff", text: "#4c1d95" },
+  other:     { bg: "#f3f4f6", text: "#374151" },
 };
 
 // ─── Senior Editor Assignment panel (clinic_manager only) ─────────────────────
@@ -514,7 +537,24 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     } catch { /* file may already be gone */ }
     await deleteDoc(doc(db, "patientDocuments", document.id));
     setDeletingDocId(null);
-    if (previewDoc?.id === document.id) setPreviewDoc(null);
+    if (editingDoc?.id === document.id) setEditingDoc(null);
+  };
+
+  const openEditDoc = (document: PatientDocument) => {
+    setEditingDoc(document);
+    setEditDocLabel(document.label);
+    setEditDocType(document.type);
+  };
+
+  const handleSaveEditDoc = async () => {
+    if (!editingDoc || !editDocLabel.trim()) return;
+    setEditDocSaving(true);
+    await updateDoc(doc(db, "patientDocuments", editingDoc.id), {
+      label: editDocLabel.trim(),
+      type:  editDocType,
+    });
+    setEditDocSaving(false);
+    setEditingDoc(null);
   };
 
   const handleSaveCombined = async () => {
@@ -597,7 +637,6 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
 
   // ── Local UI state (unchanged) ─────────────────────────────────────────────
   const [activeSection, setActiveSection] = useState<string>(initialSection ?? "diagnosis");
-  const [previewDoc,    setPreviewDoc]    = useState<PatientDocument | null>(null);
 
   // ── Live documents state ──────────────────────────────────────────────────
   const [patientDocs,   setPatientDocs]   = useState<PatientDocument[]>([]);
@@ -605,6 +644,11 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError,   setUploadError]   = useState<string | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [editingDoc,    setEditingDoc]    = useState<PatientDocument | null>(null);
+  const [editDocLabel,  setEditDocLabel]  = useState("");
+  const [editDocType,   setEditDocType]   = useState<DocType>("report");
+  const [editDocSaving, setEditDocSaving] = useState(false);
+  const [docFilter,     setDocFilter]     = useState<DocType | "all">("all");
 
   const allSections = [
     { id: "profile",           label: "Patient Profile" },
@@ -1000,157 +1044,137 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         .ps-note-text { font-size: 14px; color: #5a5550; line-height: 1.7; }
 
         /* ── DOCUMENTS ── */
-        .ps-doc-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-          gap: 8px;
-          margin-bottom: 14px;
+        /* ── DOCUMENTS ── */
+        .ps-doc-filter-row {
+          display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px;
         }
-        .ps-doc-card {
-          background: #fff;
-          border: 1px solid #e5e0d8;
-          border-radius: 12px;
-          padding: 14px;
-          cursor: pointer;
-          transition: all 0.2s;
+        .ps-doc-filter-btn {
+          padding: 5px 13px; border-radius: 100px;
+          border: 1.5px solid #e5e0d8; background: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500;
+          color: #9a9590; cursor: pointer; transition: all 0.15s;
         }
-        .ps-doc-card:hover {
-          border-color: #B3DEF0;
-          box-shadow: 0 4px 16px rgba(46,139,192,0.1);
-          transform: translateY(-2px);
+        .ps-doc-filter-btn.active { background: #2E8BC0; border-color: #2E8BC0; color: #fff; }
+        .ps-doc-filter-btn:hover:not(.active) { border-color: #B3DEF0; color: #2E8BC0; }
+
+        .ps-doc-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+        .ps-doc-row {
+          background: #fff; border: 1.5px solid #e5e0d8; border-radius: 12px;
+          padding: 12px 14px; display: flex; align-items: center; gap: 12px;
+          transition: border-color 0.15s;
         }
-        .ps-doc-icon {
-          font-size: 32px;
-          margin-bottom: 10px;
-          display: block;
+        .ps-doc-row:hover { border-color: #B3DEF0; }
+        .ps-doc-row-icon {
+          font-size: 26px; flex-shrink: 0; width: 38px; height: 38px;
+          border-radius: 8px; display: flex; align-items: center; justify-content: center;
+          background: #f5f3ef;
         }
-        .ps-doc-label {
-          font-size: 13px;
-          font-weight: 500;
-          color: #1a1a1a;
-          margin-bottom: 4px;
-          line-height: 1.3;
+        .ps-doc-row-body { flex: 1; min-width: 0; }
+        .ps-doc-row-name {
+          font-size: 14px; font-weight: 500; color: #1a1a1a;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          margin-bottom: 3px;
         }
-        .ps-doc-meta { font-size: 11px; color: #9a9590; }
+        .ps-doc-row-meta { font-size: 11.5px; color: #9a9590; display: flex; align-items: center; gap: 6px; }
         .ps-doc-type-badge {
-          font-size: 10px;
-          font-weight: 600;
-          padding: 2px 7px;
-          border-radius: 4px;
-          text-transform: uppercase;
-          letter-spacing: 0.06em;
-          display: inline-block;
-          margin-bottom: 8px;
+          font-size: 10px; font-weight: 700; padding: 2px 7px;
+          border-radius: 4px; text-transform: uppercase; letter-spacing: 0.06em;
+          display: inline-block; flex-shrink: 0;
         }
-
-        .ps-upload-zone {
-          border: 2px dashed #e5e0d8;
-          border-radius: 14px;
-          padding: 20px;
-          text-align: center;
-          cursor: pointer;
-          transition: all 0.2s;
-          background: #fafaf8;
-        }
-        .ps-upload-zone:hover {
-          border-color: #5BC0BE;
-          background: #f0f7f4;
-        }
-        /* Read-only state: keep zone visible but non-interactive */
-        .ps-upload-zone.ps-disabled {
-          opacity: 0.45;
-          cursor: not-allowed;
-          pointer-events: none;
-        }
-        .ps-upload-icon { font-size: 28px; margin-bottom: 8px; }
-        .ps-upload-text { font-size: 14px; color: #5a5550; margin-bottom: 4px; }
-        .ps-upload-sub { font-size: 12px; color: #c0bbb4; }
-
-        .ps-upload-progress {
-          margin-top: 12px; height: 6px; border-radius: 6px;
-          background: #e5e0d8; overflow: hidden;
-        }
-        .ps-upload-progress-fill {
-          height: 100%; border-radius: 6px;
-          background: linear-gradient(90deg, #2E8BC0, #5BC0BE);
-          transition: width 0.2s;
-        }
-        .ps-upload-error {
-          margin-top: 10px; font-size: 13px; color: #b91c1c;
-        }
-        .ps-doc-del {
-          position: absolute; top: 8px; right: 8px;
-          width: 24px; height: 24px; border-radius: 50%;
-          background: rgba(0,0,0,0.06); border: none;
+        .ps-doc-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+        .ps-doc-edit-btn, .ps-doc-del-btn {
+          width: 30px; height: 30px; border-radius: 8px;
+          border: 1.5px solid #e5e0d8; background: #fff;
           display: flex; align-items: center; justify-content: center;
-          cursor: pointer; color: #9a9590; transition: all 0.15s;
-          font-size: 12px;
+          cursor: pointer; color: #9a9590; transition: all 0.15s; font-size: 13px;
         }
-        .ps-doc-del:hover { background: #fee2e2; color: #b91c1c; }
-        .ps-doc-card { position: relative; }
+        .ps-doc-edit-btn:hover { border-color: #B3DEF0; color: #2E8BC0; background: #EAF5FC; }
+        .ps-doc-del-btn:hover  { border-color: #fca5a5; color: #b91c1c; background: #fee2e2; }
+        .ps-doc-dl-btn {
+          padding: 5px 11px; border-radius: 8px;
+          background: #2E8BC0; border: none; color: #fff;
+          font-size: 12px; font-weight: 500; cursor: pointer;
+          font-family: 'Outfit', sans-serif; transition: background 0.15s;
+          text-decoration: none; display: flex; align-items: center; gap: 4px;
+        }
+        .ps-doc-dl-btn:hover { background: #0C3C60; }
+
         .ps-docs-empty {
           text-align: center; padding: 44px 24px;
           background: #fafaf8; border-radius: 14px;
           border: 1.5px dashed #e5e0d8;
           font-size: 14px; color: #9a9590; margin-bottom: 16px;
         }
-        .ps-doc-filter-row {
-          display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
-        }
-        .ps-doc-filter-btn {
-          padding: 5px 14px; border-radius: 100px;
-          border: 1.5px solid #e5e0d8; background: #fff;
-          font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 500;
-          color: #9a9590; cursor: pointer; transition: all 0.15s;
-        }
-        .ps-doc-filter-btn.active { background: #2E8BC0; border-color: #2E8BC0; color: #fff; }
-        .ps-doc-filter-btn:hover:not(.active) { border-color: #B3DEF0; color: #2E8BC0; }
 
-        /* Modal */
+        .ps-upload-zone {
+          border: 2px dashed #e5e0d8; border-radius: 14px; padding: 20px;
+          text-align: center; cursor: pointer; transition: all 0.2s; background: #fafaf8;
+        }
+        .ps-upload-zone:hover { border-color: #5BC0BE; background: #f0f7f4; }
+        .ps-upload-zone.ps-disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+        .ps-upload-icon { font-size: 28px; margin-bottom: 8px; }
+        .ps-upload-text { font-size: 14px; color: #5a5550; margin-bottom: 4px; }
+        .ps-upload-sub { font-size: 12px; color: #c0bbb4; }
+        .ps-upload-progress {
+          margin-top: 12px; height: 6px; border-radius: 6px;
+          background: #e5e0d8; overflow: hidden;
+        }
+        .ps-upload-progress-fill {
+          height: 100%; border-radius: 6px;
+          background: linear-gradient(90deg, #2E8BC0, #5BC0BE); transition: width 0.2s;
+        }
+        .ps-upload-error { margin-top: 10px; font-size: 13px; color: #b91c1c; }
+
+        /* Edit doc modal */
         .ps-doc-modal {
-          position: fixed; inset: 0;
-          background: rgba(0,0,0,0.5);
+          position: fixed; inset: 0; background: rgba(0,0,0,0.45);
           display: flex; align-items: center; justify-content: center;
-          z-index: 200;
-          backdrop-filter: blur(4px);
+          z-index: 9999; backdrop-filter: blur(4px); padding: 20px;
         }
         .ps-doc-modal-inner {
-          background: #fff;
-          border-radius: 20px;
-          padding: 28px;
-          width: min(460px, 90vw);
-          box-shadow: 0 24px 80px rgba(0,0,0,0.2);
+          background: #fff; border-radius: 20px; padding: 28px;
+          width: min(460px, 100%); box-shadow: 0 24px 80px rgba(0,0,0,0.2);
           animation: modalIn 0.2s ease;
         }
         @keyframes modalIn { from { opacity:0; transform:scale(0.95); } to { opacity:1; transform:scale(1); } }
-        .ps-doc-preview-box {
-          aspect-ratio: 16/9;
-          border-radius: 12px;
-          background: linear-gradient(145deg, #0C3C60, #2E8BC0);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 60px;
-          margin-bottom: 18px;
+        .ps-doc-modal-title { font-size: 18px; font-weight: 600; color: #1a1a1a; margin-bottom: 20px; }
+        .ps-doc-modal-field { margin-bottom: 14px; }
+        .ps-doc-modal-label {
+          display: block; font-size: 11.5px; font-weight: 600; color: #5a5550;
+          text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;
         }
-        .ps-doc-modal-name { font-family: 'Playfair Display', serif; font-size: 20px; margin-bottom: 6px; }
-        .ps-doc-modal-meta { font-size: 13px; color: #9a9590; margin-bottom: 20px; }
-        .ps-doc-modal-actions { display: flex; gap: 10px; }
-        .ps-doc-dl {
-          flex: 1; padding: 11px; border-radius: 10px;
-          background: #2E8BC0; border: none; color: #fff;
-          font-size: 14px; font-weight: 500; cursor: pointer;
-          font-family: 'Outfit', sans-serif;
-          transition: background 0.15s;
+        .ps-doc-modal-input, .ps-doc-modal-select {
+          width: 100%; padding: 10px 13px; border: 1.5px solid #e5e0d8;
+          border-radius: 10px; font-family: 'Outfit', sans-serif; font-size: 14px;
+          color: #1a1a1a; background: #fff; outline: none;
+          box-sizing: border-box; transition: border-color 0.15s;
         }
-        .ps-doc-dl:hover:not(:disabled) { background: #0C3C60; }
-        .ps-doc-dl:disabled { background: #c0bbb4; cursor: not-allowed; opacity: 0.6; }
-        .ps-doc-close {
-          padding: 11px 20px; border-radius: 10px;
-          border: 1px solid #e5e0d8; background: #fff;
-          font-size: 14px; cursor: pointer;
-          font-family: 'Outfit', sans-serif;
-          transition: background 0.15s;
+        .ps-doc-modal-input:focus, .ps-doc-modal-select:focus { border-color: #2E8BC0; }
+        .ps-doc-modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .ps-doc-modal-save {
+          flex: 1; padding: 11px; border-radius: 10px; border: none;
+          background: #2E8BC0; color: #fff; font-size: 14px; font-weight: 500;
+          cursor: pointer; font-family: 'Outfit', sans-serif; transition: background 0.15s;
         }
-        .ps-doc-close:hover { background: #f5f3ef; }
+        .ps-doc-modal-save:hover:not(:disabled) { background: #0C3C60; }
+        .ps-doc-modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+        .ps-doc-modal-cancel {
+          padding: 11px 20px; border-radius: 10px; border: 1.5px solid #e5e0d8;
+          background: #fff; font-size: 14px; cursor: pointer;
+          font-family: 'Outfit', sans-serif; transition: background 0.15s;
+        }
+        .ps-doc-modal-cancel:hover { background: #f5f3ef; }
+        .ps-doc-modal-dl {
+          padding: 11px 16px; border-radius: 10px; border: none;
+          background: #f0f7fa; color: #2E8BC0; font-size: 14px; font-weight: 500;
+          cursor: pointer; font-family: 'Outfit', sans-serif;
+          text-decoration: none; display: flex; align-items: center; gap: 5px;
+        }
+        .ps-doc-modal-dl:hover { background: #D6EEF8; }
+        @media (max-width: 520px) {
+          .ps-doc-modal { align-items: flex-start; padding: 0; }
+          .ps-doc-modal-inner { border-radius: 0 0 20px 20px; width: 100%; }
+        }
 
         /* ── PROGRESS ── */
         .ps-progress-cards { display: flex; flex-direction: column; gap: 14px; }
@@ -2583,77 +2607,109 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       )}
 
 
-      {/* ── DOCUMENTS — live Firebase Storage ── */}
+      {/* ── DOCUMENTS ── */}
       {activeSection === "documents" && (
         <>
-          {/* Filter row */}
+          {/* Type filter chips */}
           {!docsLoading && patientDocs.length > 0 && (() => {
-            const types: DocType[] = ["mri", "xray", "report", "referral"];
-            const present = types.filter((t) => patientDocs.some((d) => d.type === t));
-            return present.length > 1 ? (
+            const present = ALL_DOC_TYPES.filter((t) => patientDocs.some((d) => d.type === t));
+            if (present.length < 2) return null;
+            return (
               <div className="ps-doc-filter-row">
-                {present.map((t) => (
-                  <button key={t} className="ps-doc-filter-btn"
-                    onClick={() => {
-                      const section = document.querySelector(`[data-doctype="${t}"]`);
-                      section?.scrollIntoView({ behavior: "smooth" });
-                    }}>
-                    {docTypeIcon(t)} {t.toUpperCase()}
-                  </button>
-                ))}
+                <button
+                  className={`ps-doc-filter-btn${docFilter === "all" ? " active" : ""}`}
+                  onClick={() => setDocFilter("all")}
+                >All</button>
+                {present.map((t) => {
+                  const colors = DOC_COLORS[t];
+                  return (
+                    <button
+                      key={t}
+                      className={`ps-doc-filter-btn${docFilter === t ? " active" : ""}`}
+                      style={docFilter === t ? {} : { borderColor: colors.bg, color: colors.text, background: colors.bg }}
+                      onClick={() => setDocFilter(docFilter === t ? "all" : t)}
+                    >
+                      {docTypeIcon(t)} {DOC_TYPE_LABELS[t]}
+                    </button>
+                  );
+                })}
               </div>
-            ) : null;
+            );
           })()}
 
-          {/* Document grid */}
+          {/* Document list */}
           {docsLoading ? (
-            <div className="ps-doc-grid">
+            <div className="ps-doc-list">
               {[1,2,3].map((n) => (
-                <div key={n} style={{ height: 140, borderRadius: 14, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "epShimmer 1.4s ease infinite" }} />
+                <div key={n} style={{ height: 62, borderRadius: 12, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "epShimmer 1.4s ease infinite" }} />
               ))}
             </div>
-          ) : patientDocs.length === 0 ? (
+          ) : patientDocs.filter((d) => docFilter === "all" || d.type === docFilter).length === 0 ? (
             <div className="ps-docs-empty">
-              No documents uploaded yet.
-              {" "}Upload X-rays, MRIs, or reports using the upload zone below.
+              {patientDocs.length === 0
+                ? "No documents uploaded yet. Use the upload zone below."
+                : `No ${DOC_TYPE_LABELS[docFilter as DocType]} documents found.`}
             </div>
           ) : (
-            <div className="ps-doc-grid">
-              {patientDocs.map((document) => {
-                const colors = DOC_COLORS[document.type] ?? { bg: "#f5f3ef", text: "#5a5550" };
-                return (
-                  <div key={document.id} className="ps-doc-card"
-                    data-doctype={document.type}
-                    onClick={() => setPreviewDoc(document)}>
-                    <span className="ps-doc-type-badge"
-                      style={{ background: colors.bg, color: colors.text }}>
-                      {document.type.toUpperCase()}
-                    </span>
-                    <span className="ps-doc-icon">{docTypeIcon(document.type)}</span>
-                    <div className="ps-doc-label">{document.label}</div>
-                    <div className="ps-doc-meta">
-                      {document.createdAt
-                        ? new Date((document.createdAt as unknown as { toDate(): Date }).toDate()).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-                        : "—"
-                      } · {fmtBytes(document.size)}
+            <div className="ps-doc-list">
+              {patientDocs
+                .filter((d) => docFilter === "all" || d.type === docFilter)
+                .map((document) => {
+                  const colors = DOC_COLORS[document.type] ?? { bg: "#f3f4f6", text: "#374151" };
+                  const dateStr = document.createdAt
+                    ? new Date((document.createdAt as unknown as { toDate(): Date }).toDate())
+                        .toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+                    : "—";
+                  return (
+                    <div key={document.id} className="ps-doc-row">
+                      <div className="ps-doc-row-icon" style={{ background: colors.bg }}>
+                        {docTypeIcon(document.type)}
+                      </div>
+                      <div className="ps-doc-row-body">
+                        <div className="ps-doc-row-name" title={document.label}>{document.label}</div>
+                        <div className="ps-doc-row-meta">
+                          <span className="ps-doc-type-badge" style={{ background: colors.bg, color: colors.text }}>
+                            {DOC_TYPE_LABELS[document.type]}
+                          </span>
+                          <span>·</span>
+                          <span>{dateStr}</span>
+                          <span>·</span>
+                          <span>{fmtBytes(document.size)}</span>
+                        </div>
+                      </div>
+                      <div className="ps-doc-row-actions">
+                        <a
+                          className="ps-doc-dl-btn"
+                          href={document.downloadUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Download"
+                        >
+                          ⬇
+                        </a>
+                        {(canEdit || user?.uid === document.uploadedBy) && (
+                          <>
+                            <button
+                              className="ps-doc-edit-btn"
+                              title="Edit"
+                              onClick={() => openEditDoc(document)}
+                            >✎</button>
+                            <button
+                              className="ps-doc-del-btn"
+                              title="Delete"
+                              disabled={deletingDocId === document.id}
+                              onClick={() => handleDeleteDoc(document)}
+                            >{deletingDocId === document.id ? "…" : "✕"}</button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    {(canEdit || user?.uid === document.uploadedBy) && (
-                      <button
-                        className="ps-doc-del"
-                        disabled={deletingDocId === document.id}
-                        onClick={(e) => { e.stopPropagation(); handleDeleteDoc(document); }}
-                        title="Delete document"
-                      >
-                        {deletingDocId === document.id ? "…" : "✕"}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           )}
 
-          {/* Upload zone — any authenticated user can upload */}
+          {/* Upload zone */}
           <label
             className={`ps-upload-zone${uploadProgress !== null ? " ps-disabled" : ""}`}
             style={{ cursor: uploadProgress !== null ? "not-allowed" : "pointer", display: "block" }}
@@ -2667,17 +2723,11 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                 if (file) { handleUpload(file); e.target.value = ""; }
               }}
             />
-            <div className="ps-upload-icon">
-              {uploadProgress !== null ? "⏳" : "📤"}
-            </div>
+            <div className="ps-upload-icon">{uploadProgress !== null ? "⏳" : "📤"}</div>
             <div className="ps-upload-text">
-              {uploadProgress !== null
-                ? `Uploading… ${uploadProgress}%`
-                : "Click to upload a document"}
+              {uploadProgress !== null ? `Uploading… ${uploadProgress}%` : "Click to upload a document"}
             </div>
-            <div className="ps-upload-sub">
-              X-Ray, MRI, PDF reports, referral letters · Max 50MB
-            </div>
+            <div className="ps-upload-sub">X-Ray, MRI, CT, Sonography, PDF reports · Max 50MB</div>
             {uploadProgress !== null && (
               <div className="ps-upload-progress">
                 <div className="ps-upload-progress-fill" style={{ width: `${uploadProgress}%` }} />
@@ -2686,27 +2736,54 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
             {uploadError && <div className="ps-upload-error">{uploadError}</div>}
           </label>
 
-          {/* Document preview modal */}
-          {previewDoc && (
-            <div className="ps-doc-modal" onClick={() => setPreviewDoc(null)}>
+          {/* Edit document modal */}
+          {editingDoc && (
+            <div className="ps-doc-modal" onClick={() => setEditingDoc(null)}>
               <div className="ps-doc-modal-inner" onClick={(e) => e.stopPropagation()}>
-                <div className="ps-doc-preview-box">{docTypeIcon(previewDoc.type)}</div>
-                <div className="ps-doc-modal-name">{previewDoc.label}</div>
-                <div className="ps-doc-modal-meta">
-                  {previewDoc.fileName} · {fmtBytes(previewDoc.size)} · {previewDoc.type.toUpperCase()}
+                <div className="ps-doc-modal-title">Edit Document</div>
+
+                <div className="ps-doc-modal-field">
+                  <label className="ps-doc-modal-label">Document Name</label>
+                  <input
+                    className="ps-doc-modal-input"
+                    value={editDocLabel}
+                    onChange={(e) => setEditDocLabel(e.target.value)}
+                    autoFocus
+                  />
                 </div>
+
+                <div className="ps-doc-modal-field">
+                  <label className="ps-doc-modal-label">Classification</label>
+                  <select
+                    className="ps-doc-modal-select"
+                    value={editDocType}
+                    onChange={(e) => setEditDocType(e.target.value as DocType)}
+                  >
+                    {ALL_DOC_TYPES.map((t) => (
+                      <option key={t} value={t}>{DOC_TYPE_LABELS[t]}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ fontSize: 12, color: "#9a9590", marginTop: 4 }}>
+                  File: {editingDoc.fileName} · {fmtBytes(editingDoc.size)}
+                </div>
+
                 <div className="ps-doc-modal-actions">
                   <a
-                    className="ps-doc-dl"
-                    href={previewDoc.downloadUrl}
+                    className="ps-doc-modal-dl"
+                    href={editingDoc.downloadUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    download={previewDoc.fileName}
-                    style={{ textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >⬇ Download</a>
+                  <button className="ps-doc-modal-cancel" onClick={() => setEditingDoc(null)}>Cancel</button>
+                  <button
+                    className="ps-doc-modal-save"
+                    disabled={editDocSaving || !editDocLabel.trim()}
+                    onClick={handleSaveEditDoc}
                   >
-                    ⬇ Download
-                  </a>
-                  <button className="ps-doc-close" onClick={() => setPreviewDoc(null)}>Close</button>
+                    {editDocSaving ? "Saving…" : "Save"}
+                  </button>
                 </div>
               </div>
             </div>
