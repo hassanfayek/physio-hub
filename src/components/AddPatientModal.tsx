@@ -15,20 +15,6 @@ interface AddPatientModalProps {
   onCreated: (patient: Patient) => void;
 }
 
-const CONDITIONS = [
-  "ACL / Knee Injury",
-  "Lower Back Pain",
-  "Shoulder Impingement",
-  "Rotator Cuff Tear",
-  "Cervical Spondylosis",
-  "Hip Replacement — Post-Op",
-  "Ankle Sprain",
-  "Achilles Tendinopathy",
-  "Plantar Fasciitis",
-  "Sciatica",
-  "Post-Stroke Rehabilitation",
-  "Other",
-];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -42,7 +28,7 @@ export default function AddPatientModal({
 
   const [firstName,   setFirstName]   = useState("");
   const [lastName,    setLastName]    = useState("");
-  const [condition,   setCondition]   = useState("");
+  const [occupation,  setOccupation]  = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [phone,       setPhone]       = useState("");
   const [assignedPhysioId, setAssignedPhysioId] = useState(physioId);
@@ -66,7 +52,7 @@ export default function AddPatientModal({
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  const isValid = firstName.trim() && lastName.trim() && condition;
+  const isValid = firstName.trim() && lastName.trim();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -74,10 +60,10 @@ export default function AddPatientModal({
     setError(null);
 
     const payload: CreatePatientPayload = {
-      firstName:   firstName.trim(),
-      lastName:    lastName.trim(),
-      condition,
-      physioId:    isManager ? assignedPhysioId : physioId,
+      firstName:  firstName.trim(),
+      lastName:   lastName.trim(),
+      occupation: occupation.trim(),
+      physioId:   isManager ? assignedPhysioId : physioId,
       dateOfBirth,
       phone,
     };
@@ -333,15 +319,9 @@ export default function AddPatientModal({
                 </div>
 
                 <div className="apm-field">
-                  <label className="apm-label">Primary Condition</label>
-                  <div className="apm-select-wrap">
-                    <select className="apm-select" value={condition}
-                      onChange={(e: ChangeEvent<HTMLSelectElement>) => { setCondition(e.target.value); setError(null); }}
-                      required>
-                      <option value="" disabled>Select a condition…</option>
-                      {CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
+                  <label className="apm-label">Occupation</label>
+                  <input className="apm-input" placeholder="e.g. Teacher, Engineer…" value={occupation}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setOccupation(e.target.value)} />
                 </div>
 
                 {isManager && (

@@ -27,7 +27,7 @@ export interface Patient {
   lastName:         string;
   email:            string;
   phone:            string;
-  condition:        string;
+  occupation:       string;
   physioId:         string;
   status:           "active" | "discharged" | "on_hold";
   createdAt:        Timestamp | null;
@@ -53,10 +53,10 @@ export interface Physiotherapist {
 }
 
 export interface CreatePatientPayload {
-  firstName: string;
-  lastName:  string;
-  condition: string;
-  physioId:  string;
+  firstName:  string;
+  lastName:   string;
+  occupation: string;
+  physioId:   string;
   dateOfBirth?: string;
   phone?:       string;
 }
@@ -95,7 +95,7 @@ function docToPatient(id: string, data: Record<string, unknown>): Patient {
     lastName:  (data.lastName  as string) ?? "",
     email:     (data.email     as string) ?? "",
     phone:     (data.phone     as string) ?? "",
-    condition: (data.condition as string) ?? "",
+    occupation: (data.occupation as string) ?? "",
     physioId:  (data.physioId  as string) ?? "",
     status:           (data.status           as Patient["status"]) ?? "active",
     createdAt:        (data.createdAt        as Timestamp | null) ?? null,
@@ -175,7 +175,7 @@ export async function createPatient(
       firstName:    payload.firstName,
       lastName:     payload.lastName,
       email,
-      condition:    payload.condition,
+      occupation:   payload.occupation,
       physioId:     payload.physioId,
       dateOfBirth:  payload.dateOfBirth ?? "",
       phone:        payload.phone ?? "",
@@ -191,7 +191,7 @@ export async function createPatient(
         lastName:  payload.lastName,
         email,
         phone:     payload.phone ?? "",
-        condition: payload.condition,
+        occupation: payload.occupation,
         physioId:  payload.physioId,
         status:    "active",
         createdAt: null,

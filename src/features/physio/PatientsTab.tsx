@@ -576,7 +576,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
             <thead>
               <tr>
                 <th>Patient</th>
-                <th>Condition</th>
+                <th>Phone</th>
                 <th>Status</th>
                 <th>Team</th>
                 {(isManager || isSecretary) && <th>Assign Staff</th>}
@@ -634,7 +634,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
                               </div>
                             </div>
                           </td>
-                          <td className="pt-cell-cond">{patient.condition || "—"}</td>
+                          <td className="pt-cell-cond">{patient.phone || "—"}</td>
                           <td>
                             <span className="pt-status-chip" style={{ background: sm.bg, color: sm.text }}>{sm.label}</span>
                           </td>
