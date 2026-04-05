@@ -2623,9 +2623,13 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       {activeSection === "documents" && (
         <>
           {/* Type filter chips */}
-          {!docsLoading && patientDocs.length > 0 && (() => {
+          {!docsLoading && (() => {
             const present = ALL_DOC_TYPES.filter((t) => patientDocs.some((d) => d.type === t));
-            if (present.length < 2) return null;
+            // Auto-reset filter if active type no longer has any documents
+            if (docFilter !== "all" && !present.includes(docFilter as DocType)) {
+              setTimeout(() => setDocFilter("all"), 0);
+            }
+            if (present.length < 2 && docFilter === "all") return null;
             return (
               <div className="ps-doc-filter-row">
                 <button
