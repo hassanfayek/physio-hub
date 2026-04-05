@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, X, Check, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, X, Check, Search } from "lucide-react";
 import {
   subscribeToProtocols,
   createProtocol,
