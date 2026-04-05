@@ -23,12 +23,13 @@ import DayView   from "./DayView";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SchedulePageProps {
-  physioId:       string;
-  firstName:      string;
-  lastName:       string;
-  isManager:      boolean;
-  isSecretary?:   boolean;
-  onViewPatient?: (patientId: string) => void;
+  physioId:              string;
+  firstName:             string;
+  lastName:              string;
+  isManager:             boolean;
+  isSecretary?:          boolean;
+  onViewPatient?:        (patientId: string) => void;
+  onViewPatientSection?: (patientId: string, section: string) => void;
 }
 
 type ViewMode = "month" | "week" | "day";
@@ -125,6 +126,7 @@ export default function SchedulePage({
   isManager,
   isSecretary = false,
   onViewPatient,
+  onViewPatientSection,
 }: SchedulePageProps) {
   // ── State ─────────────────────────────────────────────────────────────────
   const today     = new Date();
@@ -445,6 +447,7 @@ export default function SchedulePage({
               isManager={isManager || isSecretary}
               onBack={() => setView("week")}
               onViewPatient={onViewPatient}
+              onViewPatientSection={onViewPatientSection}
             />
           )}
         </div>

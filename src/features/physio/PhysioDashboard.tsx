@@ -710,9 +710,10 @@ export default function PhysioDashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { lang, toggleLang, t } = useLang();
-  const [activeTab,        setActiveTab]        = useState<Tab>("overview");
-  const [sidebarOpen,      setSidebarOpen]      = useState(false);
-  const [viewingPatientId, setViewingPatientId] = useState<string | null>(null);
+  const [activeTab,             setActiveTab]             = useState<Tab>("overview");
+  const [sidebarOpen,           setSidebarOpen]           = useState(false);
+  const [viewingPatientId,      setViewingPatientId]      = useState<string | null>(null);
+  const [viewingPatientSection, setViewingPatientSection] = useState<string | undefined>(undefined);
 
   // ── Resolve role flags ───────────────────────────────────────────────────
   const [isManager,   setIsManager]   = useState(false);
@@ -1051,7 +1052,7 @@ export default function PhysioDashboard() {
                 <div
                   key={tab.id}
                   className={`phd-nav-item ${activeTab === tab.id ? "active" : ""}`}
-                  onClick={() => { setActiveTab(tab.id); setSidebarOpen(false); }}
+                  onClick={() => { setActiveTab(tab.id); setViewingPatientId(null); setViewingPatientSection(undefined); setSidebarOpen(false); }}
                 >
                   <div className="phd-nav-icon">{tab.icon}</div>
                   <span className="phd-nav-text">{tab.label}</span>
@@ -1097,7 +1098,8 @@ export default function PhysioDashboard() {
                 </button>
                 <PatientSheetPage
                   patientId={viewingPatientId}
-                  onBack={() => setViewingPatientId(null)}
+                  initialSection={viewingPatientSection}
+                  onBack={() => { setViewingPatientId(null); setViewingPatientSection(undefined); }}
                 />
               </>
             ) : (
@@ -1119,7 +1121,8 @@ export default function PhysioDashboard() {
                     lastName={physio.lastName}
                     isManager={isManager}
                     isSecretary={isSecretary}
-                    onViewPatient={(id) => setViewingPatientId(id)}
+                    onViewPatient={(id) => { setViewingPatientSection(undefined); setViewingPatientId(id); }}
+                    onViewPatientSection={(id, section) => { setViewingPatientSection(section); setViewingPatientId(id); }}
                   />
                 )}
                 {activeTab === "team"      && isManager && <TeamTab />}

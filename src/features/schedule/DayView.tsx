@@ -29,7 +29,8 @@ interface DayViewProps {
   currentPhysio:   { uid: string; firstName: string; lastName: string };
   isManager:       boolean;
   onBack?:         () => void;
-  onViewPatient?:  (patientId: string) => void;
+  onViewPatient?:        (patientId: string) => void;
+  onViewPatientSection?: (patientId: string, section: string) => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -43,6 +44,7 @@ export default function DayView({
   isManager,
   onBack,
   onViewPatient,
+  onViewPatientSection,
 }: DayViewProps) {
   const [appointments,  setAppointments]  = useState<Appointment[]>([]);
   const [loading,       setLoading]       = useState(true);
@@ -298,6 +300,14 @@ export default function DayView({
         .dv-appt-patient { font-size: 13.5px; font-weight: 500; color: #1a1a1a; }
         .dv-appt-patient-link { cursor: pointer; color: #2E8BC0; text-decoration: underline; text-underline-offset: 2px; }
         .dv-appt-patient-link:hover { color: #0C3C60; }
+        .dv-price-btn {
+          display: inline-flex; align-items: center; gap: 4px;
+          padding: 2px 8px; border-radius: 6px; border: 1.5px solid #e5e0d8;
+          background: #fafaf8; font-family: 'Outfit', sans-serif;
+          font-size: 11px; font-weight: 500; color: #5a5550;
+          cursor: pointer; transition: all 0.15s; white-space: nowrap; margin-top: 3px;
+        }
+        .dv-price-btn:hover { border-color: #2E8BC0; color: #2E8BC0; background: #EAF5FC; }
         .dv-appt-physio  { font-size: 12px; color: #9a9590; }
         .dv-appt-session { font-size: 11px; color: #5BC0BE; font-weight: 500; margin-top: 1px; }
         .dv-appt-del {
@@ -536,6 +546,18 @@ export default function DayView({
                                   ) : (
                                     <div className="dv-appt-patient">{a.patientName || "Walk-in"}</div>
                                   )}
+                                {onViewPatientSection && a.patientId && (
+                                  <button
+                                    className="dv-price-btn"
+                                    onClick={() => onViewPatientSection(a.patientId, "pricing")}
+                                    type="button"
+                                  >
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                    </svg>
+                                    Price Sheet
+                                  </button>
+                                )}
                                   {a.patientPhone && (
                                     <div className="dv-appt-physio" style={{ color: "#5BC0BE" }}>{a.patientPhone}</div>
                                   )}

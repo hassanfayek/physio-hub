@@ -11,6 +11,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { db } from "../../firebase";
 import { toDateStr, getWeekStart } from "../../services/appointmentService";
 import { setSessionPrice, deleteSessionPrice } from "../../services/priceService";
+import { subscribeToAllPatients } from "../../services/patientService";
 
 // ─── Local types (raw Firestore shapes) ──────────────────────────────────────
 
@@ -65,6 +66,7 @@ export default function ClinicBillingPage() {
   const [sessionPrices,   setSessionPrices]   = useState<RawSessionPrice[]>([]);
   const [packages,        setPackages]        = useState<RawPackage[]>([]);
   const [loading,         setLoading]         = useState(true);
+  const [patientMap,      setPatientMap]      = useState<Map<string, string>>(new Map());
 
   // ── Active section detail ───────────────────────────────────────────────
   const [activeSection, setActiveSection] = useState<"overview" | "entries" | "sessions" | "packages">("overview");
@@ -132,6 +134,15 @@ export default function ClinicBillingPage() {
       () => check()
     );
     return () => { u1(); u2(); u3(); };
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribeToAllPatients((patients) => {
+      const map = new Map<string, string>();
+      patients.forEach((p) => map.set(p.uid, `${p.firstName} ${p.lastName}`));
+      setPatientMap(map);
+    });
+    return unsub;
   }, []);
 
   // ── Filter by current period ─────────────────────────────────────────────
@@ -475,12 +486,13 @@ export default function ClinicBillingPage() {
                     <div className="cb-table-wrap">
                       <table className="cb-table">
                         <thead>
-                          <tr><th>Date</th><th>Type</th><th>Description</th><th>Amount</th><th>Status</th></tr>
+                          <tr><th>Date</th><th>Patient</th><th>Type</th><th>Description</th><th>Amount</th><th>Status</th></tr>
                         </thead>
                         <tbody>
                           {filteredEntries.filter((e) => !e.paid).map((e) => (
                             <tr key={e.id}>
                               <td style={{ color: "#5a5550", whiteSpace: "nowrap" }}>{e.date}</td>
+                              <td style={{ fontWeight: 500 }}>{patientMap.get(e.patientId) ?? "—"}</td>
                               <td><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 100, background: "#EAF5FC", color: "#2E8BC0" }}>Entry</span></td>
                               <td>{e.description}</td>
                               <td><span className="cb-amount">{fmt(e.amount)}</span></td>
@@ -490,6 +502,7 @@ export default function ClinicBillingPage() {
                           {filteredSessions.filter((s) => !s.paid).map((s) => (
                             <tr key={s.id}>
                               <td style={{ color: "#5a5550", whiteSpace: "nowrap" }}>{s.date}</td>
+                              <td style={{ fontWeight: 500 }}>{patientMap.get(s.patientId) ?? "—"}</td>
                               <td><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 100, background: "#ede9fe", color: "#4c1d95" }}>Session</span></td>
                               <td>{s.sessionType || "Session"}{s.physioName ? ` · ${s.physioName}` : ""}</td>
                               <td><span className="cb-amount">{fmt(s.amount)}</span></td>
@@ -499,7 +512,7 @@ export default function ClinicBillingPage() {
                         </tbody>
                         <tfoot>
                           <tr>
-                            <td colSpan={3}>Total Outstanding</td>
+                            <td colSpan={4}>Total Outstanding</td>
                             <td><span className="cb-amount" style={{ color: "#b91c1c" }}>{fmt(grandBalance)}</span></td>
                             <td />
                           </tr>
@@ -519,12 +532,13 @@ export default function ClinicBillingPage() {
                 <div className="cb-table-wrap">
                   <table className="cb-table">
                     <thead>
-                      <tr><th>Date</th><th>Description</th><th>Amount</th><th>Status</th><th>Paid On</th><th>Notes</th></tr>
+                      <tr><th>Date</th><th>Patient</th><th>Description</th><th>Amount</th><th>Status</th><th>Paid On</th><th>Notes</th></tr>
                     </thead>
                     <tbody>
                       {filteredEntries.map((e) => (
                         <tr key={e.id}>
                           <td style={{ whiteSpace: "nowrap", color: "#5a5550" }}>{e.date}</td>
+                          <td style={{ fontWeight: 500 }}>{patientMap.get(e.patientId) ?? "—"}</td>
                           <td style={{ fontWeight: 500 }}>{e.description}</td>
                           <td><span className="cb-amount">{fmt(e.amount)}</span></td>
                           <td><span className={`cb-paid-pill ${e.paid ? "paid" : "unpaid"}`}>{e.paid ? "✓ Paid" : "Unpaid"}</span></td>
@@ -535,7 +549,7 @@ export default function ClinicBillingPage() {
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td colSpan={2}>Total</td>
+                        <td colSpan={3}>Total</td>
                         <td><span className="cb-amount">{fmt(entryTotal)}</span></td>
                         <td><span style={{ fontSize: 12, color: "#1b4332" }}>{fmt(entryPaid)} paid</span></td>
                         <td><span style={{ fontSize: 12, color: entryTotal - entryPaid > 0 ? "#b91c1c" : "#1b4332" }}>{entryTotal - entryPaid > 0 ? `${fmt(entryTotal - entryPaid)} due` : "✓ Settled"}</span></td>
@@ -555,12 +569,13 @@ export default function ClinicBillingPage() {
                 <div className="cb-table-wrap">
                   <table className="cb-table">
                     <thead>
-                      <tr><th>Date</th><th>Session Type</th><th>Physiotherapist</th><th>Amount</th><th>Status</th><th>Package</th><th>Notes</th><th></th></tr>
+                      <tr><th>Date</th><th>Patient</th><th>Session Type</th><th>Physiotherapist</th><th>Amount</th><th>Status</th><th>Package</th><th>Notes</th><th></th></tr>
                     </thead>
                     <tbody>
                       {filteredSessions.map((s) => (
                         <tr key={s.id}>
                           <td style={{ whiteSpace: "nowrap", color: "#5a5550" }}>{s.date}</td>
+                          <td style={{ fontWeight: 500 }}>{patientMap.get(s.patientId) ?? "—"}</td>
                           <td style={{ fontWeight: 500 }}>{s.sessionType || "Session"}</td>
                           <td style={{ color: "#5a5550" }}>{s.physioName || "—"}</td>
                           <td><span className="cb-amount">{fmt(s.amount)}</span></td>
@@ -585,11 +600,11 @@ export default function ClinicBillingPage() {
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td colSpan={3}>Total</td>
+                        <td colSpan={4}>Total</td>
                         <td><span className="cb-amount">{fmt(sessionTotal)}</span></td>
                         <td><span style={{ fontSize: 12, color: "#1b4332" }}>{fmt(sessionPaid)} paid</span></td>
                         <td><span style={{ fontSize: 12, color: sessionTotal - sessionPaid > 0 ? "#b91c1c" : "#1b4332" }}>{sessionTotal - sessionPaid > 0 ? `${fmt(sessionTotal - sessionPaid)} due` : "✓ Settled"}</span></td>
-                        <td />
+                        <td /><td />
                       </tr>
                     </tfoot>
                   </table>
@@ -608,6 +623,7 @@ export default function ClinicBillingPage() {
                     const balance   = p.totalAmount - p.paidAmount;
                     return (
                       <div key={p.id} className="cb-pkg-card">
+                        <div style={{ fontWeight: 700, fontSize: 15, color: "#1a1a1a", marginBottom: 6 }}>{patientMap.get(p.patientId) ?? "—"}</div>
                         <div className="cb-pkg-size">{p.packageSize} <span>sessions</span></div>
                         <div className="cb-pkg-row"><span>Per session</span><strong>{fmt(p.pricePerSession)}</strong></div>
                         <div className="cb-pkg-row"><span>Total value</span><strong>{fmt(p.totalAmount)}</strong></div>
