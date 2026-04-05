@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Calendar, Dumbbell, BarChart2, Plus, ChevronDown, ChevronRight, Pencil, LogOut, Menu, ArrowLeft, Receipt } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, Dumbbell, BarChart2, Plus, ChevronDown, ChevronRight, Pencil, LogOut, Menu, ArrowLeft, Receipt, BookOpen } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
 import { doc, getDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -29,11 +29,12 @@ import { subscribeToSecretaries, deleteSecretary, type Secretary } from "../../s
 import AddPhysioModal from "../../components/AddPhysioModal";
 import { createPortal } from "react-dom";
 import ClinicBillingPage from "./ClinicBillingPage";
+import TreatmentProtocolsPage from "../protocols/TreatmentProtocolsPage";
 
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
-type Tab = "overview" | "patients" | "team" | "schedule" | "exercises" | "reports" | "billing";
+type Tab = "overview" | "patients" | "team" | "schedule" | "exercises" | "reports" | "billing" | "protocols";
 
 interface TabDef {
   id:    Tab;
@@ -47,7 +48,8 @@ function IconPatients()  { return <Users size={17} strokeWidth={1.8} color="whit
 function IconSchedule()  { return <Calendar size={17} strokeWidth={1.8} color="white" />; }
 function IconExercises() { return <Dumbbell size={17} strokeWidth={1.8} color="white" />; }
 function IconReports()   { return <BarChart2 size={17} strokeWidth={1.8} color="white" />; }
-function IconBilling()   { return <Receipt size={17} strokeWidth={1.8} color="white" />; }
+function IconBilling()    { return <Receipt size={17} strokeWidth={1.8} color="white" />; }
+function IconProtocols() { return <BookOpen size={17} strokeWidth={1.8} color="white" />; }
 function IconTeam()      { return <Users size={17} strokeWidth={1.8} color="white" />; }
 function IconAdd()       { return <Plus size={14} strokeWidth={2.5} color="white" />; }
 
@@ -751,6 +753,7 @@ export default function PhysioDashboard() {
     ...(!isSecretary ? [{ id: "exercises" as Tab, label: t("nav.exercises.lib"), icon: <IconExercises /> }] : []),
     ...(!isSecretary ? [{ id: "reports"   as Tab, label: t("nav.reports"),       icon: <IconReports /> }]   : []),
     ...(isManager    ? [{ id: "billing"   as Tab, label: "Billing",              icon: <IconBilling /> }]   : []),
+    ...(!isSecretary ? [{ id: "protocols" as Tab, label: "Protocols",            icon: <IconProtocols /> }] : []),
   ];
 
   const handleLogout = async () => {
@@ -1137,6 +1140,9 @@ export default function PhysioDashboard() {
                 )}
                 {activeTab === "reports"   && !isSecretary && <ComingSoon label="Reports" />}
                 {activeTab === "billing"   && isManager   && <ClinicBillingPage />}
+                {activeTab === "protocols" && !isSecretary && (
+                  <TreatmentProtocolsPage physioId={physio.uid} isManager={isManager} />
+                )}
               </>
             )}
           </main>
