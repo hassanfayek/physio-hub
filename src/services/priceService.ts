@@ -8,7 +8,6 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
   onSnapshot,
   setDoc,
   getDoc,
@@ -109,12 +108,16 @@ export function subscribeToPatientBilling(
 ): () => void {
   const q = query(
     collection(db, "patientBilling"),
-    where("patientId", "==", patientId),
-    orderBy("date", "desc")
+    where("patientId", "==", patientId)
   );
   return onSnapshot(
     q,
-    (snap) => onData(snap.docs.map((d) => docToEntry(d.id, d.data()))),
+    (snap) => {
+      const entries = snap.docs
+        .map((d) => docToEntry(d.id, d.data()))
+        .sort((a, b) => b.date.localeCompare(a.date));
+      onData(entries);
+    },
     (err)  => onError?.(err)
   );
 }
@@ -206,12 +209,16 @@ export function subscribeToSessionPrices(
 ): () => void {
   const q = query(
     collection(db, "patientSessionPrices"),
-    where("patientId", "==", patientId),
-    orderBy("date", "desc")
+    where("patientId", "==", patientId)
   );
   return onSnapshot(
     q,
-    (snap) => onData(snap.docs.map((d) => docToSessionPrice(d.id, d.data()))),
+    (snap) => {
+      const prices = snap.docs
+        .map((d) => docToSessionPrice(d.id, d.data()))
+        .sort((a, b) => b.date.localeCompare(a.date));
+      onData(prices);
+    },
     (err)  => onError?.(err)
   );
 }

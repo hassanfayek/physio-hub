@@ -604,8 +604,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
   const allSections = [
     { id: "profile",           label: "Patient Profile" },
     { id: "diagnosis",         label: "Diagnosis & Assessment", physioOnly: true },
-    { id: "notes",             label: "Treatment Program", physioOnly: true },
-    { id: "session-notes",     label: "Session Notes",     physioOnly: true },
+    { id: "notes",             label: "Treatment Program & Notes", physioOnly: true },
     { id: "documents",         label: "Documents" },
     { id: "session-feedback",  label: "Session Feedback", managerOnly: true },
     { id: "session-history",   label: "Session History" },
@@ -2514,6 +2513,70 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
               );
             })
           )}
+          {/* ── Session Notes (combined) ── */}
+          <div style={{ borderTop: "1.5px solid #f0ede8", margin: "28px 0 24px" }} />
+          {canEdit && (
+            <div className="ps-sn-form">
+              <div className="ps-sn-form-title">Record Session Notes</div>
+              <div className="ps-sn-row">
+                <div className="ps-sn-field">
+                  <label className="ps-sn-label">Session Date</label>
+                  <input
+                    type="date"
+                    className="ps-sn-input"
+                    value={snDate}
+                    onChange={(e) => setSnDate(e.target.value)}
+                  />
+                </div>
+                <div className="ps-sn-field">
+                  <label className="ps-sn-label">Treatment Type</label>
+                  <select
+                    className="ps-sn-select"
+                    value={snTreatment}
+                    onChange={(e) => setSnTreatment(e.target.value)}
+                  >
+                    {TREATMENT_TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="ps-sn-field">
+                <label className="ps-sn-label">Session Notes</label>
+                <textarea
+                  className="ps-sn-textarea"
+                  placeholder="Record what was done in this session…"
+                  value={snNotes}
+                  onChange={(e) => setSnNotes(e.target.value)}
+                />
+              </div>
+              {snError && <div className="ps-sn-error">{snError}</div>}
+              <button
+                className="ps-sn-save-btn"
+                disabled={snSaving || !snNotes.trim()}
+                onClick={handleSaveSessionNote}
+              >
+                {snSaving
+                  ? <><span className="ps-senior-spinner" /> Saving…</>
+                  : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Session Note</>
+                }
+              </button>
+            </div>
+          )}
+          <div className="ps-sn-history-title">Session Notes History</div>
+          {sessionNotes.length === 0 ? (
+            <div className="ps-sn-empty">No session notes recorded yet.</div>
+          ) : (
+            sessionNotes.map((note) => (
+              <div key={note.id} className="ps-sn-card">
+                <div className="ps-sn-card-header">
+                  <span className="ps-sn-card-type">{note.treatmentType}</span>
+                  <span className="ps-sn-card-date">{note.date}</span>
+                </div>
+                <div className="ps-sn-card-notes">{note.notes}</div>
+              </div>
+            ))
+          )}
         </>
       )}
 
@@ -2661,83 +2724,6 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
             (user as PhysioProfile).uid === patient.seniorEditorId
           }
         />
-      )}
-
-      {/* ── Part 4: Session Notes ── */}
-      {activeSection === "session-notes" && (
-        <>
-          {/* Form — only visible to editors */}
-          {canEdit && (
-            <div className="ps-sn-form">
-              <div className="ps-sn-form-title">Record Session Notes</div>
-              <div className="ps-sn-row">
-                <div className="ps-sn-field">
-                  <label className="ps-sn-label">Session Date</label>
-                  <input
-                    type="date"
-                    className="ps-sn-input"
-                    value={snDate}
-                    onChange={(e) => setSnDate(e.target.value)}
-                  />
-                </div>
-                <div className="ps-sn-field">
-                  <label className="ps-sn-label">Treatment Type</label>
-                  <select
-                    className="ps-sn-select"
-                    value={snTreatment}
-                    onChange={(e) => setSnTreatment(e.target.value)}
-                  >
-                    {TREATMENT_TYPES.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <textarea
-                className="ps-sn-textarea"
-                placeholder="Describe what was done during the session, patient response, progress observed…"
-                value={snNotes}
-                onChange={(e) => setSnNotes(e.target.value)}
-              />
-              <div style={{ display: "flex", alignItems: "center" }}>
-                <button
-                  className="ps-sn-save-btn"
-                  disabled={snSaving || !snNotes.trim()}
-                  onClick={handleSaveSessionNote}
-                >
-                  {snSaving ? (
-                    <><span className="ps-senior-spinner" /> Saving…</>
-                  ) : (
-                    <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Note</>
-                  )}
-                </button>
-                {snSuccess && (
-                  <span className="ps-sn-success">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    Saved
-                  </span>
-                )}
-              </div>
-              {snError && <div className="ps-sn-error">{snError}</div>}
-            </div>
-          )}
-
-          {/* Session history */}
-          <div className="ps-sn-history-title">Session History</div>
-          {sessionNotes.length === 0 ? (
-            <div className="ps-sn-empty">No session notes recorded yet.</div>
-          ) : (
-            sessionNotes.map((note) => (
-              <div key={note.id} className="ps-sn-card">
-                <div className="ps-sn-card-header">
-                  <span className="ps-sn-card-type">{note.treatmentType}</span>
-                  <span className="ps-sn-card-date">{note.date}</span>
-                </div>
-                <div className="ps-sn-card-notes">{note.notes}</div>
-              </div>
-            ))
-          )}
-        </>
       )}
 
       {/* ── PROGRESS (unchanged) ── */}
