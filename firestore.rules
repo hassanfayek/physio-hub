@@ -108,6 +108,20 @@ service cloud.firestore {
       allow write: if isManager() || isPhysio();
     }
 
+    // ── Treatment Protocols ───────────────────────────────────────────────────
+    // All staff can read; only manager can create / edit / delete.
+    match /treatmentProtocols/{protocolId} {
+      allow read:  if isStaff();
+      allow write: if isManager();
+    }
+
+    // ── Patient Protocol Assignments ──────────────────────────────────────────
+    // All physios and manager can assign; all staff can read.
+    match /patientProtocols/{docId} {
+      allow read:  if isStaff();
+      allow write: if isManager() || isPhysio();
+    }
+
     // ── Clinic Settings ──────────────────────────────────────────────────────
     match /clinicSettings/{docId} {
       allow read:  if isStaff() || isPatient();
