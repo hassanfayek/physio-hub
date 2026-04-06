@@ -525,7 +525,7 @@ interface OverviewTabProps {
   onViewPatient?:  (patientId: string) => void;
 }
 
-function OverviewTab({ physio, isManager, isSecretary = false, onViewPatient }: OverviewTabProps) {
+function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false, onViewPatient }: OverviewTabProps) {
   const hour     = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
@@ -562,14 +562,17 @@ function OverviewTab({ physio, isManager, isSecretary = false, onViewPatient }: 
   useEffect(() => {
     setApptLoading(true);
     const today = toDateStr(new Date());
+    // Juniors (non-senior, non-manager, non-secretary) see all clinic appointments
+    // because their patients' appointments are booked under other physios' IDs
+    const isJunior = !isManager && !isSecretary && !isSenior;
     const unsubscribe = subscribeToAppointmentsByDay(
       today,
-      (isManager || isSecretary) ? null : physio.uid,
+      (isManager || isSecretary || isJunior) ? null : physio.uid,
       (data) => { setTodayAppts(data); setApptLoading(false); },
       ()     => setApptLoading(false)
     );
     return () => unsubscribe();
-  }, [physio.uid, isManager, isSecretary]);
+  }, [physio.uid, isManager, isSecretary, isSenior]);
 
   return (
     <>
@@ -1109,23 +1112,25 @@ export default function PhysioDashboard() {
       <div className="phd-root">
         {/* Topbar */}
         <header className="phd-topbar">
-          <div className="phd-topbar-left" />
+          {/* Left: user name chip */}
+          <div className="phd-topbar-left">
+            <div className="phd-user-chip">
+              <div className="phd-user-name">
+                {isManager ? physio.firstName : isSecretary ? physio.firstName : `Dr. ${physio.lastName}`}
+              </div>
+            </div>
+          </div>
 
           {/* Centre: logo */}
           <div className="phd-topbar-logo">
             <img src={logo} alt="Physio+ Hub" style={{ height: 40, width: "auto", objectFit: "contain", display: "block" }} />
           </div>
 
-          {/* Right: user + sign out */}
+          {/* Right: language + sign out */}
           <div className="phd-topbar-right">
             <button className="lang-toggle" onClick={toggleLang} title="Switch language">
               {lang === "en" ? "🌐 العربية" : "🌐 English"}
             </button>
-            <div className="phd-user-chip">
-              <div className="phd-user-name">
-                {isManager ? physio.firstName : isSecretary ? physio.firstName : `Dr. ${physio.lastName}`}
-              </div>
-            </div>
             <button className="phd-logout-btn" onClick={handleLogout}>
               <LogOut size={13} strokeWidth={2} color="#9a9590" />
               {t("common.signOut")}

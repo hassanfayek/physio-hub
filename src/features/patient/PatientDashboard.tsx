@@ -329,21 +329,23 @@ export default function PatientDashboard() {
       <div className="pd2-root">
         {/* Topbar */}
         <header className="pd2-topbar">
-          <div className="pd2-topbar-left" />
+          {/* Left: user name */}
+          <div className="pd2-topbar-left">
+            <div className="pd2-user-chip" onClick={() => navigate("/patient/profile")}>
+              <div className="pd2-user-name">{patientFullName}</div>
+            </div>
+          </div>
 
           {/* Centre: logo */}
           <div className="pd2-topbar-logo">
             <img src={logo} alt="Physio+ Hub" style={{ height: 40, width: "auto", objectFit: "contain", display: "block" }} />
           </div>
 
-          {/* Right: user chip + sign out */}
+          {/* Right: language + sign out */}
           <div className="pd2-topbar-right">
             <button className="lang-toggle" onClick={toggleLang} title="Switch language">
               {lang === "en" ? "🌐 العربية" : "🌐 English"}
             </button>
-            <div className="pd2-user-chip" onClick={() => navigate("/patient/profile")}>
-              <div className="pd2-user-name">{patientFullName}</div>
-            </div>
             <button className="pd2-logout" onClick={handleLogout}>Sign out</button>
           </div>
         </header>

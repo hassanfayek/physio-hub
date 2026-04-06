@@ -37,6 +37,7 @@ export interface Patient {
   juniorName:       string | null;
   traineeId:        string | null;
   traineeName:      string | null;
+  hideBodyProfile?: boolean;
 }
 
 export type PhysioRank = "senior" | "junior" | "trainee";
@@ -105,6 +106,7 @@ function docToPatient(id: string, data: Record<string, unknown>): Patient {
     juniorName:       (data.juniorName       as string | null) ?? null,
     traineeId:        (data.traineeId        as string | null) ?? null,
     traineeName:      (data.traineeName      as string | null) ?? null,
+    hideBodyProfile:  (data.hideBodyProfile  as boolean | undefined) ?? true,
   };
 }
 

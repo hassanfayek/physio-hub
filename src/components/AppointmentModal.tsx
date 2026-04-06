@@ -48,11 +48,12 @@ export default function AppointmentModal({
     : patients.filter((p) => p.physioId === currentPhysio.uid);
 
   // Pre-select current physio for non-managers
-  const [walkIn,      setWalkIn]      = useState(false);
-  const [walkInName,  setWalkInName]  = useState("");
-  const [walkInPhone, setWalkInPhone] = useState("");
-  const [patientId,   setPatientId]   = useState("");
-  const [physioId,    setPhysioId]    = useState(isManager ? "" : currentPhysio.uid);
+  const [walkIn,        setWalkIn]        = useState(false);
+  const [walkInName,    setWalkInName]    = useState("");
+  const [walkInPhone,   setWalkInPhone]   = useState("");
+  const [patientId,     setPatientId]     = useState("");
+  const [patientSearch, setPatientSearch] = useState("");
+  const [physioId,      setPhysioId]      = useState(isManager ? "" : currentPhysio.uid);
   const [sessionType, setSessionType] = useState("");
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState<string | null>(null);
@@ -261,6 +262,40 @@ export default function AppointmentModal({
         .am-select:focus { border-color: #2E8BC0; background: #fff; box-shadow: 0 0 0 3px rgba(46,139,192,0.08); }
         .am-select:disabled { opacity: 0.55; cursor: not-allowed; }
 
+        .am-search-wrap { position: relative; }
+        .am-search-input {
+          font-family: 'Outfit', sans-serif;
+          width: 100%; padding: 10px 14px; border-radius: 10px;
+          border: 1.5px solid #e5e0d8; background: #fafaf8;
+          font-size: 14px; color: #1a1a1a; outline: none; transition: border-color 0.15s;
+          min-height: 44px;
+        }
+        .am-search-input:focus { border-color: #2E8BC0; background: #fff; box-shadow: 0 0 0 3px rgba(46,139,192,0.08); }
+        .am-search-dropdown {
+          position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 10;
+          background: #fff; border: 1.5px solid #e5e0d8; border-radius: 10px;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.1); max-height: 200px; overflow-y: auto;
+        }
+        .am-search-option {
+          padding: 10px 14px; font-size: 13.5px; cursor: pointer; transition: background 0.12s;
+          border-bottom: 1px solid #f0ede8;
+        }
+        .am-search-option:last-child { border-bottom: none; }
+        .am-search-option:hover { background: #EAF5FC; }
+        .am-search-option.selected { background: #D6EEF8; font-weight: 600; }
+        .am-search-empty { padding: 12px 14px; font-size: 13px; color: #9a9590; }
+        .am-selected-patient {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 10px 14px; border-radius: 10px;
+          border: 1.5px solid #B3DEF0; background: #EAF5FC;
+          font-size: 13.5px; font-weight: 500; color: #0C3C60;
+        }
+        .am-clear-patient {
+          background: none; border: none; cursor: pointer; color: #9a9590;
+          font-size: 16px; line-height: 1; padding: 0 2px; transition: color 0.15s;
+        }
+        .am-clear-patient:hover { color: #b91c1c; }
+
         .am-footer {
           padding: 20px 28px 24px; display: flex; align-items: center; gap: 10px;
           border-top: 1px solid #f5f3ef; margin-top: 20px;
@@ -434,21 +469,43 @@ export default function AppointmentModal({
                   ) : (
                     <div className="am-field">
                       <label className="am-label">Select Patient</label>
-                      <div className="am-select-wrap">
-                        <select
-                          className="am-select"
-                          value={patientId}
-                          onChange={(e) => { setPatientId(e.target.value); setError(null); }}
-                          required
-                        >
-                          <option value="">— Choose a patient —</option>
-                          {availablePatients.map((p) => (
-                            <option key={p.uid} value={p.uid}>
-                              {p.firstName} {p.lastName}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      {patientId ? (
+                        <div className="am-selected-patient">
+                          <span>{availablePatients.find(p => p.uid === patientId)?.firstName} {availablePatients.find(p => p.uid === patientId)?.lastName}</span>
+                          <button className="am-clear-patient" type="button" onClick={() => { setPatientId(""); setPatientSearch(""); setError(null); }}>×</button>
+                        </div>
+                      ) : (
+                        <div className="am-search-wrap">
+                          <input
+                            className="am-search-input"
+                            type="text"
+                            placeholder="Search by name…"
+                            value={patientSearch}
+                            onChange={(e) => setPatientSearch(e.target.value)}
+                            autoComplete="off"
+                          />
+                          {patientSearch.trim().length > 0 && (
+                            <div className="am-search-dropdown">
+                              {availablePatients
+                                .filter(p => `${p.firstName} ${p.lastName}`.toLowerCase().includes(patientSearch.toLowerCase()))
+                                .slice(0, 20)
+                                .map(p => (
+                                  <div
+                                    key={p.uid}
+                                    className="am-search-option"
+                                    onClick={() => { setPatientId(p.uid); setPatientSearch(""); setError(null); }}
+                                  >
+                                    {p.firstName} {p.lastName}
+                                  </div>
+                                ))
+                              }
+                              {availablePatients.filter(p => `${p.firstName} ${p.lastName}`.toLowerCase().includes(patientSearch.toLowerCase())).length === 0 && (
+                                <div className="am-search-empty">No patients match "{patientSearch}"</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {availablePatients.length === 0 && (
                         <span style={{ fontSize: 12, color: "#9a9590" }}>
                           {isManager ? "No patients in the system." : "You have no assigned patients."}

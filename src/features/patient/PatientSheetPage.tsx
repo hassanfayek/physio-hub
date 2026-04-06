@@ -670,7 +670,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     { id: "session-feedback",  label: "Session Feedback", managerOnly: true },
     { id: "session-history",   label: "Session History" },
     { id: "exercises",         label: "Exercises" },
-    { id: "joint-assessment",  label: "Body Profile",     physioOnly: true },
+    { id: "joint-assessment",  label: "Body Profile",     physioOnly: patient?.hideBodyProfile !== false },
     { id: "pricing",           label: "Price Sheet",       billingOnly: true },
   ];
   // Filter sections by role:
@@ -2299,29 +2299,31 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
             <div className="ps-sn-form">
               <div className="ps-sn-form-title">Add to Treatment Program</div>
 
-              {/* Mode toggle */}
-              <div className="ps-tp-mode-toggle">
-                <button
-                  className={`ps-tp-mode-btn ${tpMode === "session" ? "active" : ""}`}
-                  onClick={() => setTpMode("session")}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
-                  </svg>
-                  Session Note
-                </button>
-                <button
-                  className={`ps-tp-mode-btn ${tpMode === "plan" ? "active" : ""}`}
-                  onClick={() => setTpMode("plan")}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                    <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                  </svg>
-                  Treatment Plan
-                  <span className="ps-tp-plan-badge">6 sessions</span>
-                </button>
-              </div>
+              {/* Mode toggle — plan mode only for managers and assigned senior */}
+              {canEdit && (
+                <div className="ps-tp-mode-toggle">
+                  <button
+                    className={`ps-tp-mode-btn ${tpMode === "session" ? "active" : ""}`}
+                    onClick={() => setTpMode("session")}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+                    </svg>
+                    Session Note
+                  </button>
+                  <button
+                    className={`ps-tp-mode-btn ${tpMode === "plan" ? "active" : ""}`}
+                    onClick={() => setTpMode("plan")}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                      <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    Treatment Plan
+                    <span className="ps-tp-plan-badge">6 sessions</span>
+                  </button>
+                </div>
+              )}
 
               {/* Session Note fields */}
               {tpMode === "session" && (
@@ -3038,12 +3040,38 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         />
       )}
       {/* ── BODY PROFILE ── */}
-      {activeSection === "joint-assessment" && role !== "patient" && (
-        <JointAssessmentSheet
-          patientId={patientId}
-          patientName={patient ? `${patient.firstName} ${patient.lastName}` : ""}
-          canEdit={canEdit}
-        />
+      {activeSection === "joint-assessment" && (role !== "patient" || patient?.hideBodyProfile === false) && (
+        <>
+          {isManager && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 14, gap: 10 }}>
+              <span style={{ fontSize: 13, color: "#9a9590" }}>
+                {patient?.hideBodyProfile ? "Body profile is hidden from patient" : "Body profile is visible to patient"}
+              </span>
+              <button
+                onClick={async () => {
+                  if (!patientId) return;
+                  const { updateDoc, doc } = await import("firebase/firestore");
+                  await updateDoc(doc(db, "patients", patientId), { hideBodyProfile: !patient?.hideBodyProfile });
+                }}
+                style={{
+                  padding: "5px 14px", borderRadius: 8, border: "1.5px solid",
+                  fontFamily: "'Outfit', sans-serif", fontSize: 12.5, fontWeight: 500,
+                  cursor: "pointer", transition: "all 0.15s",
+                  borderColor: patient?.hideBodyProfile ? "#B3DEF0" : "#e5e0d8",
+                  background: patient?.hideBodyProfile ? "#EAF5FC" : "#fafaf8",
+                  color: patient?.hideBodyProfile ? "#2E8BC0" : "#9a9590",
+                }}
+              >
+                {patient?.hideBodyProfile ? "👁 Show to Patient" : "🚫 Hide from Patient"}
+              </button>
+            </div>
+          )}
+          <JointAssessmentSheet
+            patientId={patientId}
+            patientName={patient ? `${patient.firstName} ${patient.lastName}` : ""}
+            canEdit={canEdit}
+          />
+        </>
       )}
     </>
       )}
