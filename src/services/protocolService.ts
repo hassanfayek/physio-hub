@@ -10,12 +10,13 @@ import { db } from "../firebase";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ProtocolPhase {
-  name:          string;   // e.g. "Phase 1 — Acute"
-  duration:      string;   // e.g. "Week 1–2"
-  goals:         string;
-  interventions: string;
-  exercises:     string;
-  precautions:   string;
+  name:             string;   // e.g. "Phase 1 — Acute"
+  duration:         string;   // e.g. "Week 1–2"
+  goals:            string;
+  interventions:    string;
+  exercises:        string;
+  precautions:      string;
+  progressCriteria: string;   // criteria patient must meet to advance to next phase
 }
 
 export interface TreatmentProtocol {

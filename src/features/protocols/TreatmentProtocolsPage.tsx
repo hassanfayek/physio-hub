@@ -37,7 +37,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 const BLANK_PHASE: ProtocolPhase = {
-  name: "", duration: "", goals: "", interventions: "", exercises: "", precautions: "",
+  name: "", duration: "", goals: "", interventions: "", exercises: "", precautions: "", progressCriteria: "",
 };
 
 const BLANK_PROTOCOL = {
@@ -614,6 +614,12 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
                                       <p>{phase.precautions}</p>
                                     </div>
                                   )}
+                                  {phase.progressCriteria && (
+                                    <div className="tp-phase-field" style={{ gridColumn: "1 / -1", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "8px 10px" }}>
+                                      <label style={{ color: "#166534" }}>Progress Criteria</label>
+                                      <p style={{ color: "#166534" }}>{phase.progressCriteria}</p>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             ))}
@@ -734,10 +740,17 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
                         value={phase.exercises} onChange={(e) => setPhase(i, "exercises", e.target.value)} />
                     </div>
                   </div>
-                  <div className="tp-field" style={{ marginBottom: 0 }}>
-                    <label className="tp-label">Precautions</label>
-                    <input className="tp-input" placeholder="Any contraindications or precautions…"
-                      value={phase.precautions} onChange={(e) => setPhase(i, "precautions", e.target.value)} />
+                  <div className="tp-grid2">
+                    <div className="tp-field">
+                      <label className="tp-label">Precautions</label>
+                      <input className="tp-input" placeholder="Any contraindications or precautions…"
+                        value={phase.precautions} onChange={(e) => setPhase(i, "precautions", e.target.value)} />
+                    </div>
+                    <div className="tp-field">
+                      <label className="tp-label">Progress Criteria</label>
+                      <input className="tp-input" placeholder="e.g. Full ROM, pain ≤ 2/10, no swelling…"
+                        value={phase.progressCriteria} onChange={(e) => setPhase(i, "progressCriteria", e.target.value)} />
+                    </div>
                   </div>
                 </div>
               ))}
