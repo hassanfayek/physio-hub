@@ -12,6 +12,7 @@ import {
 import {
   subscribeToPatients,
   subscribeToAllPatients,
+  subscribeToPhysioPatients,
   subscribeToPhysiotherapists,
   type Patient,
   type Physiotherapist,
@@ -28,6 +29,7 @@ interface SchedulePageProps {
   lastName:              string;
   isManager:             boolean;
   isSecretary?:          boolean;
+  canBook?:              boolean;  // false for juniors
   onViewPatient?:        (patientId: string) => void;
   onViewPatientSection?: (patientId: string, section: string) => void;
 }
@@ -125,9 +127,12 @@ export default function SchedulePage({
   lastName,
   isManager,
   isSecretary = false,
+  canBook = true,
   onViewPatient,
   onViewPatientSection,
 }: SchedulePageProps) {
+  // Juniors see all clinic appointments but cannot book
+  const showAll = isManager || isSecretary || !canBook;
   // ── State ─────────────────────────────────────────────────────────────────
   const today     = new Date();
   const [view,    setView]    = useState<ViewMode>("month");
@@ -146,11 +151,11 @@ export default function SchedulePage({
   }, []);
 
   useEffect(() => {
-    const unsub = (isManager || isSecretary)
+    const unsub = showAll
       ? subscribeToAllPatients(setPatients)
-      : subscribeToPatients(physioId, setPatients);
+      : subscribeToPhysioPatients(physioId, setPatients);
     return () => unsub();
-  }, [physioId, isManager, isSecretary]);
+  }, [physioId, showAll]);
 
   useEffect(() => {
     return subscribeToPhysiotherapists(setPhysios);
@@ -340,7 +345,7 @@ export default function SchedulePage({
           <div>
             <div className="sc-title">Schedule</div>
             <div className="sc-sub">
-              {(isManager || isSecretary) ? "Clinic-wide schedule" : "Your appointment schedule"}
+              {showAll ? "Clinic-wide schedule" : "Your appointment schedule"}
             </div>
           </div>
         </div>
@@ -420,7 +425,7 @@ export default function SchedulePage({
               year={cursor.getFullYear()}
               month={cursor.getMonth() + 1}
               settings={settings}
-              physioId={(isManager || isSecretary) ? null : physioId}
+              physioId={showAll ? null : physioId}
               onDayClick={openDay}
             />
           )}
@@ -432,7 +437,7 @@ export default function SchedulePage({
               patients={patients}
               physios={physios}
               currentPhysio={currentPhysio}
-              isManager={isManager || isSecretary}
+              isManager={showAll}
               onDayClick={openDay}
             />
           )}
@@ -444,7 +449,8 @@ export default function SchedulePage({
               patients={patients}
               physios={physios}
               currentPhysio={currentPhysio}
-              isManager={isManager || isSecretary}
+              isManager={showAll}
+              canBook={canBook}
               onBack={() => setView("week")}
               onViewPatient={onViewPatient}
               onViewPatientSection={onViewPatientSection}

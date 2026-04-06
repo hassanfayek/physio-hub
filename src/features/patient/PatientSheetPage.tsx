@@ -609,6 +609,9 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       !!patient?.seniorEditorId &&
       (user as PhysioProfile).uid === patient.seniorEditorId);
 
+  // canWriteSessionNotes: all physios (junior, senior, manager) can add session notes
+  const canWriteSessionNotes: boolean = role === "clinic_manager" || role === "physiotherapist";
+
   // canEditProfile: can edit patient profile & manage documents (non-clinical)
   const canEditProfile: boolean = canEdit || isSecretary;
 
@@ -2291,8 +2294,8 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       {/* ── CLINICAL NOTES (unchanged) ── */}
       {activeSection === "notes" && role !== "patient" && (
         <>
-          {/* Add entry form — manager + senior only */}
-          {canEdit && (
+          {/* Add entry form — all physios + manager */}
+          {canWriteSessionNotes && (
             <div className="ps-sn-form">
               <div className="ps-sn-form-title">Add to Treatment Program</div>
 

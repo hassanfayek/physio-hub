@@ -1233,6 +1233,7 @@ export default function PhysioDashboard() {
                     lastName={physio.lastName}
                     isManager={isManager}
                     isSecretary={isSecretary}
+                    canBook={isManager || isSenior || isSecretary}
                     onViewPatient={(id) => { setViewingPatientSection(undefined); setViewingPatientId(id); }}
                     onViewPatientSection={(id, section) => { setViewingPatientSection(section); setViewingPatientId(id); }}
                   />

@@ -28,6 +28,7 @@ interface DayViewProps {
   physios:         Physiotherapist[];
   currentPhysio:   { uid: string; firstName: string; lastName: string };
   isManager:       boolean;
+  canBook?:        boolean;  // false for juniors
   onBack?:         () => void;
   onViewPatient?:        (patientId: string) => void;
   onViewPatientSection?: (patientId: string, section: string) => void;
@@ -42,6 +43,7 @@ export default function DayView({
   physios,
   currentPhysio,
   isManager,
+  canBook = true,
   onBack,
   onViewPatient,
   onViewPatientSection,
@@ -514,15 +516,17 @@ export default function DayView({
                           />
                         </div>
                       </div>
-                      <button
-                        className={`dv-book-btn ${isFull ? "disabled" : ""}`}
-                        onClick={() => !isFull && setModalSlot(h)}
-                        disabled={isFull}
-                        type="button"
-                      >
-                        <Plus size={11} strokeWidth={2.5} />
-                        {isFull ? "Full" : "Book"}
-                      </button>
+                      {canBook && (
+                        <button
+                          className={`dv-book-btn ${isFull ? "disabled" : ""}`}
+                          onClick={() => !isFull && setModalSlot(h)}
+                          disabled={isFull}
+                          type="button"
+                        >
+                          <Plus size={11} strokeWidth={2.5} />
+                          {isFull ? "Full" : "Book"}
+                        </button>
+                      )}
                     </div>
 
                     {/* Appointment cards */}
