@@ -10,7 +10,6 @@ import {
   type ClinicSettings,
 } from "../../services/appointmentService";
 import {
-  subscribeToPatients,
   subscribeToAllPatients,
   subscribeToPhysioPatients,
   subscribeToPhysiotherapists,
