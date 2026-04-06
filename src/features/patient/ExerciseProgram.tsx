@@ -215,20 +215,18 @@ interface ExerciseCardProps {
   editSaving:   boolean;
   editError:    string | null;
   removingId:   string | null;
-  openVideoId:  string | null;
   onToggle:     (rec: PatientExercise) => void;
   onEditOpen:   (rec: PatientExercise) => void;
   onSaveEdit:   (rec: PatientExercise) => void;
   onRemove:     (rec: PatientExercise) => void;
   onSetEditVals: (v: { sets: string; reps: string; holdTime: string; notes: string }) => void;
   onCancelEdit: () => void;
-  onSetOpenVideoId: (id: string | null) => void;
 }
 
 function ExerciseCard({
   rec, viewerRole, canEdit, canComplete_, togglingId, editingId,
-  editVals, editSaving, editError, removingId, openVideoId,
-  onToggle, onEditOpen, onSaveEdit, onRemove, onSetEditVals, onCancelEdit, onSetOpenVideoId,
+  editVals, editSaving, editError, removingId,
+  onToggle, onEditOpen, onSaveEdit, onRemove, onSetEditVals, onCancelEdit,
 }: ExerciseCardProps) {
   const isClinicPatient = viewerRole === "patient" && (rec.programType ?? "clinic") === "clinic";
   const isDisabled = !canComplete_ || isClinicPatient;
@@ -281,34 +279,13 @@ function ExerciseCard({
         {rec.notes && <div className="ep-ex-notes">{rec.notes}</div>}
 
         {rec.videoId && (
-          viewerRole === "patient" ? (
-            openVideoId === rec.id ? (
-              <>
-                <div className="ep-video-wrap">
-                  <iframe
-                    src={`https://www.youtube.com/embed/${rec.videoId}`}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-                <button className="ep-watch-btn" style={{ marginTop: 6 }} onClick={() => onSetOpenVideoId(null)}>
-                  <Play size={12} strokeWidth={2} /> Hide Video
-                </button>
-              </>
-            ) : (
-              <button className="ep-watch-btn" onClick={() => onSetOpenVideoId(rec.id)}>
-                <Play size={12} strokeWidth={2} /> Watch Video
-              </button>
-            )
-          ) : (
-            <div className="ep-video-wrap">
-              <iframe
-                src={`https://www.youtube.com/embed/${rec.videoId}`}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-          )
+          <div className="ep-video-wrap">
+            <iframe
+              src={`https://www.youtube.com/embed/${rec.videoId}`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
         )}
 
         <div className="ep-ex-footer">
@@ -391,7 +368,6 @@ export default function ExerciseProgram({
   const resetDoneRef = useRef(false);
   const [removingId,   setRemovingId]   = useState<string | null>(null);
   const [editingId,    setEditingId]    = useState<string | null>(null);
-  const [openVideoId,  setOpenVideoId]  = useState<string | null>(null);
   const [editVals,     setEditVals]     = useState<{ sets: string; reps: string; holdTime: string; notes: string }>({ sets: "", reps: "", holdTime: "", notes: "" });
   const [editSaving,   setEditSaving]   = useState(false);
   const [editError,    setEditError]    = useState<string | null>(null);
@@ -914,10 +890,9 @@ export default function ExerciseProgram({
                   ) : clinicExercises.map((rec) => (
                     <ExerciseCard key={rec.id} rec={rec} viewerRole={viewerRole} canEdit={canEdit} canComplete_={canComplete_}
                       togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
-                      removingId={removingId} openVideoId={openVideoId}
+                      removingId={removingId}
                       onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
-                      onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }}
-                      onSetOpenVideoId={setOpenVideoId} />
+                      onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
                   ))}
 
                   {/* ── Home section ── */}
@@ -933,10 +908,9 @@ export default function ExerciseProgram({
                   ) : homeExercises.map((rec) => (
                     <ExerciseCard key={rec.id} rec={rec} viewerRole={viewerRole} canEdit={canEdit} canComplete_={canComplete_}
                       togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
-                      removingId={removingId} openVideoId={openVideoId}
+                      removingId={removingId}
                       onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
-                      onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }}
-                      onSetOpenVideoId={setOpenVideoId} />
+                      onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
                   ))}
                 </>
               )
