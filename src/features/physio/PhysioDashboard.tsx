@@ -1137,7 +1137,7 @@ export default function PhysioDashboard() {
         {/* Body */}
         <div className="phd-body">
           {/* Sidebar */}
-          <aside className={`phd-sidebar ${sidebarOpen ? "open" : ""}`}>
+          <aside className="phd-sidebar">
             <div className="phd-profile">
               <div className="phd-p-avatar">
                 {physio.firstName[0]}{physio.lastName[0]}
