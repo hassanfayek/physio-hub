@@ -13,7 +13,7 @@ import {
   type PatientExercise,
 } from "../../services/exerciseService";
 import type { PatientProfile } from "../../services/authService";
-import { Calendar, FileText, Check, X, ChevronRight, Play } from "lucide-react";
+import { Calendar, FileText, Check, ChevronRight } from "lucide-react";
 import {
   collection, doc, query, where, orderBy, limit,
   onSnapshot, setDoc, updateDoc, serverTimestamp,
@@ -142,7 +142,6 @@ function ExCard({
   ex: PatientExercise;
   onComplete: (id: string, val: boolean) => void;
 }) {
-  const [videoOpen, setVideoOpen] = useState(false);
   const bucket = bucketFor(ex);
   const grad   = BUCKET_GRADIENT[bucket];
 
@@ -175,28 +174,17 @@ function ExCard({
         )}
       </div>
 
-      {/* Video toggle */}
+      {/* Video — always visible inline */}
       {ex.videoId && (
         <div style={{ padding: "0 16px 6px" }}>
-          {videoOpen ? (
-            <>
-              <div style={{ position: "relative", paddingTop: "56.25%", borderRadius: 10, overflow: "hidden", marginBottom: 6 }}>
-                <iframe
-                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-                  src={`https://www.youtube.com/embed/${ex.videoId}`}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-              <button onClick={() => setVideoOpen(false)} style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4 }}>
-                <X size={11} strokeWidth={2} /> Hide video
-              </button>
-            </>
-          ) : (
-            <button onClick={() => setVideoOpen(true)} style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.85)", background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "5px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
-              <Play size={11} strokeWidth={2.5} fill="currentColor" /> Watch Video
-            </button>
-          )}
+          <div style={{ position: "relative", paddingTop: "56.25%", borderRadius: 10, overflow: "hidden" }}>
+            <iframe
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+              src={`https://www.youtube.com/embed/${ex.videoId}`}
+              allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
         </div>
       )}
 

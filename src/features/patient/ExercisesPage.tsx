@@ -13,7 +13,7 @@ import {
   type PatientExercise,
 } from "../../services/exerciseService";
 import type { PatientProfile } from "../../services/authService";
-import { Check, Dumbbell, ChevronDown, Play } from "lucide-react";
+import { Check, Dumbbell, ChevronDown } from "lucide-react";
 
 // ─── Skeleton card ────────────────────────────────────────────────────────────
 
@@ -105,21 +105,15 @@ function ExerciseCard({
             </div>
           )}
 
-          {exercise.mediaUrl && (
-            <button
-              className="ep-media-link"
-              onClick={(e) => {
-                e.stopPropagation();
-                // Ensure URL has a protocol prefix
-                const url = exercise.mediaUrl.startsWith("http")
-                  ? exercise.mediaUrl
-                  : `https://${exercise.mediaUrl}`;
-                window.open(url, "_blank", "noopener,noreferrer");
-              }}
-            >
-              <Play size={13} strokeWidth={2} />
-              Watch Video
-            </button>
+          {exercise.videoId && (
+            <div style={{ position: "relative", paddingTop: "56.25%", borderRadius: 10, overflow: "hidden", marginBottom: 8 }}>
+              <iframe
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+                src={`https://www.youtube.com/embed/${exercise.videoId}`}
+                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
           )}
 
           {/* Complete button — home exercises only */}
