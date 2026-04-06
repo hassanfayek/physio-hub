@@ -9,47 +9,27 @@ import AppointmentsPage from "./AppointmentsPage";
 import PatientSheetPage from "./PatientSheetPage";
 import FeedbackPage from "./FeedbackPage";
 import logo from "../../assets/physio-logo.svg";
-import { Home, Dumbbell, CalendarDays, FileText, MessageSquare, Menu, ChevronRight, LogOut, ChevronLeft, History } from "lucide-react";
+import { Home, Dumbbell, CalendarDays, FileText, MessageSquare, ChevronRight, LogOut, ChevronLeft, History } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
 
 type Tab = "home" | "exercises" | "appointments" | "sheet" | "feedback";
 
+function IconHome()         { return <Home         size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconExercises()    { return <Dumbbell      size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconAppointments() { return <CalendarDays  size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconSheet()        { return <FileText      size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconFeedback()     { return <MessageSquare size={18} strokeWidth={1.8} color="currentColor" />; }
+
 const TABS: { id: Tab; label: string; icon: React.ReactNode; desc: string }[] = [
-  {
-    id: "home",
-    label: "Home",
-    desc: "Overview",
-    icon: <Home size={20} strokeWidth={1.8} color="white" />,
-  },
-  {
-    id: "exercises",
-    label: "Exercises",
-    desc: "4 assigned",
-    icon: <Dumbbell size={20} strokeWidth={1.8} color="white" />,
-  },
-  {
-    id: "appointments",
-    label: "Appointments",
-    desc: "2 upcoming",
-    icon: <CalendarDays size={20} strokeWidth={1.8} color="white" />,
-  },
-  {
-    id: "sheet",
-    label: "Patient Sheet",
-    desc: "View records",
-    icon: <FileText size={20} strokeWidth={1.8} color="white" />,
-  },
-  {
-    id: "feedback",
-    label: "Feedback",
-    desc: "Rate session",
-    icon: <MessageSquare size={20} strokeWidth={1.8} color="white" />,
-  },
+  { id: "home",         label: "Home",         desc: "Overview",     icon: <IconHome /> },
+  { id: "exercises",    label: "Exercises",    desc: "4 assigned",   icon: <IconExercises /> },
+  { id: "appointments", label: "Appointments", desc: "2 upcoming",   icon: <IconAppointments /> },
+  { id: "sheet",        label: "Sheet",        desc: "View records", icon: <IconSheet /> },
+  { id: "feedback",     label: "Feedback",     desc: "Rate session", icon: <IconFeedback /> },
 ];
 
 export default function PatientDashboard() {
   const [activeTab,    setActiveTab]    = useState<Tab>("home");
-  const [sidebarOpen,  setSidebarOpen]  = useState(false);
   const [sheetSection, setSheetSection] = useState<string | undefined>(undefined);
   const navigate = useNavigate();
   const { lang, toggleLang, t } = useLang();
@@ -78,8 +58,6 @@ export default function PatientDashboard() {
     : authPatient?.firstName
       ? `${authPatient.firstName} ${authPatient.lastName ?? ""}`.trim()
       : "Loading...";
-
-  // const patientCondition = patientData?.condition ?? "";
 
   return (
     <>
@@ -166,7 +144,7 @@ export default function PatientDashboard() {
           min-height: calc(100vh - 56px);
         }
 
-        /* ── SIDEBAR ── */
+        /* ── SIDEBAR — desktop only ── */
         .pd2-sidebar {
           background: #0C3C60;
           border-right: 1px solid #0a3254;
@@ -234,7 +212,6 @@ export default function PatientDashboard() {
         .pd2-nav-arrow { opacity: 0; transition: opacity 0.15s; }
         .pd2-nav-item:hover .pd2-nav-arrow { opacity: 1; }
 
-        /* Progress section */
         /* Sign out in sidebar */
         .pd2-sidebar-signout {
           margin-top: auto;
@@ -254,35 +231,6 @@ export default function PatientDashboard() {
           background: rgba(224,122,95,0.15);
           border-color: rgba(224,122,95,0.3);
           color: #fca5a5;
-        }
-        .pd2-rehab-title {
-          font-size: 12px;
-          font-weight: 600;
-          color: rgba(255,255,255,0.6);
-          margin-bottom: 12px;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-        }
-
-        .pd2-rehab-bar-top {
-          display: flex;
-          justify-content: space-between;
-          font-size: 12px;
-          color: rgba(255,255,255,0.7);
-          margin-bottom: 5px;
-        }
-
-        .pd2-rehab-bar-track {
-          height: 5px;
-          border-radius: 5px;
-          background: rgba(255,255,255,0.15);
-          overflow: hidden;
-        }
-        .pd2-rehab-bar-fill {
-          height: 100%;
-          border-radius: 5px;
-          background: linear-gradient(90deg, #2d6a4f, #52b788);
-          transition: width 0.8s cubic-bezier(0.34, 1.2, 0.64, 1);
         }
 
         /* ── PAGE CONTAINER ── */
@@ -323,85 +271,67 @@ export default function PatientDashboard() {
           to   { opacity: 1; transform: translateY(0); }
         }
 
-        /* ── HAMBURGER (hidden on desktop) ── */
-        .pd2-hamburger {
+        /* ── Bottom nav bar — hidden by default (desktop) ── */
+        .pd2-bottom-nav {
           display: none;
-          align-items: center; justify-content: center;
-          width: 40px; height: 40px;
-          border: 1px solid #e5e0d8; border-radius: 8px;
-          background: #f5f3ef; cursor: pointer;
-          color: #5a5550; transition: background 0.15s;
-          flex-shrink: 0;
         }
-        .pd2-hamburger:hover { background: #ede9e3; }
 
-        /* ── OVERLAY (mobile only) ── */
-        .pd2-overlay {
-          display: none;
-          position: fixed; inset: 0; z-index: 90;
-          background: rgba(0,0,0,0.4);
-          backdrop-filter: blur(2px);
-        }
-        .pd2-overlay.open { display: block; }
-
-        /* ── RESPONSIVE ── */
-
-        /* Desktop: sidebar always visible regardless of sidebarOpen state */
+        /* ── Desktop: sidebar visible, bottom nav hidden ── */
         @media (min-width: 769px) {
-          .pd2-sidebar {
-            display: flex !important;
-            transform: none !important;
-            position: sticky;
-          }
+          .pd2-sidebar { display: flex !important; }
+          .pd2-bottom-nav { display: none !important; }
+          .pd2-main { padding: 20px 18px; }
+          .pd2-logout { display: block; }
         }
 
+        /* ── Mobile: no sidebar, bottom nav instead ── */
         @media (max-width: 768px) {
-          /* Show hamburger button */
-          .pd2-hamburger { display: flex; }
-
-          /* Body collapses to single column */
           .pd2-body { grid-template-columns: 1fr; }
-
-          /* Sidebar: display:none by default (fully hidden, no layout impact) */
-          /* slides in as a drawer when .open class is added               */
-          .pd2-sidebar {
-            display: none;
-            position: fixed;
-            top: 0; left: 0;
-            height: 100vh;
-            width: 260px;
-            z-index: 100;
-            transform: translateX(0);
-            transition: none;
-            background: #0C3C60;
-          }
-          .pd2-sidebar.open {
-            display: flex;
-            box-shadow: 4px 0 24px rgba(0,0,0,0.15);
-          }
-
-          .pd2-main { padding: 14px 14px; }
+          .pd2-sidebar { display: none !important; }
           .pd2-logout { display: none; }
           .pd2-user-name { max-width: 90px; }
+
+          .pd2-main { padding: 14px 12px 80px; }
+
+          .pd2-bottom-nav {
+            display: flex;
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+            background: #fff;
+            border-top: 1px solid #e8e4de;
+            box-shadow: 0 -2px 16px rgba(0,0,0,0.07);
+            height: 60px;
+            padding-bottom: env(safe-area-inset-bottom);
+          }
+          .pd2-bn-item {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 2px;
+            background: none; border: none;
+            font-family: 'Outfit', sans-serif;
+            color: #5a5550; cursor: pointer;
+            padding: 5px 2px 4px; min-width: 0; position: relative;
+          }
+          .pd2-bn-item:hover { color: #2E8BC0; }
+          .pd2-bn-item.active { color: #2E8BC0; }
+          .pd2-bn-icon {
+            width: 26px; height: 26px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s;
+          }
+          .pd2-bn-item.active .pd2-bn-icon { background: #EAF5FC; }
+          .pd2-bn-label {
+            font-size: 9.5px; font-weight: 600; letter-spacing: 0.01em;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            max-width: 52px;
+          }
         }
       `}</style>
 
       <div className="pd2-root">
         {/* Topbar */}
         <header className="pd2-topbar">
-          {/* Left: hamburger (mobile) */}
-          <div className="pd2-topbar-left">
-            <button
-              className="pd2-hamburger"
-              style={{ background: "#f5f3ef", border: "1px solid #e5e0d8", color: "#5a5550" }}
-              onClick={() => setSidebarOpen(true)}
-              aria-label="Open menu"
-            >
-              <Menu size={20} strokeWidth={2} color="#5a5550" />
-            </button>
-          </div>
+          <div className="pd2-topbar-left" />
 
-          {/* Centre: logo — truly centred via grid */}
+          {/* Centre: logo */}
           <div className="pd2-topbar-logo">
             <img src={logo} alt="Physio+ Hub" style={{ height: 40, width: "auto", objectFit: "contain", display: "block" }} />
           </div>
@@ -412,23 +342,16 @@ export default function PatientDashboard() {
               {lang === "en" ? "🌐 العربية" : "🌐 English"}
             </button>
             <div className="pd2-user-chip" onClick={() => navigate("/patient/profile")}>
-<div className="pd2-user-name">{patientFullName}</div>
+              <div className="pd2-user-name">{patientFullName}</div>
             </div>
             <button className="pd2-logout" onClick={handleLogout}>Sign out</button>
           </div>
         </header>
 
-        {/* Overlay: closes sidebar on mobile when tapped */}
-        <div
-          className={`pd2-overlay ${sidebarOpen ? "open" : ""}`}
-          onClick={() => setSidebarOpen(false)}
-        />
-
         {/* Body */}
         <div className="pd2-body">
-          {/* Sidebar */}
-          <aside className={`pd2-sidebar ${sidebarOpen ? "open" : ""}`}>
-            
+          {/* Sidebar — desktop only */}
+          <aside className="pd2-sidebar">
             {/* Navigation */}
             <div className="pd2-nav-section">
               <div className="pd2-nav-label">{t("nav.myPortal")}</div>
@@ -436,7 +359,7 @@ export default function PatientDashboard() {
                 <div
                   key={tab.id}
                   className={`pd2-nav-item ${activeTab === tab.id ? "active" : ""}`}
-                  onClick={() => { setActiveTab(tab.id); setSheetSection(undefined); setSidebarOpen(false); }}
+                  onClick={() => { setActiveTab(tab.id); setSheetSection(undefined); }}
                 >
                   <div className="pd2-nav-icon">{tab.icon}</div>
                   <div className="pd2-nav-text">
@@ -444,7 +367,7 @@ export default function PatientDashboard() {
                     <div className="pd2-nav-desc">{t(`nav.${tab.id === "sheet" ? "patientSheet" : tab.id}.desc`)}</div>
                   </div>
                   <div className="pd2-nav-arrow">
-                    <ChevronRight size={14} strokeWidth={2} color="white" />
+                    <ChevronRight size={14} strokeWidth={2} color="currentColor" />
                   </div>
                 </div>
               ))}
@@ -458,18 +381,17 @@ export default function PatientDashboard() {
                 onClick={() => {
                   setSheetSection("session-history");
                   setActiveTab("sheet");
-                  setSidebarOpen(false);
                 }}
               >
                 <div className="pd2-nav-icon">
-                  <History size={20} strokeWidth={1.8} color="white" />
+                  <History size={18} strokeWidth={1.8} color="currentColor" />
                 </div>
                 <div className="pd2-nav-text">
                   <div className="pd2-nav-title">Session History</div>
                   <div className="pd2-nav-desc">Past sessions</div>
                 </div>
                 <div className="pd2-nav-arrow">
-                  <ChevronRight size={14} strokeWidth={2} color="white" />
+                  <ChevronRight size={14} strokeWidth={2} color="currentColor" />
                 </div>
               </div>
             </div>
@@ -500,6 +422,23 @@ export default function PatientDashboard() {
             </div>
           </main>
         </div>
+
+        {/* ── Bottom nav bar — mobile only ── */}
+        <nav className="pd2-bottom-nav">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                className={`pd2-bn-item${isActive ? " active" : ""}`}
+                onClick={() => { setActiveTab(tab.id); setSheetSection(undefined); }}
+              >
+                <div className="pd2-bn-icon">{tab.icon}</div>
+                <span className="pd2-bn-label">{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
     </>
   );
