@@ -138,16 +138,13 @@ function buildWeek(centerDate: string): { iso: string; dow: number; day: number 
 function ExCard({
   ex,
   onComplete,
-  onSkip,
 }: {
   ex: PatientExercise;
   onComplete: (id: string, val: boolean) => void;
-  onSkip: (id: string) => void;
 }) {
   const [videoOpen, setVideoOpen] = useState(false);
   const bucket = bucketFor(ex);
   const grad   = BUCKET_GRADIENT[bucket];
-  const skipped = ex.skipped ?? false;
 
   return (
     <div style={{
@@ -155,11 +152,10 @@ function ExCard({
       width: 200,
       borderRadius: 18,
       overflow: "hidden",
-      background: skipped ? "#f0ede8" : grad,
+      background: grad,
       position: "relative",
       display: "flex",
       flexDirection: "column",
-      opacity: skipped ? 0.55 : 1,
     }}>
       {/* Main content */}
       <div style={{ padding: "16px 16px 10px", flex: 1 }}>
@@ -180,7 +176,7 @@ function ExCard({
       </div>
 
       {/* Video toggle */}
-      {ex.videoId && !skipped && (
+      {ex.videoId && (
         <div style={{ padding: "0 16px 6px" }}>
           {videoOpen ? (
             <>
@@ -204,37 +200,21 @@ function ExCard({
         </div>
       )}
 
-      {/* Action buttons */}
-      {!skipped && (
-        <div style={{ display: "flex", gap: 8, padding: "8px 16px 14px" }}>
-          <button
-            onClick={() => onComplete(ex.id, !(ex.completed ?? false))}
-            title={ex.completed ? "Mark incomplete" : "Mark complete"}
-            style={{
-              width: 36, height: 36, borderRadius: "50%", border: "none",
-              background: ex.completed ? "#fbbf24" : "rgba(255,255,255,0.18)",
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all 0.15s",
-            }}
-          >
-            <Check size={16} strokeWidth={3} color={ex.completed ? "#fff" : "rgba(255,255,255,0.85)"} />
-          </button>
-          <button
-            onClick={() => onSkip(ex.id)}
-            title="Skip for today"
-            style={{
-              width: 36, height: 36, borderRadius: "50%", border: "none",
-              background: "rgba(255,255,255,0.12)",
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <X size={16} strokeWidth={2.5} color="rgba(255,255,255,0.7)" />
-          </button>
-        </div>
-      )}
-      {skipped && (
-        <div style={{ padding: "8px 16px 12px", fontSize: 12, color: "#9a9590" }}>Skipped</div>
-      )}
+      {/* Complete button only */}
+      <div style={{ padding: "8px 16px 14px" }}>
+        <button
+          onClick={() => onComplete(ex.id, !(ex.completed ?? false))}
+          title={ex.completed ? "Mark incomplete" : "Mark complete"}
+          style={{
+            width: 36, height: 36, borderRadius: "50%", border: "none",
+            background: ex.completed ? "#fbbf24" : "rgba(255,255,255,0.18)",
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "all 0.15s",
+          }}
+        >
+          <Check size={16} strokeWidth={3} color={ex.completed ? "#fff" : "rgba(255,255,255,0.85)"} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -373,9 +353,6 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
     await updateDoc(doc(db, "patientExercises", id), { completed: val });
   };
 
-  const handleSkip = async (id: string) => {
-    await updateDoc(doc(db, "patientExercises", id), { skipped: true });
-  };
 
   // Derive
   const nextAppt      = appointments[0] ?? null;
@@ -605,7 +582,7 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
                 </div>
                 <div className="pth-ex-scroll">
                   {exs.map((ex) => (
-                    <ExCard key={ex.id} ex={ex} onComplete={handleComplete} onSkip={handleSkip} />
+                    <ExCard key={ex.id} ex={ex} onComplete={handleComplete} />
                   ))}
                 </div>
               </div>
