@@ -306,10 +306,11 @@ export async function toggleExerciseCompletion(
 export async function updatePatientExercise(
   recordId: string,
   updates: Partial<{
-    sets:     number;
-    reps:     number;
-    holdTime: number;
-    notes:    string;
+    sets:        number;
+    reps:        number;
+    holdTime:    number;
+    notes:       string;
+    programType: "clinic" | "home";
   }>
 ): Promise<{ error?: string }> {
   try {

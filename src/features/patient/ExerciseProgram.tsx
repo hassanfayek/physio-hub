@@ -211,7 +211,7 @@ interface ExerciseCardProps {
   canComplete_: boolean;
   togglingId:   string | null;
   editingId:    string | null;
-  editVals:     { sets: string; reps: string; holdTime: string; notes: string };
+  editVals:     { sets: string; reps: string; holdTime: string; notes: string; programType: "clinic" | "home" };
   editSaving:   boolean;
   editError:    string | null;
   removingId:   string | null;
@@ -219,7 +219,7 @@ interface ExerciseCardProps {
   onEditOpen:   (rec: PatientExercise) => void;
   onSaveEdit:   (rec: PatientExercise) => void;
   onRemove:     (rec: PatientExercise) => void;
-  onSetEditVals: (v: { sets: string; reps: string; holdTime: string; notes: string }) => void;
+  onSetEditVals: (v: { sets: string; reps: string; holdTime: string; notes: string; programType: "clinic" | "home" }) => void;
   onCancelEdit: () => void;
 }
 
@@ -313,6 +313,36 @@ function ExerciseCard({
 
         {canEdit && editingId === rec.id && (
           <div className="ep-inline-edit">
+            {/* Program type toggle */}
+            <div className="ep-edit-field">
+              <label className="ep-edit-label">Program Type</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => onSetEditVals({ ...editVals, programType: "clinic" })}
+                  style={{
+                    flex: 1, padding: "6px 10px", borderRadius: 7, border: "1.5px solid",
+                    fontFamily: "'Outfit', sans-serif", fontSize: 12.5, fontWeight: 500,
+                    cursor: "pointer", transition: "all 0.15s",
+                    borderColor: editVals.programType === "clinic" ? "#2E8BC0" : "#e5e0d8",
+                    background: editVals.programType === "clinic" ? "#2E8BC0" : "#fff",
+                    color: editVals.programType === "clinic" ? "#fff" : "#9a9590",
+                  }}
+                >🏥 Clinic</button>
+                <button
+                  type="button"
+                  onClick={() => onSetEditVals({ ...editVals, programType: "home" })}
+                  style={{
+                    flex: 1, padding: "6px 10px", borderRadius: 7, border: "1.5px solid",
+                    fontFamily: "'Outfit', sans-serif", fontSize: 12.5, fontWeight: 500,
+                    cursor: "pointer", transition: "all 0.15s",
+                    borderColor: editVals.programType === "home" ? "#059669" : "#e5e0d8",
+                    background: editVals.programType === "home" ? "#059669" : "#fff",
+                    color: editVals.programType === "home" ? "#fff" : "#9a9590",
+                  }}
+                >🏠 Home</button>
+              </div>
+            </div>
             <div className="ep-edit-row">
               <div className="ep-edit-field">
                 <label className="ep-edit-label">Sets</label>
@@ -368,7 +398,7 @@ export default function ExerciseProgram({
   const resetDoneRef = useRef(false);
   const [removingId,   setRemovingId]   = useState<string | null>(null);
   const [editingId,    setEditingId]    = useState<string | null>(null);
-  const [editVals,     setEditVals]     = useState<{ sets: string; reps: string; holdTime: string; notes: string }>({ sets: "", reps: "", holdTime: "", notes: "" });
+  const [editVals,     setEditVals]     = useState<{ sets: string; reps: string; holdTime: string; notes: string; programType: "clinic" | "home" }>({ sets: "", reps: "", holdTime: "", notes: "", programType: "clinic" });
   const [editSaving,   setEditSaving]   = useState(false);
   const [editError,    setEditError]    = useState<string | null>(null);
   const [toast,        setToast]        = useState<string | null>(null);
@@ -410,10 +440,11 @@ export default function ExerciseProgram({
   const handleEditOpen = (rec: PatientExercise) => {
     setEditingId(rec.id);
     setEditVals({
-      sets:     String(rec.sets),
-      reps:     String(rec.reps),
-      holdTime: String(rec.holdTime ?? 0),
-      notes:    rec.notes ?? "",
+      sets:        String(rec.sets),
+      reps:        String(rec.reps),
+      holdTime:    String(rec.holdTime ?? 0),
+      notes:       rec.notes ?? "",
+      programType: rec.programType ?? "clinic",
     });
     setEditError(null);
   };
@@ -421,10 +452,11 @@ export default function ExerciseProgram({
   const handleSaveEdit = async (rec: PatientExercise) => {
     setEditSaving(true); setEditError(null);
     const result = await updatePatientExercise(rec.id, {
-      sets:     Math.max(1, parseInt(editVals.sets)     || rec.sets),
-      reps:     Math.max(1, parseInt(editVals.reps)     || rec.reps),
-      holdTime: Math.max(0, parseInt(editVals.holdTime) || 0),
-      notes:    editVals.notes.trim(),
+      sets:        Math.max(1, parseInt(editVals.sets)     || rec.sets),
+      reps:        Math.max(1, parseInt(editVals.reps)     || rec.reps),
+      holdTime:    Math.max(0, parseInt(editVals.holdTime) || 0),
+      notes:       editVals.notes.trim(),
+      programType: editVals.programType,
     });
     setEditSaving(false);
     if (result.error) { setEditError(result.error); return; }
