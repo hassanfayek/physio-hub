@@ -41,6 +41,7 @@ export interface PatientExercise {
   patientId:   string;
   exerciseId:  string;
   exerciseName: string;
+  name:        string;   // alias kept for display convenience
   sets:        number;
   reps:        number;
   holdTime:    number;
@@ -53,6 +54,8 @@ export interface PatientExercise {
   mediaUrl:      string;
   videoId:       string;
   programType:   "clinic" | "home";
+  timeOfDay?:    "Morning" | "Afternoon" | "Evening";
+  skipped?:      boolean;
 }
 
 export interface CreateExercisePayload {
@@ -110,11 +113,13 @@ function docToLibraryExercise(id: string, data: Record<string, unknown>): Librar
 }
 
 function docToPatientExercise(id: string, data: Record<string, unknown>): PatientExercise {
+  const exerciseName = (data.exerciseName as string) ?? "";
   return {
     id,
     patientId:    (data.patientId    as string)  ?? "",
     exerciseId:   (data.exerciseId   as string)  ?? "",
-    exerciseName: (data.exerciseName as string)  ?? "",
+    exerciseName,
+    name:         exerciseName,
     sets:         (data.sets         as number)  ?? 3,
     reps:         (data.reps         as number)  ?? 10,
     holdTime:     (data.holdTime     as number)  ?? 0,
@@ -127,6 +132,8 @@ function docToPatientExercise(id: string, data: Record<string, unknown>): Patien
     mediaUrl:      (data.mediaUrl      as string)  ?? "",
     videoId:       (data.videoId       as string)  ?? "",
     programType:  ((data.programType as string) === "home" ? "home" : "clinic") as "clinic" | "home",
+    timeOfDay:    (data.timeOfDay as "Morning" | "Afternoon" | "Evening" | undefined) ?? undefined,
+    skipped:      (data.skipped as boolean | undefined) ?? undefined,
   };
 }
 

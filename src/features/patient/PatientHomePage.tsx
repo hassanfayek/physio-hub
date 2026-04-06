@@ -1,16 +1,7 @@
 // FILE: src/features/patient/PatientHomePage.tsx
-// Patient home screen — shown as the default landing tab after login.
-// CSS prefix: pth- (patient home — no collision with pd2-, ep-, ap-, ps-, el-, ph-ov-)
-//
-// Sections:
-//   1. Greeting          — patient first name from auth context
-//   2. Next Appointment  — realtime from appointments collection
-//   3. Today's Exercises — clinic programType exercises count
-//   4. Home Program      — home programType exercises count
-//   5. Quick Actions     — navigate to other tabs
-//   6. Recovery Progress — completion % from patientExercises
+// Patient home — redesigned with week calendar strip + exercise card feed.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import {
   subscribeToPatientAppointments,
@@ -22,10 +13,10 @@ import {
   type PatientExercise,
 } from "../../services/exerciseService";
 import type { PatientProfile } from "../../services/authService";
-import { Dumbbell, Home, ChevronRight, Calendar, FileText } from "lucide-react";
+import { Calendar, FileText, Check, X, ChevronRight, Play } from "lucide-react";
 import {
   collection, doc, query, where, orderBy, limit,
-  onSnapshot, setDoc, serverTimestamp,
+  onSnapshot, setDoc, updateDoc, serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 
@@ -36,171 +27,19 @@ interface PatientHomePageProps {
 }
 
 interface PainEntry {
-  date:  string;   // YYYY-MM-DD
-  pain:  number;   // 0–10
+  date: string;
+  pain: number;
 }
-
-// ─── Pain chart (pure SVG, no library) ───────────────────────────────────────
-
-const PAIN_COLORS_SCALE = [
-  "#22c55e","#4ade80","#86efac","#fde047","#facc15",
-  "#fb923c","#f97316","#ef4444","#dc2626","#b91c1c","#7f1d1d",
-];
-const SHORT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-function painColor(v: number): string {
-  const i = Math.max(0, Math.min(10, Math.round(v)));
-  return PAIN_COLORS_SCALE[i] ?? "#ef4444";
-}
-
-function PainChart({ data }: { data: PainEntry[] }) {
-  if (data.length === 0) {
-    return (
-      <div style={{ textAlign: "center", color: "#9a9590", padding: "20px 0", fontSize: 13 }}>
-        No session feedback recorded yet.<br />
-        <span style={{ fontSize: 12 }}>Submit feedback after your sessions to track progress.</span>
-      </div>
-    );
-  }
-
-  const W = 300, H = 100;
-  const padL = 22, padR = 8, padT = 10, padB = 26;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
-  const n     = data.length;
-
-  const pts = data.map((d, i) => ({
-    x:    padL + (n > 1 ? (i / (n - 1)) * plotW : plotW / 2),
-    y:    padT + plotH - (d.pain / 10) * plotH,
-    pain: d.pain,
-    date: d.date,
-  }));
-
-  const linePts  = pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-  const areaPath = n > 1
-    ? `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)} ` +
-      pts.slice(1).map((p) => `L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ") +
-      ` L${pts[n-1].x.toFixed(1)},${(padT+plotH).toFixed(1)} L${pts[0].x.toFixed(1)},${(padT+plotH).toFixed(1)} Z`
-    : "";
-
-  const latestPain = data[n - 1]?.pain ?? 0;
-
-  return (
-    <div>
-      {/* Latest pain level pill */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <div style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          padding: "4px 10px", borderRadius: 100,
-          background: painColor(latestPain) + "22",
-          border: `1px solid ${painColor(latestPain)}55`,
-        }}>
-          <div style={{
-            width: 8, height: 8, borderRadius: "50%",
-            background: painColor(latestPain),
-          }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: painColor(latestPain) }}>
-            Latest: {latestPain}/10
-          </span>
-        </div>
-        <span style={{ fontSize: 12, color: "#9a9590" }}>
-          {n} session{n !== 1 ? "s" : ""} recorded
-        </span>
-      </div>
-
-      {/* SVG chart */}
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}
-        aria-label="Pain level over time"
-      >
-        <defs>
-          <linearGradient id="pthPainGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="#ef4444" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="#22c55e" stopOpacity="0.03" />
-          </linearGradient>
-        </defs>
-
-        {/* Y-axis grid + labels */}
-        {[0, 5, 10].map((v) => {
-          const gy = padT + plotH - (v / 10) * plotH;
-          return (
-            <g key={v}>
-              <line
-                x1={padL} y1={gy} x2={W - padR} y2={gy}
-                stroke="#f0ede8" strokeWidth="1"
-              />
-              <text
-                x={padL - 5} y={gy + 3.5}
-                textAnchor="end" fontSize="8" fill="#b0aca6"
-              >{v}</text>
-            </g>
-          );
-        })}
-
-        {/* Area fill */}
-        {n > 1 && (
-          <path d={areaPath} fill="url(#pthPainGrad)" />
-        )}
-
-        {/* Line */}
-        {n > 1 && (
-          <polyline
-            points={linePts}
-            fill="none"
-            stroke="#2E8BC0"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        )}
-
-        {/* Dots + X labels */}
-        {pts.map((p, i) => {
-          const [, m, d] = p.date.split("-");
-          const label = `${parseInt(d, 10)} ${SHORT_MONTHS[parseInt(m, 10) - 1] ?? ""}`;
-          const showLabel = n <= 6 || i === 0 || i === n - 1 || i % Math.ceil(n / 5) === 0;
-          return (
-            <g key={i}>
-              {/* Shadow halo */}
-              <circle cx={p.x} cy={p.y} r="5.5" fill={painColor(p.pain)} opacity="0.15" />
-              {/* Dot */}
-              <circle
-                cx={p.x} cy={p.y} r="3.8"
-                fill={painColor(p.pain)}
-                stroke="#fff" strokeWidth="1.5"
-              />
-              {/* X-axis date label */}
-              {showLabel && (
-                <text
-                  x={p.x} y={padT + plotH + 16}
-                  textAnchor="middle" fontSize="7.5" fill="#b0aca6"
-                >{label}</text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
-
-      {/* Legend */}
-      <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
-        {[{ label: "Low (0–3)", color: "#22c55e" }, { label: "Moderate (4–6)", color: "#fb923c" }, { label: "High (7–10)", color: "#ef4444" }].map((l) => (
-          <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#9a9590" }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: l.color }} />
-            {l.label}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Check-in types & helpers ────────────────────────────────────────────────
 
 interface CheckIn {
-  mood:  number;   // 1–5
-  date:  string;   // YYYY-MM-DD
+  mood: number;
+  date: string;
 }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DAY_LABELS  = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const MOODS = [
   { value: 1, emoji: "😫", label: "Struggling" },
@@ -210,61 +49,29 @@ const MOODS = [
   { value: 5, emoji: "😄", label: "Great"      },
 ];
 
-function moodLabel(v: number) { return MOODS.find((m) => m.value === v)?.label ?? ""; }
-function moodEmoji(v: number) { return MOODS.find((m) => m.value === v)?.emoji ?? "😐"; }
+// Time-of-day buckets — we split exercises into Morning / Afternoon / Evening
+// based on a `timeOfDay` field; if absent, default to "Morning".
+const TIME_BUCKETS = ["Morning", "Afternoon", "Evening"] as const;
+type TimeBucket = typeof TIME_BUCKETS[number];
 
-// ─── Streak calculation ───────────────────────────────────────────────────────
+const BUCKET_GRADIENT: Record<TimeBucket, string> = {
+  Morning:   "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
+  Afternoon: "linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)",
+  Evening:   "linear-gradient(135deg, #0C3C60 0%, #2E8BC0 100%)",
+};
+
+const BUCKET_ICON: Record<TimeBucket, string> = {
+  Morning:   "🌅",
+  Afternoon: "☀️",
+  Evening:   "🌙",
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function isoDate(offsetDays = 0): string {
   const d = new Date();
   d.setDate(d.getDate() - offsetDays);
   return d.toISOString().slice(0, 10);
-}
-
-function calcStreak(logDates: string[]): { current: number; best: number; last7: boolean[] } {
-  const dateSet = new Set(logDates);
-
-  // Last 7 days (oldest → newest)
-  const last7: boolean[] = [];
-  for (let i = 6; i >= 0; i--) last7.push(dateSet.has(isoDate(i)));
-
-  // Current streak: consecutive days back from today
-  let current = 0;
-  for (let i = 0; i < 365; i++) {
-    if (dateSet.has(isoDate(i))) current++;
-    else break;
-  }
-
-  // Best streak over all logged dates
-  const sorted = [...logDates].sort();
-  let best = current, run = 0, prev = "";
-  for (const d of sorted) {
-    if (prev) {
-      const next = new Date(prev + "T00:00:00");
-      next.setDate(next.getDate() + 1);
-      run = next.toISOString().slice(0, 10) === d ? run + 1 : 1;
-    } else {
-      run = 1;
-    }
-    if (run > best) best = run;
-    prev = d;
-  }
-
-  return { current, best, last7 };
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const MONTH_NAMES = [
-  "Jan","Feb","Mar","Apr","May","Jun",
-  "Jul","Aug","Sep","Oct","Nov","Dec",
-];
-
-function formatAppointmentDate(dateStr: string, hour: number): string {
-  const [, m, d] = dateStr.split("-");
-  const month = MONTH_NAMES[parseInt(m, 10) - 1] ?? "";
-  const day   = parseInt(d, 10);
-  return `${month} ${day} — ${fmtHour(hour)}`;
 }
 
 function getGreeting(): string {
@@ -274,23 +81,222 @@ function getGreeting(): string {
   return "Good evening";
 }
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
+function formatApptShort(dateStr: string, hour: number): string {
+  const [, m, d] = dateStr.split("-");
+  return `${parseInt(d, 10)} ${MONTH_NAMES[parseInt(m, 10) - 1] ?? ""} · ${fmtHour(hour)}`;
+}
 
-function Skel({ w = "100%", h = 16 }: { w?: string; h?: number }) {
+function bucketFor(ex: PatientExercise): TimeBucket {
+  if (ex.timeOfDay === "Afternoon") return "Afternoon";
+  if (ex.timeOfDay === "Evening")   return "Evening";
+  return "Morning";
+}
+
+const PAIN_COLORS = ["#22c55e","#4ade80","#86efac","#fde047","#facc15","#fb923c","#f97316","#ef4444","#dc2626","#b91c1c","#7f1d1d"];
+function painColor(v: number) { return PAIN_COLORS[Math.max(0, Math.min(10, Math.round(v)))] ?? "#ef4444"; }
+
+function calcStreak(logDates: string[]): { current: number; best: number; last7: boolean[] } {
+  const dateSet = new Set(logDates);
+  const last7: boolean[] = [];
+  for (let i = 6; i >= 0; i--) last7.push(dateSet.has(isoDate(i)));
+  let current = 0;
+  for (let i = 0; i < 365; i++) {
+    if (dateSet.has(isoDate(i))) current++;
+    else break;
+  }
+  const sorted = [...logDates].sort();
+  let best = current, run = 0, prev = "";
+  for (const d of sorted) {
+    if (prev) {
+      const next = new Date(prev + "T00:00:00");
+      next.setDate(next.getDate() + 1);
+      run = next.toISOString().slice(0, 10) === d ? run + 1 : 1;
+    } else { run = 1; }
+    if (run > best) best = run;
+    prev = d;
+  }
+  return { current, best, last7 };
+}
+
+// ─── Week calendar strip ──────────────────────────────────────────────────────
+
+function buildWeek(centerDate: string): { iso: string; dow: number; day: number }[] {
+  const center = new Date(centerDate + "T00:00:00");
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(center);
+    d.setDate(center.getDate() - 3 + i);
+    return {
+      iso: d.toISOString().slice(0, 10),
+      dow: d.getDay(),
+      day: d.getDate(),
+    };
+  });
+}
+
+// ─── Exercise card component ──────────────────────────────────────────────────
+
+function ExCard({
+  ex,
+  onComplete,
+  onSkip,
+}: {
+  ex: PatientExercise;
+  onComplete: (id: string, val: boolean) => void;
+  onSkip: (id: string) => void;
+}) {
+  const [videoOpen, setVideoOpen] = useState(false);
+  const bucket = bucketFor(ex);
+  const grad   = BUCKET_GRADIENT[bucket];
+  const skipped = ex.skipped ?? false;
+
   return (
     <div style={{
-      width: w, height: h, borderRadius: 6,
-      background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)",
-      backgroundSize: "200% 100%", animation: "pthShimmer 1.4s ease infinite",
-    }} />
+      flexShrink: 0,
+      width: 200,
+      borderRadius: 18,
+      overflow: "hidden",
+      background: skipped ? "#f0ede8" : grad,
+      position: "relative",
+      display: "flex",
+      flexDirection: "column",
+      opacity: skipped ? 0.55 : 1,
+    }}>
+      {/* Main content */}
+      <div style={{ padding: "16px 16px 10px", flex: 1 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.65)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+          {ex.programType === "home" ? "Home" : "Clinic"}
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", lineHeight: 1.25, marginBottom: 4 }}>
+          {ex.name}
+        </div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", lineHeight: 1.4 }}>
+          {[ex.sets && `${ex.sets} sets`, ex.reps && `${ex.reps} reps`, ex.holdTime && `${ex.holdTime}s hold`].filter(Boolean).join(" · ") || "See instructions"}
+        </div>
+        {ex.notes && (
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 6, lineHeight: 1.4 }}>
+            {ex.notes}
+          </div>
+        )}
+      </div>
+
+      {/* Video toggle */}
+      {ex.videoId && !skipped && (
+        <div style={{ padding: "0 16px 6px" }}>
+          {videoOpen ? (
+            <>
+              <div style={{ position: "relative", paddingTop: "56.25%", borderRadius: 10, overflow: "hidden", marginBottom: 6 }}>
+                <iframe
+                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+                  src={`https://www.youtube.com/embed/${ex.videoId}?autoplay=1`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+              <button onClick={() => setVideoOpen(false)} style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4 }}>
+                <X size={11} strokeWidth={2} /> Hide video
+              </button>
+            </>
+          ) : (
+            <button onClick={() => setVideoOpen(true)} style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.85)", background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "5px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
+              <Play size={11} strokeWidth={2.5} fill="currentColor" /> Watch Video
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      {!skipped && (
+        <div style={{ display: "flex", gap: 8, padding: "8px 16px 14px" }}>
+          <button
+            onClick={() => onComplete(ex.id, !(ex.completed ?? false))}
+            title={ex.completed ? "Mark incomplete" : "Mark complete"}
+            style={{
+              width: 36, height: 36, borderRadius: "50%", border: "none",
+              background: ex.completed ? "#fbbf24" : "rgba(255,255,255,0.18)",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "all 0.15s",
+            }}
+          >
+            <Check size={16} strokeWidth={3} color={ex.completed ? "#fff" : "rgba(255,255,255,0.85)"} />
+          </button>
+          <button
+            onClick={() => onSkip(ex.id)}
+            title="Skip for today"
+            style={{
+              width: 36, height: 36, borderRadius: "50%", border: "none",
+              background: "rgba(255,255,255,0.12)",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <X size={16} strokeWidth={2.5} color="rgba(255,255,255,0.7)" />
+          </button>
+        </div>
+      )}
+      {skipped && (
+        <div style={{ padding: "8px 16px 12px", fontSize: 12, color: "#9a9590" }}>Skipped</div>
+      )}
+    </div>
   );
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// ─── Pain chart (unchanged, kept compact) ────────────────────────────────────
+
+function MiniPainChart({ data }: { data: PainEntry[] }) {
+  if (data.length === 0) return (
+    <div style={{ textAlign: "center", color: "#9a9590", padding: "16px 0", fontSize: 13 }}>
+      No session feedback yet.
+    </div>
+  );
+  const W = 300, H = 80, padL = 18, padR = 6, padT = 8, padB = 20;
+  const plotW = W - padL - padR, plotH = H - padT - padB, n = data.length;
+  const pts = data.map((d, i) => ({
+    x: padL + (n > 1 ? (i / (n - 1)) * plotW : plotW / 2),
+    y: padT + plotH - (d.pain / 10) * plotH,
+    pain: d.pain, date: d.date,
+  }));
+  const linePts = pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const latest  = data[n - 1]?.pain ?? 0;
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: painColor(latest), background: painColor(latest) + "22", padding: "2px 8px", borderRadius: 100 }}>
+          Latest: {latest}/10
+        </span>
+        <span style={{ fontSize: 12, color: "#9a9590" }}>{n} session{n !== 1 ? "s" : ""}</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
+        {n > 1 && <polyline points={linePts} fill="none" stroke="#2E8BC0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+        {pts.map((p, i) => (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r="4" fill={painColor(p.pain)} stroke="#fff" strokeWidth="1.5" />
+          </g>
+        ))}
+        {[0, 5, 10].map((v) => {
+          const gy = padT + plotH - (v / 10) * plotH;
+          return <text key={v} x={padL - 4} y={gy + 3.5} textAnchor="end" fontSize="7" fill="#c0bbb4">{v}</text>;
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function Skel({ w = "100%", h = 16 }: { w?: string; h?: number }) {
+  return (
+    <div style={{ width: w, height: h, borderRadius: 6, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "pthShimmer 1.4s ease infinite" }} />
+  );
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
   const { user } = useAuth();
-  const patient = user as PatientProfile | null;
+  const patient  = user as PatientProfile | null;
+
+  const today = isoDate();
+  const [selectedDate, setSelectedDate] = useState(today);
+  const weekDays = buildWeek(selectedDate);
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [exercises,    setExercises]    = useState<PatientExercise[]>([]);
@@ -305,632 +311,427 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
   const [checkInLoading, setCheckInLoading] = useState(true);
   const [streakLoading,  setStreakLoading]  = useState(true);
 
-  // ── Realtime: upcoming appointments ─────────────────────────────────────
+  const calRef = useRef<HTMLDivElement>(null);
+
+  // Scroll today into center on mount
+  useEffect(() => {
+    setTimeout(() => {
+      const el = calRef.current?.querySelector("[data-today]") as HTMLElement | null;
+      el?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    }, 100);
+  }, []);
+
   useEffect(() => {
     if (!patient?.uid) return;
     setApptLoading(true);
-    return subscribeToPatientAppointments(
-      patient.uid,
-      (data) => { setAppointments(data); setApptLoading(false); },
-      ()     => setApptLoading(false)
-    );
+    return subscribeToPatientAppointments(patient.uid, (data) => { setAppointments(data); setApptLoading(false); }, () => setApptLoading(false));
   }, [patient?.uid]);
 
-  // ── Realtime: patient exercises ──────────────────────────────────────────
   useEffect(() => {
     if (!patient?.uid) return;
     setExLoading(true);
-    return subscribeToPatientExercises(
-      patient.uid,
-      (data) => { setExercises(data); setExLoading(false); },
-      ()     => setExLoading(false)
-    );
+    return subscribeToPatientExercises(patient.uid, (data) => { setExercises(data); setExLoading(false); }, () => setExLoading(false));
   }, [patient?.uid]);
 
-  // ── Realtime: session feedback pain levels ────────────────────────────────
   useEffect(() => {
     if (!patient?.uid) return;
     setFbLoading(true);
-    const q = query(
-      collection(db, "sessionFeedback"),
-      where("patientId", "==", patient.uid),
-      orderBy("sessionDate", "asc"),
-      limit(12)
-    );
-    return onSnapshot(
-      q,
-      (snap) => {
-        const entries: PainEntry[] = snap.docs.map((d) => ({
-          date: d.data().sessionDate as string,
-          pain: (d.data().painLevel as number) ?? 0,
-        }));
-        setFeedback(entries);
-        setFbLoading(false);
-      },
-      () => setFbLoading(false)
-    );
+    const q = query(collection(db, "sessionFeedback"), where("patientId", "==", patient.uid), orderBy("sessionDate", "asc"), limit(12));
+    return onSnapshot(q, (snap) => {
+      setFeedback(snap.docs.map((d) => ({ date: d.data().sessionDate as string, pain: (d.data().painLevel as number) ?? 0 })));
+      setFbLoading(false);
+    }, () => setFbLoading(false));
   }, [patient?.uid]);
 
-  // ── Today's check-in ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!patient?.uid) return;
-    const today  = isoDate();
     const docRef = doc(db, "dailyCheckIns", `${patient.uid}_${today}`);
-    return onSnapshot(
-      docRef,
-      (snap) => {
-        if (snap.exists()) {
-          const d = snap.data();
-          setCheckIn({ mood: d.mood as number, date: d.date as string });
-        } else {
-          setCheckIn(null);
-        }
-        setCheckInLoading(false);
-      },
-      () => setCheckInLoading(false)
-    );
+    return onSnapshot(docRef, (snap) => {
+      setCheckIn(snap.exists() ? { mood: snap.data().mood as number, date: snap.data().date as string } : null);
+      setCheckInLoading(false);
+    }, () => setCheckInLoading(false));
   }, [patient?.uid]);
 
-  // ── Exercise streak log ───────────────────────────────────────────────────
   useEffect(() => {
     if (!patient?.uid) return;
-    const thirtyDaysAgo = isoDate(30);
-    const q = query(
-      collection(db, "exerciseStreakLog"),
-      where("patientId", "==", patient.uid),
-      where("date", ">=", thirtyDaysAgo),
-      orderBy("date", "asc")
-    );
-    return onSnapshot(
-      q,
-      (snap) => {
-        setStreakDates(snap.docs.map((d) => d.data().date as string));
-        setStreakLoading(false);
-      },
-      () => setStreakLoading(false)
-    );
+    const q = query(collection(db, "exerciseStreakLog"), where("patientId", "==", patient.uid), where("date", ">=", isoDate(30)), orderBy("date", "asc"));
+    return onSnapshot(q, (snap) => {
+      setStreakDates(snap.docs.map((d) => d.data().date as string));
+      setStreakLoading(false);
+    }, () => setStreakLoading(false));
   }, [patient?.uid]);
 
-  // ── Submit check-in ───────────────────────────────────────────────────────
   const handleCheckIn = async () => {
     if (!patient?.uid || checkInMood === null) return;
     setSavingCheckIn(true);
-    const today  = isoDate();
-    const docRef = doc(db, "dailyCheckIns", `${patient.uid}_${today}`);
-    await setDoc(docRef, {
-      patientId: patient.uid,
-      date:      today,
-      mood:      checkInMood,
-      createdAt: serverTimestamp(),
-    });
+    await setDoc(doc(db, "dailyCheckIns", `${patient.uid}_${today}`), { patientId: patient.uid, date: today, mood: checkInMood, createdAt: serverTimestamp() });
     setSavingCheckIn(false);
     setCheckInMood(null);
   };
 
-  // ── Derived values ────────────────────────────────────────────────────────
+  const handleComplete = async (id: string, val: boolean) => {
+    await updateDoc(doc(db, "patientExercises", id), { completed: val });
+  };
+
+  const handleSkip = async (id: string) => {
+    await updateDoc(doc(db, "patientExercises", id), { skipped: true });
+  };
+
+  // Derive
   const nextAppt      = appointments[0] ?? null;
-  const clinicEx      = exercises.filter((e) => (e.programType ?? "clinic") === "clinic");
-  const homeEx        = exercises.filter((e) => (e.programType ?? "clinic") === "home");
   const completedEx   = exercises.filter((e) => e.completed ?? false);
-  const completionPct = exercises.length > 0
-    ? Math.round((completedEx.length / exercises.length) * 100)
-    : 0;
+  const completionPct = exercises.length > 0 ? Math.round((completedEx.length / exercises.length) * 100) : 0;
 
-  const firstName     = patient?.firstName ?? "";
-  const greeting      = getGreeting();
+  // Group exercises by time bucket
+  const byBucket: Record<TimeBucket, PatientExercise[]> = { Morning: [], Afternoon: [], Evening: [] };
+  exercises.forEach((ex) => { byBucket[bucketFor(ex)].push(ex); });
 
-  // ─────────────────────────────────────────────────────────────────────────
+  const { current: streak, best: bestStreak, last7 } = calcStreak(streakDates);
+
+  const firstName = patient?.firstName ?? "";
+  const greeting  = getGreeting();
+
+  // ──────────────────────────────────────────────────────────────────────────
   return (
     <>
       <style>{`
         @keyframes pthShimmer { to { background-position: -200% 0; } }
-        @keyframes pthFadeUp {
-          from { opacity: 0; transform: translateY(10px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes pthFadeUp  { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
 
-        .pth-root {
-          font-family: 'Outfit', sans-serif;
-          display: flex; flex-direction: column; gap: 14px;
-        }
+        .pth-root { font-family:'Outfit',sans-serif; display:flex; flex-direction:column; gap:0; animation:pthFadeUp 0.3s ease; }
 
-        /* ── Greeting ── */
-        .pth-greeting {
-          animation: pthFadeUp 0.35s ease both;
+        /* ── Week calendar ── */
+        .pth-cal-wrap  { background:#fff; border-radius:18px; border:1.5px solid #e5e0d8; padding:16px 10px 14px; margin-bottom:18px; }
+        .pth-cal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; padding:0 6px; }
+        .pth-cal-title  { font-family:'Playfair Display',serif; font-size:22px; font-weight:500; color:#1a1a1a; letter-spacing:-0.02em; }
+        .pth-cal-sub    { font-size:12px; color:#9a9590; }
+        .pth-cal-strip  { display:flex; gap:6px; overflow-x:auto; scroll-snap-type:x mandatory; padding:2px 4px; scrollbar-width:none; }
+        .pth-cal-strip::-webkit-scrollbar { display:none; }
+        .pth-cal-day {
+          flex-shrink:0; width:52px; height:64px; border-radius:14px;
+          display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+          cursor:pointer; scroll-snap-align:center; transition:all 0.18s;
+          border:1.5px solid transparent; background:transparent;
+          font-family:'Outfit',sans-serif;
         }
-        .pth-greeting-sub {
-          font-size: 13px; color: #9a9590; margin-top: 2px;
+        .pth-cal-day:hover:not(.active) { background:#f5f3ef; }
+        .pth-cal-day.active { background:linear-gradient(135deg,#2E8BC0,#0C3C60); border-color:transparent; box-shadow:0 4px 14px rgba(46,139,192,0.35); }
+        .pth-cal-day.is-today:not(.active) { border-color:#2E8BC0; }
+        .pth-cal-dow { font-size:10px; font-weight:600; color:#9a9590; text-transform:uppercase; letter-spacing:0.05em; }
+        .pth-cal-day.active .pth-cal-dow { color:rgba(255,255,255,0.7); }
+        .pth-cal-num {
+          width:32px; height:32px; border-radius:50%;
+          display:flex; align-items:center; justify-content:center;
+          font-size:16px; font-weight:700; color:#1a1a1a; transition:all 0.18s;
         }
-        .pth-greeting-name {
-          font-family: 'Playfair Display', serif;
-          font-size: 22px; font-weight: 500; color: #1a1a1a;
-          letter-spacing: -0.02em; line-height: 1.2;
-        }
+        .pth-cal-day.active .pth-cal-num { color:#fff; }
+        .pth-cal-day.is-today:not(.active) .pth-cal-num { color:#2E8BC0; }
 
-        /* ── Cards grid ── */
-        .pth-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
+        /* ── Next appointment banner ── */
+        .pth-appt-banner {
+          background:linear-gradient(135deg,#2E8BC0 0%,#0C3C60 100%);
+          border-radius:16px; padding:16px 18px; margin-bottom:18px;
+          display:flex; align-items:center; gap:14px;
+          cursor:pointer; transition:opacity 0.15s;
         }
-        @media (max-width: 480px) {
-          .pth-grid { grid-template-columns: 1fr; }
-        }
-
-        /* ── Base card ── */
-        .pth-card {
-          background: #fff;
-          border: 1.5px solid #e5e0d8;
-          border-radius: 14px;
-          padding: 14px;
-          transition: box-shadow 0.15s, border-color 0.15s;
-        }
-        .pth-card:hover {
-          border-color: #B3DEF0;
-          box-shadow: 0 4px 20px rgba(46,139,192,0.07);
-        }
-
-        /* Next appointment — full width with accent */
-        .pth-card-appt {
-          grid-column: 1 / -1;
-          background: linear-gradient(135deg, #2E8BC0 0%, #0C3C60 100%);
-          border: none;
-          color: #fff;
-        }
-        .pth-card-appt:hover {
-          box-shadow: 0 6px 28px rgba(46,139,192,0.3);
-          border-color: transparent;
-        }
-
-        .pth-card-label {
-          font-size: 10px; font-weight: 700;
-          text-transform: uppercase; letter-spacing: 0.1em;
-          color: #9a9590; margin-bottom: 8px;
-        }
-        .pth-card-appt .pth-card-label {
-          color: rgba(255,255,255,0.6);
-        }
-
-        /* ── Next appointment content ── */
-        .pth-appt-row {
-          display: flex; align-items: center; gap: 16px;
-        }
+        .pth-appt-banner:hover { opacity:0.92; }
         .pth-appt-badge {
-          width: 52px; height: 56px; flex-shrink: 0;
-          background: rgba(255,255,255,0.12);
-          border: 1px solid rgba(255,255,255,0.2);
-          border-radius: 12px;
-          display: flex; flex-direction: column;
-          align-items: center; justify-content: center; gap: 1px;
+          width:46px; height:50px; border-radius:12px;
+          background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25);
+          display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; flex-shrink:0;
         }
-        .pth-appt-badge-day   { font-size: 22px; font-weight: 700; line-height: 1; }
-        .pth-appt-badge-month {
-          font-size: 10px; text-transform: uppercase;
-          opacity: 0.7; letter-spacing: 0.05em;
-        }
-        .pth-appt-info { flex: 1; }
-        .pth-appt-time {
-          font-size: 16px; font-weight: 600; margin-bottom: 3px;
-        }
-        .pth-appt-type { font-size: 13px; opacity: 0.85; margin-bottom: 2px; }
-        .pth-appt-physio { font-size: 12px; opacity: 0.65; }
+        .pth-appt-badge-day   { font-size:20px; font-weight:700; color:#fff; line-height:1; }
+        .pth-appt-badge-month { font-size:9px; text-transform:uppercase; color:rgba(255,255,255,0.7); letter-spacing:0.05em; }
+        .pth-appt-info { flex:1; }
+        .pth-appt-lbl  { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:rgba(255,255,255,0.55); margin-bottom:3px; }
+        .pth-appt-time { font-size:16px; font-weight:600; color:#fff; margin-bottom:2px; }
+        .pth-appt-type { font-size:13px; color:rgba(255,255,255,0.8); }
+        .pth-appt-arrow { color:rgba(255,255,255,0.55); flex-shrink:0; }
 
-        .pth-appt-empty {
-          font-size: 14px; opacity: 0.7; padding: 4px 0;
+        /* ── Exercise section ── */
+        .pth-ex-section { margin-bottom:22px; }
+        .pth-ex-section-hd {
+          display:flex; align-items:center; gap:8px; margin-bottom:12px;
         }
+        .pth-ex-section-icon { font-size:18px; }
+        .pth-ex-section-name { font-size:17px; font-weight:700; color:#1a1a1a; }
+        .pth-ex-section-count { font-size:12px; color:#9a9590; margin-left:auto; }
+        .pth-ex-scroll {
+          display:flex; gap:12px; overflow-x:auto; padding:4px 2px 12px;
+          scroll-snap-type:x mandatory; scrollbar-width:none;
+        }
+        .pth-ex-scroll::-webkit-scrollbar { display:none; }
+        .pth-ex-scroll > * { scroll-snap-align:start; }
+        .pth-ex-empty { font-size:13px; color:#b0aca6; padding:12px 0; }
 
-        /* ── Stat card (exercises / home program) ── */
-        .pth-stat-icon {
-          width: 40px; height: 40px; border-radius: 11px;
-          background: #EAF5FC;
-          display: flex; align-items: center; justify-content: center;
-          color: #2E8BC0; margin-bottom: 12px;
-        }
-        .pth-stat-number {
-          font-family: 'Playfair Display', serif;
-          font-size: 32px; font-weight: 500; color: #1a1a1a;
-          line-height: 1; margin-bottom: 4px;
-        }
-        .pth-stat-desc { font-size: 13px; color: #9a9590; }
-        .pth-stat-link {
-          display: inline-flex; align-items: center; gap: 4px;
-          font-size: 12.5px; font-weight: 600; color: #2E8BC0;
-          margin-top: 10px; cursor: pointer;
-          background: none; border: none; padding: 0;
-          font-family: 'Outfit', sans-serif; transition: opacity 0.15s;
-        }
-        .pth-stat-link:hover { opacity: 0.75; }
+        /* ── Stats row ── */
+        .pth-stats-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px; }
+        .pth-stat-card { background:#fff; border:1.5px solid #e5e0d8; border-radius:14px; padding:14px 16px; }
+        .pth-stat-card-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#c0bbb4; margin-bottom:6px; }
+        .pth-stat-card-val { font-family:'Playfair Display',serif; font-size:28px; color:#1a1a1a; line-height:1; margin-bottom:2px; }
+        .pth-stat-card-sub { font-size:12px; color:#9a9590; }
 
-        /* ── Progress card — full width ── */
-        .pth-card-progress { grid-column: 1 / -1; }
-        .pth-progress-header {
-          display: flex; justify-content: space-between;
-          align-items: center; margin-bottom: 14px;
-        }
-        .pth-progress-pct {
-          font-size: 26px; font-weight: 700; color: #2E8BC0;
-          font-family: 'Playfair Display', serif;
-        }
-        .pth-progress-track {
-          height: 8px; border-radius: 100px;
-          background: #f0ede8; overflow: hidden; margin-bottom: 10px;
-        }
-        .pth-progress-fill {
-          height: 100%; border-radius: 100px;
-          background: linear-gradient(90deg, #2E8BC0, #5BC0BE);
-          transition: width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1);
-        }
-        .pth-progress-desc { font-size: 13px; color: #5a5550; }
-        .pth-progress-desc strong { color: #2E8BC0; }
+        /* ── Progress bar ── */
+        .pth-prog-card { background:#fff; border:1.5px solid #e5e0d8; border-radius:14px; padding:16px; margin-bottom:18px; }
+        .pth-prog-hd   { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+        .pth-prog-title { font-size:14px; font-weight:600; color:#1a1a1a; }
+        .pth-prog-pct   { font-family:'Playfair Display',serif; font-size:22px; font-weight:600; color:#2E8BC0; }
+        .pth-prog-track { height:8px; border-radius:100px; background:#f0ede8; overflow:hidden; }
+        .pth-prog-fill  { height:100%; border-radius:100px; background:linear-gradient(90deg,#2E8BC0,#5BC0BE); transition:width 0.6s cubic-bezier(0.34,1.2,0.64,1); }
 
-        /* ── Quick actions — full width ── */
-        .pth-card-actions { grid-column: 1 / -1; }
-        .pth-actions-row {
-          display: flex; gap: 8px; flex-direction: column;
-        }
-        .pth-action-btn {
-          width: 100%;
-          display: flex; align-items: center; justify-content: center; gap: 7px;
-          padding: 13px 16px; border-radius: 12px;
-          border: 1.5px solid #e5e0d8; background: #fafaf8;
-          font-family: 'Outfit', sans-serif; font-size: 14px;
-          font-weight: 500; color: #1a1a1a; cursor: pointer;
-          transition: all 0.15s; min-height: 48px;
-        }
-        .pth-action-btn:hover {
-          border-color: #2E8BC0; color: #2E8BC0; background: #EAF5FC;
-        }
-        .pth-action-btn.primary {
-          background: #2E8BC0; border-color: #2E8BC0;
-          color: #fff;
-        }
-        .pth-action-btn.primary:hover {
-          background: #0C3C60; border-color: #0C3C60; color: #fff;
-        }
-
-        /* ── Pain chart card — full width ── */
-        .pth-card-pain { grid-column: 1 / -1; }
-        .pth-pain-header {
-          display: flex; align-items: center; justify-content: space-between;
-          margin-bottom: 4px;
-        }
-        .pth-pain-title { font-size: 15px; font-weight: 600; color: #1a1a1a; }
-        .pth-pain-sub   { font-size: 12px; color: #9a9590; margin-bottom: 12px; }
-
-        /* ── Daily check-in card ── */
-        .pth-checkin-moods {
-          display: flex; gap: 6px; justify-content: space-between; margin: 10px 0;
-        }
+        /* ── Check-in ── */
+        .pth-checkin-card { background:#fff; border:1.5px solid #e5e0d8; border-radius:14px; padding:16px; margin-bottom:18px; }
+        .pth-checkin-title { font-size:14px; font-weight:700; color:#1a1a1a; margin-bottom:2px; }
+        .pth-checkin-sub   { font-size:12px; color:#9a9590; margin-bottom:12px; }
+        .pth-moods { display:flex; gap:6px; margin-bottom:10px; }
         .pth-mood-btn {
-          flex: 1; display: flex; flex-direction: column; align-items: center;
-          gap: 4px; padding: 8px 4px; border-radius: 10px;
-          border: 1.5px solid #e5e0d8; background: #fafaf8;
-          cursor: pointer; transition: all 0.15s; font-family: 'Outfit', sans-serif;
-          min-height: 56px;
+          flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+          padding:8px 4px; border-radius:10px; border:1.5px solid #e5e0d8;
+          background:#fafaf8; cursor:pointer; transition:all 0.15s; font-family:'Outfit',sans-serif;
         }
-        .pth-mood-btn:hover  { border-color: #2E8BC0; background: #EAF5FC; }
-        .pth-mood-btn.sel    { border-color: #2E8BC0; background: #EAF5FC; box-shadow: 0 0 0 3px rgba(46,139,192,0.12); }
-        .pth-mood-emoji      { font-size: 20px; line-height: 1; }
-        .pth-mood-label      { font-size: 9.5px; font-weight: 500; color: #5a5550; }
-        .pth-checkin-submit  {
-          width: 100%; padding: 10px; border-radius: 10px; border: none;
-          background: #2E8BC0; color: #fff; font-family: 'Outfit', sans-serif;
-          font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s;
-          margin-top: 4px;
+        .pth-mood-btn.sel { border-color:#2E8BC0; background:#EAF5FC; box-shadow:0 0 0 3px rgba(46,139,192,0.1); }
+        .pth-mood-emoji { font-size:20px; line-height:1; }
+        .pth-mood-lbl   { font-size:9px; font-weight:600; color:#5a5550; }
+        .pth-checkin-btn {
+          width:100%; padding:11px; border-radius:10px; border:none;
+          background:#2E8BC0; color:#fff; font-family:'Outfit',sans-serif;
+          font-size:14px; font-weight:600; cursor:pointer; transition:background 0.15s;
         }
-        .pth-checkin-submit:hover:not(:disabled) { background: #0C3C60; }
-        .pth-checkin-submit:disabled             { opacity: 0.45; cursor: not-allowed; }
+        .pth-checkin-btn:hover:not(:disabled) { background:#0C3C60; }
+        .pth-checkin-btn:disabled { opacity:0.4; cursor:not-allowed; }
         .pth-checkin-done {
-          display: flex; align-items: center; gap: 10px;
-          padding: 10px 12px; border-radius: 10px;
-          background: #f0fdf4; border: 1.5px solid #bbf7d0;
-          margin-top: 8px;
+          display:flex; align-items:center; gap:10px; padding:12px 14px;
+          border-radius:10px; background:#f0fdf4; border:1.5px solid #bbf7d0;
         }
-        .pth-checkin-done-emoji { font-size: 26px; }
-        .pth-checkin-done-text  { font-size: 13px; color: #166534; font-weight: 500; }
-        .pth-checkin-done-sub   { font-size: 12px; color: #4ade80; margin-top: 1px; }
+        .pth-checkin-done-emoji { font-size:28px; }
+        .pth-checkin-done-text  { font-size:13px; font-weight:600; color:#166534; }
+        .pth-checkin-done-sub   { font-size:12px; color:#4ade80; }
 
-        /* ── Streak card ── */
-        .pth-streak-num {
-          font-family: 'Playfair Display', serif;
-          font-size: 42px; font-weight: 600; color: #f97316;
-          line-height: 1; margin-bottom: 2px;
+        /* ── Streak ── */
+        .pth-streak-card { background:#fff; border:1.5px solid #e5e0d8; border-radius:14px; padding:16px; margin-bottom:18px; }
+        .pth-streak-hd   { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+        .pth-streak-num  { font-family:'Playfair Display',serif; font-size:36px; font-weight:600; color:#f97316; line-height:1; }
+        .pth-streak-lbl  { font-size:13px; color:#9a9590; }
+        .pth-streak-dots { display:flex; gap:5px; margin-bottom:6px; }
+        .pth-streak-dot  { flex:1; height:8px; border-radius:100px; }
+        .pth-streak-dot.on  { background:#f97316; }
+        .pth-streak-dot.off { background:#f0ede8; }
+        .pth-streak-day-lbl { flex:1; text-align:center; font-size:9px; color:#b0aca6; }
+        .pth-streak-days    { display:flex; gap:5px; margin-bottom:4px; }
+
+        /* ── Pain chart card ── */
+        .pth-pain-card { background:#fff; border:1.5px solid #e5e0d8; border-radius:14px; padding:16px; margin-bottom:18px; }
+        .pth-pain-title { font-size:14px; font-weight:700; color:#1a1a1a; margin-bottom:12px; }
+
+        /* ── Quick actions ── */
+        .pth-actions-card { display:flex; gap:8px; margin-bottom:24px; }
+        .pth-act-btn {
+          flex:1; display:flex; flex-direction:column; align-items:center; gap:5px;
+          padding:12px 6px; border-radius:12px; border:1.5px solid #e5e0d8;
+          background:#fff; font-family:'Outfit',sans-serif; font-size:11px; font-weight:600;
+          color:#5a5550; cursor:pointer; transition:all 0.15s;
         }
-        .pth-streak-label { font-size: 13px; color: #9a9590; margin-bottom: 14px; }
-        .pth-streak-dots  { display: flex; gap: 5px; margin-bottom: 10px; }
-        .pth-streak-dot   {
-          flex: 1; height: 8px; border-radius: 100px;
-          transition: background 0.2s;
-        }
-        .pth-streak-dot.on  { background: #f97316; }
-        .pth-streak-dot.off { background: #f0ede8; }
-        .pth-streak-days {
-          display: flex; gap: 5px; margin-bottom: 6px;
-        }
-        .pth-streak-day-label {
-          flex: 1; text-align: center; font-size: 9px; color: #b0aca6;
-        }
-        .pth-streak-best {
-          font-size: 12px; color: #9a9590; margin-top: 4px;
-        }
-        .pth-streak-best strong { color: #f97316; }
+        .pth-act-btn:hover { border-color:#2E8BC0; color:#2E8BC0; background:#EAF5FC; }
       `}</style>
 
       <div className="pth-root">
 
-        {/* ── Section 1: Greeting ── */}
-        <div className="pth-greeting">
-          <div className="pth-greeting-name">
-            {greeting}{firstName ? `, ${firstName}` : ""} 👋
+        {/* ── Week calendar ── */}
+        <div className="pth-cal-wrap">
+          <div className="pth-cal-header">
+            <div>
+              <div className="pth-cal-title">
+                {greeting}{firstName ? `, ${firstName}` : ""} 👋
+              </div>
+              <div className="pth-cal-sub">
+                {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
+              </div>
+            </div>
           </div>
-          <div className="pth-greeting-sub">
-            Here's your health summary for today.
+          <div className="pth-cal-strip" ref={calRef}>
+            {weekDays.map(({ iso, dow, day }) => {
+              const isActive = iso === selectedDate;
+              const isToday  = iso === today;
+              return (
+                <button
+                  key={iso}
+                  className={`pth-cal-day${isActive ? " active" : ""}${isToday ? " is-today" : ""}`}
+                  onClick={() => setSelectedDate(iso)}
+                  {...(isToday ? { "data-today": "1" } : {})}
+                >
+                  <div className="pth-cal-dow">{DAY_LABELS[dow]}</div>
+                  <div className="pth-cal-num">{day}</div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="pth-grid">
+        {/* ── Next appointment ── */}
+        {!apptLoading && nextAppt && (() => {
+          const [, m, d] = nextAppt.date.split("-");
+          return (
+            <div className="pth-appt-banner" onClick={() => onNavigate("appointments")}>
+              <div className="pth-appt-badge">
+                <div className="pth-appt-badge-day">{parseInt(d, 10)}</div>
+                <div className="pth-appt-badge-month">{MONTH_NAMES[parseInt(m, 10) - 1] ?? ""}</div>
+              </div>
+              <div className="pth-appt-info">
+                <div className="pth-appt-lbl">Next Appointment</div>
+                <div className="pth-appt-time">{formatApptShort(nextAppt.date, nextAppt.hour)}</div>
+                <div className="pth-appt-type">{nextAppt.sessionType}{nextAppt.physioName ? ` · ${nextAppt.physioName}` : ""}</div>
+              </div>
+              <ChevronRight size={18} className="pth-appt-arrow" />
+            </div>
+          );
+        })()}
 
-          {/* ── Section 2: Next Appointment ── */}
-          <div className="pth-card pth-card-appt">
-            <div className="pth-card-label">Next Appointment</div>
-            {apptLoading ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <Skel h={14} w="60%" />
-                <Skel h={18} w="80%" />
-                <Skel h={12} w="50%" />
-              </div>
-            ) : nextAppt ? (
-              <div className="pth-appt-row">
-                <div className="pth-appt-badge">
-                  {(() => {
-                    const [, m, d] = nextAppt.date.split("-");
-                    return (
-                      <>
-                        <div className="pth-appt-badge-day">{parseInt(d, 10)}</div>
-                        <div className="pth-appt-badge-month">
-                          {MONTH_NAMES[parseInt(m, 10) - 1] ?? ""}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-                <div className="pth-appt-info">
-                  <div className="pth-appt-time">
-                    {formatAppointmentDate(nextAppt.date, nextAppt.hour)}
-                  </div>
-                  <div className="pth-appt-type">{nextAppt.sessionType}</div>
-                  <div className="pth-appt-physio">{nextAppt.physioName}</div>
-                </div>
-              </div>
-            ) : (
-              <div className="pth-appt-empty">No upcoming appointments scheduled.</div>
-            )}
+        {/* ── Exercise sections by time of day ── */}
+        {exLoading ? (
+          <div style={{ display: "flex", gap: 12, overflow: "hidden", marginBottom: 22 }}>
+            {[1,2].map((n) => <div key={n} style={{ flexShrink: 0, width: 200, height: 160, borderRadius: 18, background: "linear-gradient(90deg,#e5e0d8 0%,#f0ede8 50%,#e5e0d8 100%)", backgroundSize: "200% 100%", animation: "pthShimmer 1.4s ease infinite" }} />)}
           </div>
-
-          {/* ── Section 3: Today's Exercises (clinic) ── */}
-          <div className="pth-card">
-            <div className="pth-stat-icon">
-              <Dumbbell size={20} strokeWidth={1.8} />
-            </div>
-            <div className="pth-card-label">Today's Exercises</div>
-            {exLoading ? (
-              <><Skel h={32} w="40%" /><div style={{ marginTop: 6 }}><Skel h={13} w="70%" /></div></>
-            ) : (
-              <>
-                <div className="pth-stat-number">{clinicEx.length}</div>
-                <div className="pth-stat-desc">
-                  {clinicEx.length === 1 ? "exercise" : "exercises"} assigned
+        ) : (
+          TIME_BUCKETS.map((bucket) => {
+            const exs = byBucket[bucket];
+            if (exs.length === 0) return null;
+            const done = exs.filter((e) => e.completed).length;
+            return (
+              <div key={bucket} className="pth-ex-section">
+                <div className="pth-ex-section-hd">
+                  <span className="pth-ex-section-icon">{BUCKET_ICON[bucket]}</span>
+                  <span className="pth-ex-section-name">{bucket}</span>
+                  <span className="pth-ex-section-count">{done}/{exs.length} done</span>
                 </div>
-                <button className="pth-stat-link" onClick={() => onNavigate("exercises")}>
-                  View Exercises
-                  <ChevronRight size={12} strokeWidth={2.5} />
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* ── Section 4: Home Program ── */}
-          <div className="pth-card">
-            <div className="pth-stat-icon">
-              <Home size={20} strokeWidth={1.8} />
-            </div>
-            <div className="pth-card-label">Home Program</div>
-            {exLoading ? (
-              <><Skel h={32} w="40%" /><div style={{ marginTop: 6 }}><Skel h={13} w="70%" /></div></>
-            ) : (
-              <>
-                <div className="pth-stat-number">{homeEx.length}</div>
-                <div className="pth-stat-desc">
-                  {homeEx.length === 1 ? "exercise" : "exercises"} assigned
-                </div>
-                <button className="pth-stat-link" onClick={() => onNavigate("exercises")}>
-                  View Program
-                  <ChevronRight size={12} strokeWidth={2.5} />
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* ── Section 6: Recovery Progress ── */}
-          <div className="pth-card pth-card-progress">
-            <div className="pth-card-label">Recovery Progress</div>
-            <div className="pth-progress-header">
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a", marginBottom: 2 }}>
-                  Exercise Completion
-                </div>
-                <div style={{ fontSize: 13, color: "#9a9590" }}>
-                  {exLoading ? "Loading…" : `${completedEx.length} of ${exercises.length} completed`}
-                </div>
-              </div>
-              <div className="pth-progress-pct">
-                {exLoading ? "—" : `${completionPct}%`}
-              </div>
-            </div>
-            <div className="pth-progress-track">
-              <div
-                className="pth-progress-fill"
-                style={{ width: exLoading ? "0%" : `${completionPct}%` }}
-              />
-            </div>
-            <div className="pth-progress-desc">
-              {exLoading ? (
-                <Skel h={13} w="75%" />
-              ) : exercises.length === 0 ? (
-                "No exercises assigned yet."
-              ) : completionPct === 100 ? (
-                <><strong>Great work!</strong> You completed all your exercises.</>
-              ) : completionPct >= 50 ? (
-                <>You completed <strong>{completionPct}%</strong> of your exercises. Keep it up!</>
-              ) : (
-                <>You completed <strong>{completionPct}%</strong> of your exercises this week.</>
-              )}
-            </div>
-          </div>
-
-          {/* ── Daily Check-in ── */}
-          <div className="pth-card" style={{ gridColumn: "1 / -1" }}>
-            <div className="pth-card-label">Daily Check-in</div>
-            {checkInLoading ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <Skel h={13} w="50%" />
-                <Skel h={56} w="100%" />
-              </div>
-            ) : checkIn ? (
-              /* Already checked in today */
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a", marginBottom: 2 }}>
-                  Today's check-in complete
-                </div>
-                <div className="pth-checkin-done">
-                  <div className="pth-checkin-done-emoji">{moodEmoji(checkIn.mood)}</div>
-                  <div>
-                    <div className="pth-checkin-done-text">Feeling {moodLabel(checkIn.mood)}</div>
-                    <div className="pth-checkin-done-sub">Check back in tomorrow!</div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* Check-in form */
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a", marginBottom: 2 }}>
-                  How are you feeling today?
-                </div>
-                <div style={{ fontSize: 12, color: "#9a9590", marginBottom: 2 }}>
-                  Tap to record your daily wellbeing
-                </div>
-                <div className="pth-checkin-moods">
-                  {MOODS.map((m) => (
-                    <button
-                      key={m.value}
-                      className={`pth-mood-btn${checkInMood === m.value ? " sel" : ""}`}
-                      onClick={() => setCheckInMood(m.value)}
-                    >
-                      <span className="pth-mood-emoji">{m.emoji}</span>
-                      <span className="pth-mood-label">{m.label}</span>
-                    </button>
+                <div className="pth-ex-scroll">
+                  {exs.map((ex) => (
+                    <ExCard key={ex.id} ex={ex} onComplete={handleComplete} onSkip={handleSkip} />
                   ))}
                 </div>
-                <button
-                  className="pth-checkin-submit"
-                  disabled={checkInMood === null || savingCheckIn}
-                  onClick={handleCheckIn}
-                >
-                  {savingCheckIn ? "Saving…" : "Submit Check-in"}
-                </button>
               </div>
-            )}
-          </div>
+            );
+          })
+        )}
 
-          {/* ── Exercise Streak ── */}
-          <div className="pth-card" style={{ gridColumn: "1 / -1" }}>
-            <div className="pth-card-label">Exercise Streak</div>
-            {streakLoading ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <Skel h={42} w="30%" />
-                <Skel h={8}  w="100%" />
+        {/* ── Stats row ── */}
+        <div className="pth-stats-row">
+          <div className="pth-stat-card">
+            <div className="pth-stat-card-lbl">Total Exercises</div>
+            <div className="pth-stat-card-val">{exLoading ? "—" : exercises.length}</div>
+            <div className="pth-stat-card-sub">{exLoading ? "" : `${completedEx.length} completed`}</div>
+          </div>
+          <div className="pth-stat-card">
+            <div className="pth-stat-card-lbl">Streak</div>
+            <div className="pth-stat-card-val" style={{ color: "#f97316" }}>{streakLoading ? "—" : `🔥 ${streak}`}</div>
+            <div className="pth-stat-card-sub">{streakLoading ? "" : `Best: ${bestStreak} day${bestStreak !== 1 ? "s" : ""}`}</div>
+          </div>
+        </div>
+
+        {/* ── Progress bar ── */}
+        {!exLoading && exercises.length > 0 && (
+          <div className="pth-prog-card">
+            <div className="pth-prog-hd">
+              <div className="pth-prog-title">Overall Completion</div>
+              <div className="pth-prog-pct">{completionPct}%</div>
+            </div>
+            <div className="pth-prog-track">
+              <div className="pth-prog-fill" style={{ width: `${completionPct}%` }} />
+            </div>
+          </div>
+        )}
+
+        {/* ── 7-day streak dots ── */}
+        {!streakLoading && (
+          <div className="pth-streak-card">
+            <div className="pth-streak-hd">
+              <div className="pth-streak-num">{streak > 0 ? "🔥" : "💪"} {streak}</div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>
+                  {streak === 0 ? "Start your streak!" : streak === 1 ? "1 day streak" : `${streak} day streak`}
+                </div>
+                <div className="pth-streak-lbl">Best: {bestStreak} day{bestStreak !== 1 ? "s" : ""}</div>
               </div>
-            ) : (() => {
-              const { current, best, last7 } = calcStreak(streakDates);
-              const DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-              // Align last7 to Mon–Sun (last7[0] = 6 days ago)
-              const todayDow = new Date().getDay(); // 0=Sun
+            </div>
+            {(() => {
+              const todayDow = new Date().getDay();
               const labels   = Array.from({ length: 7 }, (_, i) => {
-                const dow = (todayDow - 6 + i + 7) % 7; // day-of-week for that slot
-                return DAY_LABELS[dow === 0 ? 6 : dow - 1]; // convert Sun=0 → index 6
+                const dow = (todayDow - 6 + i + 7) % 7;
+                return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dow];
               });
               return (
-                <div>
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginBottom: 4 }}>
-                    <div className="pth-streak-num">
-                      {current > 0 ? "🔥" : "💪"} {current}
-                    </div>
-                  </div>
-                  <div className="pth-streak-label">
-                    {current === 0
-                      ? "Complete exercises to start your streak!"
-                      : current === 1
-                        ? "1 day streak — keep going!"
-                        : `${current} day streak — amazing!`}
-                  </div>
-                  {/* Day dots */}
+                <>
                   <div className="pth-streak-days">
-                    {labels.map((l) => (
-                      <div key={l} className="pth-streak-day-label">{l}</div>
-                    ))}
+                    {labels.map((l) => <div key={l} className="pth-streak-day-lbl">{l}</div>)}
                   </div>
                   <div className="pth-streak-dots">
-                    {last7.map((on, i) => (
-                      <div key={i} className={`pth-streak-dot ${on ? "on" : "off"}`} />
-                    ))}
+                    {last7.map((on, i) => <div key={i} className={`pth-streak-dot ${on ? "on" : "off"}`} />)}
                   </div>
-                  <div className="pth-streak-best">
-                    Best streak: <strong>{best} day{best !== 1 ? "s" : ""}</strong>
-                  </div>
-                </div>
+                </>
               );
             })()}
           </div>
+        )}
 
-          {/* ── Pain Level Chart ── */}
-          <div className="pth-card pth-card-pain">
-            <div className="pth-card-label">Pain Level Tracking</div>
-            <div className="pth-pain-header">
-              <div className="pth-pain-title">Pain Level Over Time</div>
+        {/* ── Daily check-in ── */}
+        <div className="pth-checkin-card">
+          {checkInLoading ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <Skel h={14} w="50%" /><Skel h={60} />
             </div>
-            <div className="pth-pain-sub">
-              Based on your post-session feedback · last {Math.min(feedback.length, 12)} sessions
-            </div>
-            {fbLoading ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <Skel h={12} w="40%" />
-                <Skel h={80} w="100%" />
+          ) : checkIn ? (
+            <>
+              <div className="pth-checkin-title">Today's Check-in</div>
+              <div className="pth-checkin-done" style={{ marginTop: 10 }}>
+                <div className="pth-checkin-done-emoji">{MOODS.find((m) => m.value === checkIn.mood)?.emoji ?? "😐"}</div>
+                <div>
+                  <div className="pth-checkin-done-text">Feeling {MOODS.find((m) => m.value === checkIn.mood)?.label ?? ""}</div>
+                  <div className="pth-checkin-done-sub">Check back in tomorrow!</div>
+                </div>
               </div>
-            ) : (
-              <PainChart data={feedback} />
-            )}
-          </div>
-
-          {/* ── Section 5: Quick Actions ── */}
-          <div className="pth-card pth-card-actions">
-            <div className="pth-card-label">Quick Actions</div>
-            <div className="pth-actions-row">
-              <button className="pth-action-btn primary" onClick={() => onNavigate("exercises")}>
-                <Dumbbell size={15} strokeWidth={2} />
-                View Exercises
+            </>
+          ) : (
+            <>
+              <div className="pth-checkin-title">How are you feeling today?</div>
+              <div className="pth-checkin-sub">Tap to record your daily wellbeing</div>
+              <div className="pth-moods">
+                {MOODS.map((m) => (
+                  <button key={m.value} className={`pth-mood-btn${checkInMood === m.value ? " sel" : ""}`} onClick={() => setCheckInMood(m.value)}>
+                    <span className="pth-mood-emoji">{m.emoji}</span>
+                    <span className="pth-mood-lbl">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+              <button className="pth-checkin-btn" disabled={checkInMood === null || savingCheckIn} onClick={handleCheckIn}>
+                {savingCheckIn ? "Saving…" : "Submit Check-in"}
               </button>
-              <button className="pth-action-btn" onClick={() => onNavigate("appointments")}>
-                <Calendar size={15} strokeWidth={2} />
-                Book Appointment
-              </button>
-              <button className="pth-action-btn" onClick={() => onNavigate("sheet")}>
-                <FileText size={15} strokeWidth={2} />
-                Patient Sheet
-              </button>
-            </div>
-          </div>
-
+            </>
+          )}
         </div>
+
+        {/* ── Pain chart ── */}
+        {!fbLoading && feedback.length > 0 && (
+          <div className="pth-pain-card">
+            <div className="pth-pain-title">Pain Level Trend</div>
+            <MiniPainChart data={feedback} />
+          </div>
+        )}
+
+        {/* ── Quick actions ── */}
+        <div className="pth-actions-card">
+          <button className="pth-act-btn" onClick={() => onNavigate("exercises")}>
+            <Calendar size={18} strokeWidth={1.8} color="#2E8BC0" />
+            Exercises
+          </button>
+          <button className="pth-act-btn" onClick={() => onNavigate("appointments")}>
+            <Calendar size={18} strokeWidth={1.8} color="#7c3aed" />
+            Appointments
+          </button>
+          <button className="pth-act-btn" onClick={() => onNavigate("sheet")}>
+            <FileText size={18} strokeWidth={1.8} color="#065f46" />
+            My Sheet
+          </button>
+        </div>
+
       </div>
     </>
   );
