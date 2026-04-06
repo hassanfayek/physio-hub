@@ -350,7 +350,7 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
   };
 
   const handleComplete = async (id: string, val: boolean) => {
-    await updateDoc(doc(db, "patientExercises", id), { completed: val });
+    await updateDoc(doc(db, "patientExercises", id), { completed: val, skipped: false });
   };
 
 
