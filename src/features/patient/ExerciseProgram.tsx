@@ -917,10 +917,9 @@ export default function ExerciseProgram({
               : visibleExercises.map((rec) => (
                 <ExerciseCard key={rec.id} rec={rec} viewerRole={viewerRole} canEdit={canEdit} canComplete_={canComplete_}
                   togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
-                  removingId={removingId} openVideoId={openVideoId}
+                  removingId={removingId}
                   onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
-                  onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }}
-                  onSetOpenVideoId={setOpenVideoId} />
+                  onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
               ))}
         </div>
       </div>
