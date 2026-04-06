@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Calendar, Dumbbell, BarChart2, Plus, ChevronDown, ChevronRight, Pencil, LogOut, Menu, ArrowLeft, Receipt, BookOpen } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, Dumbbell, BarChart2, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
 import { doc, getDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -39,15 +39,15 @@ interface TabDef {
   badge?: number;
 }
 
-function IconOverview()  { return <LayoutDashboard size={17} strokeWidth={1.8} color="white" />; }
-function IconPatients()  { return <Users size={17} strokeWidth={1.8} color="white" />; }
-function IconSchedule()  { return <Calendar size={17} strokeWidth={1.8} color="white" />; }
-function IconExercises() { return <Dumbbell size={17} strokeWidth={1.8} color="white" />; }
-function IconReports()   { return <BarChart2 size={17} strokeWidth={1.8} color="white" />; }
-function IconBilling()    { return <Receipt size={17} strokeWidth={1.8} color="white" />; }
-function IconProtocols() { return <BookOpen size={17} strokeWidth={1.8} color="white" />; }
-function IconTeam()      { return <Users size={17} strokeWidth={1.8} color="white" />; }
-function IconAdd()       { return <Plus size={14} strokeWidth={2.5} color="white" />; }
+function IconOverview()  { return <LayoutDashboard size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconPatients()  { return <Users size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconSchedule()  { return <Calendar size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconExercises() { return <Dumbbell size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconReports()   { return <BarChart2 size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconBilling()   { return <Receipt size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconProtocols() { return <BookOpen size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconTeam()      { return <Users size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconAdd()       { return <Plus size={14} strokeWidth={2.5} color="currentColor" />; }
 
 // ─── Team tab (manager only) ─────────────────────────────────────────────────
 
@@ -808,7 +808,6 @@ export default function PhysioDashboard() {
   const { user, logout } = useAuth();
   const { lang, toggleLang, t } = useLang();
   const [activeTab,             setActiveTab]             = useState<Tab>("overview");
-  const [sidebarOpen,           setSidebarOpen]           = useState(false);
   const [viewingPatientId,      setViewingPatientId]      = useState<string | null>(null);
   const [viewingPatientSection, setViewingPatientSection] = useState<string | undefined>(undefined);
 
@@ -909,7 +908,7 @@ export default function PhysioDashboard() {
           min-height: calc(100vh - 56px);
         }
 
-        /* Dark sidebar — matches patient portal */
+        /* Dark sidebar — desktop only */
         .phd-sidebar {
           background: #0C3C60;
           border-right: 1px solid #0a3254;
@@ -1047,50 +1046,70 @@ export default function PhysioDashboard() {
           }
         }
 
+        /* ── Bottom nav bar — mobile only ── */
+        .phd-bottom-nav {
+          display: none; /* hidden by default; shown on mobile */
+        }
+
+        /* ── Desktop: sidebar visible, bottom nav hidden ── */
+        @media (min-width: 769px) {
+          .phd-sidebar { display: flex !important; }
+          .phd-bottom-nav { display: none !important; }
+          .phd-main { padding: 20px 18px; }
+        }
+
+        /* ── Mobile: sidebar hidden, bottom nav shown ── */
         @media (max-width: 768px) {
-          .phd-hamburger { display: flex; }
-
-          /* Body collapses to single column */
           .phd-body { grid-template-columns: 1fr; }
-
-          /* Sidebar: display:none by default, slides in as drawer when .open */
-          .phd-sidebar {
-            display: none;
-            position: fixed;
-            top: 0; left: 0;
-            height: 100vh;
-            width: 260px;
-            z-index: 100;
-            transform: translateX(0);
-            transition: none;
-            background: #0C3C60;
-          }
-          .phd-sidebar.open {
-            display: flex;
-            box-shadow: 4px 0 24px rgba(0,0,0,0.15);
-          }
-
-          .phd-main { padding: 14px 12px; }
+          .phd-sidebar { display: none !important; }
           .phd-logout-btn { display: none; }
           .phd-user-name { max-width: 90px; }
           .phd-user-chip { padding: 5px 10px; }
+          .phd-main { padding: 14px 12px 80px; }
+
+          .phd-bottom-nav {
+            display: flex;
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+            background: #fff;
+            border-top: 1px solid #e8e4de;
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.07);
+            align-items: stretch;
+            height: 60px;
+            padding-bottom: env(safe-area-inset-bottom);
+          }
+          .phd-bn-item {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 2px;
+            cursor: pointer; border: none; background: transparent;
+            font-family: 'Outfit', sans-serif;
+            color: #b0aba4; transition: color 0.15s;
+            padding: 5px 2px 4px; min-width: 0; position: relative;
+          }
+          .phd-bn-item:hover { color: #2E8BC0; }
+          .phd-bn-item.active { color: #2E8BC0; }
+          .phd-bn-icon {
+            width: 26px; height: 26px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s;
+          }
+          .phd-bn-item.active .phd-bn-icon { background: #EAF5FC; }
+          .phd-bn-label {
+            font-size: 9.5px; font-weight: 600; letter-spacing: 0.01em;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            max-width: 52px;
+          }
+          .phd-bn-dot {
+            position: absolute; top: 5px; right: calc(50% - 16px);
+            width: 6px; height: 6px; border-radius: 50%;
+            background: #5BC0BE; border: 2px solid #fff;
+          }
         }
       `}</style>
 
       <div className="phd-root">
         {/* Topbar */}
         <header className="phd-topbar">
-          {/* Left: hamburger (mobile only) */}
-          <div className="phd-topbar-left">
-            <button
-              className="phd-hamburger"
-              style={{ background: "#f5f3ef", border: "1px solid #e5e0d8", color: "#5a5550" }}
-              onClick={() => setSidebarOpen(true)}
-              aria-label="Open menu"
-            >
-              <Menu size={22} strokeWidth={2} color="#5a5550" />
-            </button>
-          </div>
+          <div className="phd-topbar-left" />
 
           {/* Centre: logo */}
           <div className="phd-topbar-logo">
@@ -1114,11 +1133,6 @@ export default function PhysioDashboard() {
           </div>
         </header>
 
-        {/* Mobile overlay */}
-        <div
-          className={`phd-overlay ${sidebarOpen ? "open" : ""}`}
-          onClick={() => setSidebarOpen(false)}
-        />
 
         {/* Body */}
         <div className="phd-body">
@@ -1150,7 +1164,7 @@ export default function PhysioDashboard() {
                 <div
                   key={tab.id}
                   className={`phd-nav-item ${activeTab === tab.id ? "active" : ""}`}
-                  onClick={() => { setActiveTab(tab.id); setViewingPatientId(null); setViewingPatientSection(undefined); setSidebarOpen(false); }}
+                  onClick={() => { setActiveTab(tab.id); setViewingPatientId(null); setViewingPatientSection(undefined); }}
                 >
                   <div className="phd-nav-icon">{tab.icon}</div>
                   <span className="phd-nav-text">{tab.label}</span>
@@ -1242,6 +1256,28 @@ export default function PhysioDashboard() {
             )}
           </main>
         </div>
+
+        {/* ── Bottom nav bar ── */}
+        <nav className="phd-bottom-nav">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                className={`phd-bn-item${isActive ? " active" : ""}`}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setViewingPatientId(null);
+                  setViewingPatientSection(undefined);
+                }}
+              >
+                <div className="phd-bn-icon">{tab.icon}</div>
+                <span className="phd-bn-label">{tab.label}</span>
+                {tab.badge ? <span className="phd-bn-dot" /> : null}
+              </button>
+            );
+          })}
+        </nav>
       </div>
     </>
   );
