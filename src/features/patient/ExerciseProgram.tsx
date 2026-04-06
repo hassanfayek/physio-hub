@@ -202,6 +202,180 @@ function LibraryPicker({ patientId, viewerUid, onClose, onAdded }: LibraryPicker
   );
 }
 
+// ─── Exercise card (shared between patient flat list and physio sectioned view) ─
+
+interface ExerciseCardProps {
+  rec:          PatientExercise;
+  viewerRole:   string;
+  canEdit:      boolean;
+  canComplete_: boolean;
+  togglingId:   string | null;
+  editingId:    string | null;
+  editVals:     { sets: string; reps: string; holdTime: string; notes: string };
+  editSaving:   boolean;
+  editError:    string | null;
+  removingId:   string | null;
+  openVideoId:  string | null;
+  onToggle:     (rec: PatientExercise) => void;
+  onEditOpen:   (rec: PatientExercise) => void;
+  onSaveEdit:   (rec: PatientExercise) => void;
+  onRemove:     (rec: PatientExercise) => void;
+  onSetEditVals: (v: { sets: string; reps: string; holdTime: string; notes: string }) => void;
+  onCancelEdit: () => void;
+  onSetOpenVideoId: (id: string | null) => void;
+}
+
+function ExerciseCard({
+  rec, viewerRole, canEdit, canComplete_, togglingId, editingId,
+  editVals, editSaving, editError, removingId, openVideoId,
+  onToggle, onEditOpen, onSaveEdit, onRemove, onSetEditVals, onCancelEdit, onSetOpenVideoId,
+}: ExerciseCardProps) {
+  const isClinicPatient = viewerRole === "patient" && (rec.programType ?? "clinic") === "clinic";
+  const isDisabled = !canComplete_ || isClinicPatient;
+  const checkTitle = !canComplete_
+    ? "Only physiotherapists can mark exercises"
+    : isClinicPatient
+      ? "Clinic exercises are marked by your physiotherapist"
+      : (rec.completed ?? false) ? "Mark as incomplete" : "Mark as completed";
+
+  return (
+    <div className={`ep-ex-card ${(rec.completed ?? false) ? "completed" : ""}`}>
+
+      {/* Checkbox */}
+      <div className="ep-checkbox-wrap">
+        <div
+          className={`ep-checkbox ${(rec.completed ?? false) ? "checked" : ""} ${isDisabled ? "disabled" : ""} ${togglingId === rec.id ? "toggling" : ""}`}
+          onClick={() => togglingId === rec.id ? undefined : onToggle(rec)}
+          title={checkTitle}
+        >
+          {(rec.completed ?? false) && <Check size={11} strokeWidth={3} color="#fff" />}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="ep-ex-body">
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <div className="ep-ex-name" style={{ marginBottom: 0 }}>{rec.exerciseName}</div>
+          {/* Only show badge in patient view (physio view uses section headers instead) */}
+          {viewerRole === "patient" && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: "1px 7px",
+              borderRadius: 100, textTransform: "uppercase", letterSpacing: "0.06em",
+              background: rec.programType === "home" ? "#d1fae5" : "#D6EEF8",
+              color: rec.programType === "home" ? "#065f46" : "#0C3C60",
+              flexShrink: 0,
+            }}>
+              {rec.programType === "home" ? "Home" : "Clinic"}
+            </span>
+          )}
+        </div>
+
+        <div className="ep-ex-params">
+          <span><span className="ep-ex-param-val">{rec.sets}</span> sets</span>
+          <span><span className="ep-ex-param-val">{rec.reps}</span> reps</span>
+          {rec.holdTime > 0 && (
+            <span><span className="ep-ex-param-val">{rec.holdTime}s</span> hold</span>
+          )}
+        </div>
+
+        {rec.notes && <div className="ep-ex-notes">{rec.notes}</div>}
+
+        {rec.videoId && (
+          viewerRole === "patient" ? (
+            openVideoId === rec.id ? (
+              <>
+                <div className="ep-video-wrap">
+                  <iframe
+                    src={`https://www.youtube.com/embed/${rec.videoId}`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+                <button className="ep-watch-btn" style={{ marginTop: 6 }} onClick={() => onSetOpenVideoId(null)}>
+                  <Play size={12} strokeWidth={2} /> Hide Video
+                </button>
+              </>
+            ) : (
+              <button className="ep-watch-btn" onClick={() => onSetOpenVideoId(rec.id)}>
+                <Play size={12} strokeWidth={2} /> Watch Video
+              </button>
+            )
+          ) : (
+            <div className="ep-video-wrap">
+              <iframe
+                src={`https://www.youtube.com/embed/${rec.videoId}`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          )
+        )}
+
+        <div className="ep-ex-footer">
+          {!rec.videoId && rec.mediaUrl && (
+            <button className="ep-watch-btn" onClick={() => window.open(rec.mediaUrl, "_blank", "noopener,noreferrer")}>
+              <Play size={12} strokeWidth={2} /> Watch Video
+            </button>
+          )}
+          {(rec.completed ?? false) && (
+            <span className="ep-completed-tag">
+              <Check size={10} strokeWidth={2.5} /> Completed
+            </span>
+          )}
+          {canEdit && editingId !== rec.id && (
+            <button className="ep-edit-btn" onClick={() => onEditOpen(rec)}>
+              <Pencil size={10} strokeWidth={2.5} /> Edit
+            </button>
+          )}
+          {canEdit && (
+            <button className="ep-remove-btn" disabled={removingId === rec.id} onClick={() => onRemove(rec)}>
+              {removingId === rec.id ? "Removing…" : <><Trash2 size={11} strokeWidth={2} /> Remove</>}
+            </button>
+          )}
+        </div>
+
+        {canEdit && editingId === rec.id && (
+          <div className="ep-inline-edit">
+            <div className="ep-edit-row">
+              <div className="ep-edit-field">
+                <label className="ep-edit-label">Sets</label>
+                <input className="ep-edit-input" type="number" min="1"
+                  value={editVals.sets}
+                  onChange={(e) => onSetEditVals({ ...editVals, sets: e.target.value })} />
+              </div>
+              <div className="ep-edit-field">
+                <label className="ep-edit-label">Reps</label>
+                <input className="ep-edit-input" type="number" min="1"
+                  value={editVals.reps}
+                  onChange={(e) => onSetEditVals({ ...editVals, reps: e.target.value })} />
+              </div>
+              <div className="ep-edit-field">
+                <label className="ep-edit-label">Hold (s)</label>
+                <input className="ep-edit-input" type="number" min="0"
+                  value={editVals.holdTime}
+                  onChange={(e) => onSetEditVals({ ...editVals, holdTime: e.target.value })} />
+              </div>
+            </div>
+            <div className="ep-edit-field">
+              <label className="ep-edit-label">Notes</label>
+              <input className="ep-edit-input"
+                value={editVals.notes} placeholder="Physio notes…"
+                onChange={(e) => onSetEditVals({ ...editVals, notes: e.target.value })} />
+            </div>
+            {editError && <div style={{ fontSize: 12, color: "#b91c1c" }}>{editError}</div>}
+            <div className="ep-edit-actions">
+              <button className="ep-edit-save" disabled={editSaving} onClick={() => onSaveEdit(rec)}>
+                {editSaving ? "Saving…" : <><Check size={11} strokeWidth={2.5} /> Save</>}
+              </button>
+              <button className="ep-edit-cancel" onClick={onCancelEdit}>Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ExerciseProgram({
@@ -296,6 +470,10 @@ export default function ExerciseProgram({
     : exercises;
   const completedCount = visibleExercises.filter((e) => e.completed).length;
   const totalCount     = visibleExercises.length;
+
+  // For physio/manager view: split into two groups
+  const clinicExercises = exercises.filter((e) => (e.programType ?? "clinic") === "clinic");
+  const homeExercises   = exercises.filter((e) => (e.programType ?? "clinic") === "home");
 
   return (
     <>
@@ -453,6 +631,27 @@ export default function ExerciseProgram({
         }
         .ep-remove-btn:hover:not(:disabled) { border-color: #fca5a5; color: #b91c1c; }
         .ep-remove-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ── Program section dividers (physio/manager view) ── */
+        .ep-section-hd {
+          display: flex; align-items: center; gap: 10px;
+          margin: 18px 0 10px;
+        }
+        .ep-section-hd:first-child { margin-top: 0; }
+        .ep-section-pill {
+          display: inline-flex; align-items: center; gap: 5px;
+          font-size: 11px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.07em; padding: 3px 10px; border-radius: 100px;
+          flex-shrink: 0;
+        }
+        .ep-section-pill.clinic { background: #D6EEF8; color: #0C3C60; }
+        .ep-section-pill.home   { background: #d1fae5; color: #065f46; }
+        .ep-section-line {
+          flex: 1; height: 1px; background: #e5e0d8;
+        }
+        .ep-section-count {
+          font-size: 11px; color: #9a9590; flex-shrink: 0;
+        }
 
         /* Empty state */
         .ep-empty {
@@ -699,174 +898,56 @@ export default function ExerciseProgram({
                   </div>
                 </div>
               )
+              : viewerRole !== "patient"
+              ? (
+                <>
+                  {/* ── Clinic section ── */}
+                  <div className="ep-section-hd">
+                    <span className="ep-section-pill clinic">🏥 Clinic Program</span>
+                    <div className="ep-section-line" />
+                    <span className="ep-section-count">{clinicExercises.filter(e => e.completed).length}/{clinicExercises.length}</span>
+                  </div>
+                  {clinicExercises.length === 0 ? (
+                    <div className="ep-empty" style={{ padding: "20px 24px" }}>
+                      <div className="ep-empty-sub">No clinic exercises assigned.</div>
+                    </div>
+                  ) : clinicExercises.map((rec) => (
+                    <ExerciseCard key={rec.id} rec={rec} viewerRole={viewerRole} canEdit={canEdit} canComplete_={canComplete_}
+                      togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
+                      removingId={removingId} openVideoId={openVideoId}
+                      onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
+                      onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }}
+                      onSetOpenVideoId={setOpenVideoId} />
+                  ))}
+
+                  {/* ── Home section ── */}
+                  <div className="ep-section-hd">
+                    <span className="ep-section-pill home">🏠 Home Program</span>
+                    <div className="ep-section-line" />
+                    <span className="ep-section-count">{homeExercises.filter(e => e.completed).length}/{homeExercises.length}</span>
+                  </div>
+                  {homeExercises.length === 0 ? (
+                    <div className="ep-empty" style={{ padding: "20px 24px" }}>
+                      <div className="ep-empty-sub">No home exercises assigned.</div>
+                    </div>
+                  ) : homeExercises.map((rec) => (
+                    <ExerciseCard key={rec.id} rec={rec} viewerRole={viewerRole} canEdit={canEdit} canComplete_={canComplete_}
+                      togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
+                      removingId={removingId} openVideoId={openVideoId}
+                      onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
+                      onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }}
+                      onSetOpenVideoId={setOpenVideoId} />
+                  ))}
+                </>
+              )
               : visibleExercises.map((rec) => (
-                <div key={rec.id} className={`ep-ex-card ${(rec.completed ?? false) ? "completed" : ""}`}>
-
-                  {/* Checkbox */}
-                  <div className="ep-checkbox-wrap">
-                    {(() => {
-                      const isClinicPatient = viewerRole === "patient" && (rec.programType ?? "clinic") === "clinic";
-                      const isDisabled = !canComplete_ || isClinicPatient;
-                      const title = !canComplete_
-                        ? "Only physiotherapists can mark exercises"
-                        : isClinicPatient
-                          ? "Clinic exercises are marked by your physiotherapist"
-                          : (rec.completed ?? false) ? "Mark as incomplete" : "Mark as completed";
-                      return (
-                    <div
-                      className={`ep-checkbox ${(rec.completed ?? false) ? "checked" : ""} ${isDisabled ? "disabled" : ""} ${togglingId === rec.id ? "toggling" : ""}`}
-                      onClick={() => togglingId === rec.id ? undefined : handleToggle(rec)}
-                      title={title}
-                    >
-                      {(rec.completed ?? false) && (
-                        <Check size={11} strokeWidth={3} color="#fff" />
-                      )}
-                    </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Body */}
-                  <div className="ep-ex-body">
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                      <div className="ep-ex-name" style={{ marginBottom: 0 }}>{rec.exerciseName}</div>
-                      <span style={{
-                        fontSize: 10, fontWeight: 700, padding: "1px 7px",
-                        borderRadius: 100, textTransform: "uppercase", letterSpacing: "0.06em",
-                        background: rec.programType === "home" ? "#d1fae5" : "#D6EEF8",
-                        color: rec.programType === "home" ? "#065f46" : "#0C3C60",
-                        flexShrink: 0,
-                      }}>
-                        {rec.programType === "home" ? "Home" : "Clinic"}
-                      </span>
-                    </div>
-
-                    <div className="ep-ex-params">
-                      <span><span className="ep-ex-param-val">{rec.sets}</span> sets</span>
-                      <span><span className="ep-ex-param-val">{rec.reps}</span> reps</span>
-                      {rec.holdTime > 0 && (
-                        <span><span className="ep-ex-param-val">{rec.holdTime}s</span> hold</span>
-                      )}
-                    </div>
-
-                    {rec.notes && (
-                      <div className="ep-ex-notes">{rec.notes}</div>
-                    )}
-
-                    {rec.videoId && (
-                      viewerRole === "patient" ? (
-                        openVideoId === rec.id ? (
-                          <>
-                            <div className="ep-video-wrap">
-                              <iframe
-                                src={`https://www.youtube.com/embed/${rec.videoId}`}
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                              />
-                            </div>
-                            <button className="ep-watch-btn" style={{ marginTop: 6 }} onClick={() => setOpenVideoId(null)}>
-                              <Play size={12} strokeWidth={2} /> Hide Video
-                            </button>
-                          </>
-                        ) : (
-                          <button className="ep-watch-btn" onClick={() => setOpenVideoId(rec.id)}>
-                            <Play size={12} strokeWidth={2} /> Watch Video
-                          </button>
-                        )
-                      ) : (
-                        <div className="ep-video-wrap">
-                          <iframe
-                            src={`https://www.youtube.com/embed/${rec.videoId}`}
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                          />
-                        </div>
-                      )
-                    )}
-
-                    <div className="ep-ex-footer">
-                      {/* legacy mediaUrl fallback for exercises without videoId */}
-                      {!rec.videoId && rec.mediaUrl && (
-                        <button
-                          className="ep-watch-btn"
-                          onClick={() => window.open(rec.mediaUrl, "_blank", "noopener,noreferrer")}
-                        >
-                          <Play size={12} strokeWidth={2} />
-                          Watch Video
-                        </button>
-                      )}
-
-                      {(rec.completed ?? false) && (
-                        <span className="ep-completed-tag">
-                          <Check size={10} strokeWidth={2.5} />
-                          Completed
-                        </span>
-                      )}
-
-                      {canEdit && editingId !== rec.id && (
-                        <button className="ep-edit-btn" onClick={() => handleEditOpen(rec)}>
-                          <Pencil size={10} strokeWidth={2.5} />
-                          Edit
-                        </button>
-                      )}
-                      {canEdit && (
-                        <button
-                          className="ep-remove-btn"
-                          disabled={removingId === rec.id}
-                          onClick={() => handleRemove(rec)}
-                        >
-                          {removingId === rec.id
-                            ? "Removing…"
-                            : <><Trash2 size={11} strokeWidth={2} /> Remove</>
-                          }
-                        </button>
-                      )}
-                    </div>
-                    {canEdit && editingId === rec.id && (
-                      <div className="ep-inline-edit">
-                        <div className="ep-edit-row">
-                          <div className="ep-edit-field">
-                            <label className="ep-edit-label">Sets</label>
-                            <input className="ep-edit-input" type="number" min="1"
-                              value={editVals.sets}
-                              onChange={(e) => setEditVals({ ...editVals, sets: e.target.value })} />
-                          </div>
-                          <div className="ep-edit-field">
-                            <label className="ep-edit-label">Reps</label>
-                            <input className="ep-edit-input" type="number" min="1"
-                              value={editVals.reps}
-                              onChange={(e) => setEditVals({ ...editVals, reps: e.target.value })} />
-                          </div>
-                          <div className="ep-edit-field">
-                            <label className="ep-edit-label">Hold (s)</label>
-                            <input className="ep-edit-input" type="number" min="0"
-                              value={editVals.holdTime}
-                              onChange={(e) => setEditVals({ ...editVals, holdTime: e.target.value })} />
-                          </div>
-                        </div>
-                        <div className="ep-edit-field">
-                          <label className="ep-edit-label">Notes</label>
-                          <input className="ep-edit-input"
-                            value={editVals.notes} placeholder="Physio notes…"
-                            onChange={(e) => setEditVals({ ...editVals, notes: e.target.value })} />
-                        </div>
-                        {editError && <div style={{ fontSize: 12, color: "#b91c1c" }}>{editError}</div>}
-                        <div className="ep-edit-actions">
-                          <button className="ep-edit-save" disabled={editSaving} onClick={() => handleSaveEdit(rec)}>
-                            {editSaving
-                              ? "Saving…"
-                              : <><Check size={11} strokeWidth={2.5} /> Save</>
-                            }
-                          </button>
-                          <button className="ep-edit-cancel" onClick={() => { setEditingId(null); setEditError(null); }}>Cancel</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-              ))
-          }
+                <ExerciseCard key={rec.id} rec={rec} viewerRole={viewerRole} canEdit={canEdit} canComplete_={canComplete_}
+                  togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
+                  removingId={removingId} openVideoId={openVideoId}
+                  onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
+                  onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }}
+                  onSetOpenVideoId={setOpenVideoId} />
+              ))}
         </div>
       </div>
 
@@ -886,3 +967,4 @@ export default function ExerciseProgram({
     </>
   );
 }
+
