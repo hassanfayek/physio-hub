@@ -470,7 +470,6 @@ export default function ExerciseLibraryPage({
   const [assignTarget,setAssignTarget]= useState<LibraryExercise | null>(null);
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
   const [toast,       setToast]       = useState<string | null>(null);
-  const [openVideoId, setOpenVideoId] = useState<string | null>(null);
 
   // Realtime: exercise library
   useEffect(() => {
@@ -1038,21 +1037,10 @@ export default function ExerciseLibraryPage({
                               Hold: <span className="el-card-meta-val">&nbsp;{ex.defaultHoldTime}s</span>
                             </div>
                           )}
-                          {ex.videoId && (
-                            <button
-                              className="el-media-link-btn"
-                              onClick={() => setOpenVideoId(openVideoId === ex.id ? null : ex.id)}
-                            >
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polygon points="5 3 19 12 5 21 5 3"/>
-                              </svg>
-                              {openVideoId === ex.id ? "Hide Video" : "Watch Video"}
-                            </button>
-                          )}
                         </div>
                       </div>
 
-                      {openVideoId === ex.id && ex.videoId && (
+                      {ex.videoId && (
                         <div className="el-video-wrap">
                           <iframe
                             src={`https://www.youtube.com/embed/${ex.videoId}`}

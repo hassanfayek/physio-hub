@@ -66,8 +66,10 @@ service cloud.firestore {
     }
 
     match /patientDocuments/{docId} {
-      allow read:  if isStaff() || isPatient();
-      allow write: if isStaff();
+      allow read:   if isStaff() || isPatient();
+      allow create: if isStaff() || (isPatient() && request.resource.data.uploadedBy == request.auth.uid && request.resource.data.patientId == request.auth.uid);
+      allow update: if isStaff();
+      allow delete: if isStaff() || (isPatient() && resource.data.patientId == request.auth.uid && resource.data.uploadedBy == request.auth.uid);
     }
 
     match /patientExercises/{docId} {

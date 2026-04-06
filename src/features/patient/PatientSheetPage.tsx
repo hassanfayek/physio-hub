@@ -512,19 +512,25 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         setUploadProgress(null);
       },
       async () => {
-        const downloadUrl = await getDownloadURL(task.snapshot.ref);
-        await addDoc(collection(db, "patientDocuments"), {
-          patientId,
-          uploadedBy:  user.uid,
-          type:        docType,
-          label:       file.name.replace(/\.[^/.]+$/, ""),
-          fileName:    file.name,
-          size:        file.size,
-          downloadUrl,
-          storagePath: path,
-          createdAt:   serverTimestamp(),
-        });
-        setUploadProgress(null);
+        try {
+          const downloadUrl = await getDownloadURL(task.snapshot.ref);
+          await addDoc(collection(db, "patientDocuments"), {
+            patientId,
+            uploadedBy:  user.uid,
+            type:        docType,
+            label:       file.name.replace(/\.[^/.]+$/, ""),
+            fileName:    file.name,
+            size:        file.size,
+            downloadUrl,
+            storagePath: path,
+            createdAt:   serverTimestamp(),
+          });
+        } catch (err) {
+          const e = err as { message?: string };
+          setUploadError(e.message ?? "Failed to save document. Please try again.");
+        } finally {
+          setUploadProgress(null);
+        }
       }
     );
   };

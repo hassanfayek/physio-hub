@@ -754,23 +754,33 @@ export default function ExerciseProgram({
                     )}
 
                     {rec.videoId && (
-                      openVideoId === rec.id ? (
-                        <>
-                          <div className="ep-video-wrap">
-                            <iframe
-                              src={`https://www.youtube.com/embed/${rec.videoId}?autoplay=1`}
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              allowFullScreen
-                            />
-                          </div>
-                          <button className="ep-watch-btn" style={{ marginTop: 6 }} onClick={() => setOpenVideoId(null)}>
-                            <Play size={12} strokeWidth={2} /> Hide Video
+                      viewerRole === "patient" ? (
+                        openVideoId === rec.id ? (
+                          <>
+                            <div className="ep-video-wrap">
+                              <iframe
+                                src={`https://www.youtube.com/embed/${rec.videoId}?autoplay=1`}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            </div>
+                            <button className="ep-watch-btn" style={{ marginTop: 6 }} onClick={() => setOpenVideoId(null)}>
+                              <Play size={12} strokeWidth={2} /> Hide Video
+                            </button>
+                          </>
+                        ) : (
+                          <button className="ep-watch-btn" onClick={() => setOpenVideoId(rec.id)}>
+                            <Play size={12} strokeWidth={2} /> Watch Video
                           </button>
-                        </>
+                        )
                       ) : (
-                        <button className="ep-watch-btn" onClick={() => setOpenVideoId(rec.id)}>
-                          <Play size={12} strokeWidth={2} /> Watch Video
-                        </button>
+                        <div className="ep-video-wrap">
+                          <iframe
+                            src={`https://www.youtube.com/embed/${rec.videoId}`}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        </div>
                       )
                     )}
 
