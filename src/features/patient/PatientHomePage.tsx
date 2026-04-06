@@ -187,7 +187,7 @@ function ExCard({
               <div style={{ position: "relative", paddingTop: "56.25%", borderRadius: 10, overflow: "hidden", marginBottom: 6 }}>
                 <iframe
                   style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-                  src={`https://www.youtube.com/embed/${ex.videoId}?autoplay=1`}
+                  src={`https://www.youtube.com/embed/${ex.videoId}`}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />

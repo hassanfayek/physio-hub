@@ -759,7 +759,7 @@ export default function ExerciseProgram({
                           <>
                             <div className="ep-video-wrap">
                               <iframe
-                                src={`https://www.youtube.com/embed/${rec.videoId}?autoplay=1`}
+                                src={`https://www.youtube.com/embed/${rec.videoId}`}
                                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                 allowFullScreen
                               />
