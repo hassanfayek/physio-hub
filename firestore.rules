@@ -12,7 +12,7 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
-    function isManager()    { return isAuth() && role() == 'clinic_manager';   }
+    function isManager()    { return isAuth() && (role() == 'clinic_manager' || role() == 'manager'); }
     function isPhysio()     { return isAuth() && role() == 'physiotherapist';  }
     function isSecretary()  { return isAuth() && role() == 'secretary';        }
     function isPatient()    { return isAuth() && role() == 'patient';          }
