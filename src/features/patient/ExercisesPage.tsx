@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../hooks/useAuth";
+import { VideoEmbed } from "../../components/VideoEmbed";
 import {
   subscribeToPatientExercises,
   resetDailyHomeExercises,
@@ -106,14 +107,7 @@ function ExerciseCard({
           )}
 
           {exercise.videoId && (
-            <div style={{ position: "relative", paddingTop: "56.25%", borderRadius: 10, overflow: "hidden", marginBottom: 8 }}>
-              <iframe
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
-                src={`https://www.youtube.com/embed/${exercise.videoId}`}
-                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
+            <VideoEmbed videoId={exercise.videoId} wrapperStyle={{ marginBottom: 8 }} />
           )}
 
           {/* Complete button — home exercises only */}

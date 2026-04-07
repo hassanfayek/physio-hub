@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../hooks/useAuth";
+import { VideoEmbed } from "../../components/VideoEmbed";
 import {
   subscribeToPatientAppointments,
   fmtHour,
@@ -174,18 +175,8 @@ function ExCard({
         )}
       </div>
 
-      {/* Video — always visible inline */}
       {ex.videoId && (
-        <div style={{ padding: "0 16px 6px" }}>
-          <div style={{ position: "relative", paddingTop: "56.25%", borderRadius: 10, overflow: "hidden" }}>
-            <iframe
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
-              src={`https://www.youtube.com/embed/${ex.videoId}`}
-              allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
-        </div>
+        <VideoEmbed videoId={ex.videoId} wrapperStyle={{ padding: "0 16px 6px" }} />
       )}
 
       {/* Complete button only */}

@@ -10,6 +10,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X, Home, Heart, Plus, Check, Pencil, Trash2, Play } from "lucide-react";
+import { VideoEmbed } from "../../components/VideoEmbed";
 import {
   subscribeToPatientExercises,
   subscribeToExerciseLibrary,
@@ -279,13 +280,7 @@ function ExerciseCard({
         {rec.notes && <div className="ep-ex-notes">{rec.notes}</div>}
 
         {rec.videoId && (
-          <div className="ep-video-wrap">
-            <iframe
-              src={`https://www.youtube.com/embed/${rec.videoId}`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
+          <VideoEmbed videoId={rec.videoId} wrapperStyle={{ marginTop: 8 }} />
         )}
 
         <div className="ep-ex-footer">

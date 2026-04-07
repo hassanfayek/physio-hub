@@ -7,6 +7,7 @@
 import React, { useState, useEffect, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { X, Check } from "lucide-react";
+import { VideoEmbed } from "../../components/VideoEmbed";
 import {
   subscribeToExerciseLibrary,
   createExercise,
@@ -1041,13 +1042,7 @@ export default function ExerciseLibraryPage({
                       </div>
 
                       {ex.videoId && (
-                        <div className="el-video-wrap">
-                          <iframe
-                            src={`https://www.youtube.com/embed/${ex.videoId}`}
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                          />
-                        </div>
+                        <VideoEmbed videoId={ex.videoId} wrapperStyle={{ marginTop: 10 }} />
                       )}
 
                       {/* Actions */}
