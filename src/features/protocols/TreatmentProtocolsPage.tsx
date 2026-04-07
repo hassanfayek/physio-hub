@@ -15,6 +15,8 @@ import {
   type ProtocolPhase,
 } from "../../services/protocolService";
 import { subscribeToAllPatients, type Patient } from "../../services/patientService";
+import { subscribeToExerciseLibrary, type LibraryExercise } from "../../services/exerciseService";
+import { VideoEmbed } from "../../components/VideoEmbed";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -37,7 +39,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 const BLANK_PHASE: ProtocolPhase = {
-  name: "", duration: "", goals: "", interventions: "", exercises: "", precautions: "", progressCriteria: "",
+  name: "", duration: "", goals: "", interventions: "", exercises: "", exerciseRefs: [], precautions: "", progressCriteria: "",
 };
 
 const BLANK_PROTOCOL = {
@@ -83,6 +85,13 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
   const [toast,       setToast]       = useState<string | null>(null);
 
+  // Exercise library (for phase exercise picker)
+  const [library,       setLibrary]       = useState<LibraryExercise[]>([]);
+  const [exPickerPhase, setExPickerPhase] = useState<number | null>(null);
+  const [exPickerSearch,setExPickerSearch] = useState("");
+  // Video preview state per exercise ref (key: `${phaseIdx}-${exerciseId}`)
+  const [videoOpen,    setVideoOpen]     = useState<Record<string, boolean>>({});
+
   // ── Subscriptions ──────────────────────────────────────────────────────────
   useEffect(() => {
     return subscribeToProtocols(
@@ -93,6 +102,10 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
 
   useEffect(() => {
     return subscribeToAllPatients((p) => setPatients(p), () => {});
+  }, []);
+
+  useEffect(() => {
+    return subscribeToExerciseLibrary((data) => setLibrary(data), () => {});
   }, []);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -116,6 +129,8 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
     setForm({ ...BLANK_PROTOCOL, createdBy: physioId });
     setEditTarget(null);
     setSaveError(null);
+    setExPickerPhase(null);
+    setExPickerSearch("");
     setShowEditor(true);
   };
 
@@ -126,12 +141,14 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
       category:  protocol.category,
       overview:  protocol.overview,
       duration:  protocol.duration,
-      phases:    protocol.phases.map((ph) => ({ ...ph })),
+      phases:    protocol.phases.map((ph) => ({ ...ph, exerciseRefs: [...(ph.exerciseRefs ?? [])] })),
       tags:      [...protocol.tags],
       createdBy: protocol.createdBy,
     });
     setEditTarget(protocol);
     setSaveError(null);
+    setExPickerPhase(null);
+    setExPickerSearch("");
     setShowEditor(true);
   };
 
@@ -180,6 +197,27 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
       ...f,
       phases: f.phases.map((ph, idx) => idx === i ? { ...ph, [key]: val } : ph),
     }));
+
+  const addExerciseRef = (phaseIdx: number, exId: string) => {
+    setForm((f) => ({
+      ...f,
+      phases: f.phases.map((ph, idx) =>
+        idx === phaseIdx && !(ph.exerciseRefs ?? []).includes(exId)
+          ? { ...ph, exerciseRefs: [...(ph.exerciseRefs ?? []), exId] }
+          : ph
+      ),
+    }));
+  };
+  const removeExerciseRef = (phaseIdx: number, exId: string) => {
+    setForm((f) => ({
+      ...f,
+      phases: f.phases.map((ph, idx) =>
+        idx === phaseIdx
+          ? { ...ph, exerciseRefs: (ph.exerciseRefs ?? []).filter((id) => id !== exId) }
+          : ph
+      ),
+    }));
+  };
 
   // ── Assign ─────────────────────────────────────────────────────────────────
   const openAssign = (protocol: TreatmentProtocol) => {
@@ -412,6 +450,63 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
           color: #9a9590; cursor: pointer; transition: all 0.15s; margin-bottom: 10px;
         }
         .tp-add-phase-btn:hover { border-color: #2E8BC0; color: #2E8BC0; background: #EAF5FC; }
+
+        /* Exercise picker */
+        .tp-ex-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+        .tp-ex-chip {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 3px 10px 3px 10px; border-radius: 100px;
+          background: #D6EEF8; color: #0C3C60;
+          font-size: 12px; font-weight: 500;
+        }
+        .tp-ex-chip-rm {
+          background: none; border: none; cursor: pointer;
+          color: #0C3C60; opacity: 0.6; padding: 0; line-height: 1;
+          font-size: 14px;
+        }
+        .tp-ex-chip-rm:hover { opacity: 1; }
+        .tp-ex-picker-toggle {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 5px 12px; border-radius: 8px;
+          border: 1.5px dashed #B3DEF0; background: #f0f8ff;
+          font-family: 'Outfit', sans-serif; font-size: 12px; color: #2E8BC0;
+          cursor: pointer; transition: all 0.15s;
+        }
+        .tp-ex-picker-toggle:hover { border-color: #2E8BC0; background: #EAF5FC; }
+        .tp-ex-picker {
+          margin-top: 8px; border: 1.5px solid #e5e0d8; border-radius: 10px; overflow: hidden;
+        }
+        .tp-ex-picker-search {
+          width: 100%; padding: 8px 12px; border: none; border-bottom: 1.5px solid #e5e0d8;
+          font-family: 'Outfit', sans-serif; font-size: 13px; outline: none; box-sizing: border-box;
+        }
+        .tp-ex-picker-list { max-height: 180px; overflow-y: auto; }
+        .tp-ex-picker-item {
+          padding: 8px 12px; cursor: pointer; font-size: 13px; color: #1a1a1a;
+          display: flex; align-items: center; justify-content: space-between; gap: 8px;
+          transition: background 0.1s;
+        }
+        .tp-ex-picker-item:hover { background: #f0f8ff; }
+        .tp-ex-picker-item.selected { background: #EAF5FC; color: #0C3C60; font-weight: 500; }
+        .tp-ex-picker-empty { padding: 12px; font-size: 13px; color: #9a9590; text-align: center; }
+
+        /* Phase exercise view chips */
+        .tp-phase-ex-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+        .tp-phase-ex-item {
+          display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+        }
+        .tp-phase-ex-name {
+          font-size: 13px; font-weight: 500; color: #1a1a1a;
+          padding: 3px 10px; background: #EAF5FC; border-radius: 100px;
+          border: 1px solid #B3DEF0;
+        }
+        .tp-phase-ex-video-btn {
+          background: none; border: none; cursor: pointer;
+          font-size: 11px; color: #2E8BC0; padding: 0; font-family: 'Outfit', sans-serif;
+          text-decoration: underline; text-underline-offset: 2px;
+        }
+        .tp-phase-ex-video-btn:hover { color: #0C3C60; }
+
         .tp-error { font-size: 13px; color: #b91c1c; margin-top: 8px; }
         .tp-btn-cancel {
           padding: 10px 20px; border-radius: 10px; border: 1.5px solid #e5e0d8;
@@ -607,10 +702,39 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
                                       <p>{phase.interventions}</p>
                                     </div>
                                   )}
-                                  {phase.exercises && (
-                                    <div className="tp-phase-field">
+                                  {((phase.exerciseRefs ?? []).length > 0 || phase.exercises) && (
+                                    <div className="tp-phase-field" style={{ gridColumn: "1 / -1" }}>
                                       <label>Exercises</label>
-                                      <p>{phase.exercises}</p>
+                                      {(phase.exerciseRefs ?? []).length > 0 && (
+                                        <div className="tp-phase-ex-list">
+                                          {(phase.exerciseRefs ?? []).map((exId) => {
+                                            const ex = library.find((e) => e.id === exId);
+                                            const vKey = `${protocol.id}-${i}-${exId}`;
+                                            const vOpen = videoOpen[vKey] ?? false;
+                                            return (
+                                              <div key={exId}>
+                                                <div className="tp-phase-ex-item">
+                                                  <span className="tp-phase-ex-name">{ex?.name ?? exId}</span>
+                                                  {ex?.videoId && (
+                                                    <button
+                                                      className="tp-phase-ex-video-btn"
+                                                      onClick={() => setVideoOpen((s) => ({ ...s, [vKey]: !vOpen }))}
+                                                    >
+                                                      {vOpen ? "Hide video" : "Watch video"}
+                                                    </button>
+                                                  )}
+                                                </div>
+                                                {vOpen && ex?.videoId && (
+                                                  <VideoEmbed videoId={ex.videoId} wrapperStyle={{ marginTop: 6 }} />
+                                                )}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                      {phase.exercises && (
+                                        <p style={{ marginTop: (phase.exerciseRefs ?? []).length > 0 ? 8 : 0 }}>{phase.exercises}</p>
+                                      )}
                                     </div>
                                   )}
                                   {phase.precautions && (
@@ -733,17 +857,84 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
                     <textarea className="tp-textarea" rows={2} placeholder="What should be achieved in this phase?"
                       value={phase.goals} onChange={(e) => setPhase(i, "goals", e.target.value)} />
                   </div>
-                  <div className="tp-grid2">
-                    <div className="tp-field">
-                      <label className="tp-label">Interventions</label>
-                      <textarea className="tp-textarea" rows={2} placeholder="Manual therapy, modalities…"
-                        value={phase.interventions} onChange={(e) => setPhase(i, "interventions", e.target.value)} />
-                    </div>
-                    <div className="tp-field">
-                      <label className="tp-label">Exercises</label>
-                      <textarea className="tp-textarea" rows={2} placeholder="Exercise prescription…"
-                        value={phase.exercises} onChange={(e) => setPhase(i, "exercises", e.target.value)} />
-                    </div>
+                  <div className="tp-field">
+                    <label className="tp-label">Interventions</label>
+                    <textarea className="tp-textarea" rows={2} placeholder="Manual therapy, modalities…"
+                      value={phase.interventions} onChange={(e) => setPhase(i, "interventions", e.target.value)} />
+                  </div>
+
+                  {/* Exercise Library Picker */}
+                  <div className="tp-field">
+                    <label className="tp-label">Exercises from Library</label>
+                    {/* Selected chips */}
+                    {(phase.exerciseRefs ?? []).length > 0 && (
+                      <div className="tp-ex-chips">
+                        {(phase.exerciseRefs ?? []).map((exId) => {
+                          const ex = library.find((e) => e.id === exId);
+                          return (
+                            <span key={exId} className="tp-ex-chip">
+                              {ex?.name ?? exId}
+                              <button className="tp-ex-chip-rm" onClick={() => removeExerciseRef(i, exId)}>×</button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {/* Toggle picker */}
+                    <button
+                      type="button"
+                      className="tp-ex-picker-toggle"
+                      onClick={() => { setExPickerPhase(exPickerPhase === i ? null : i); setExPickerSearch(""); }}
+                    >
+                      <Plus size={11} strokeWidth={2.5} />
+                      {exPickerPhase === i ? "Close picker" : "Add from library"}
+                    </button>
+                    {exPickerPhase === i && (
+                      <div className="tp-ex-picker">
+                        <input
+                          className="tp-ex-picker-search"
+                          placeholder="Search exercises…"
+                          value={exPickerSearch}
+                          onChange={(e) => setExPickerSearch(e.target.value)}
+                          autoFocus
+                        />
+                        <div className="tp-ex-picker-list">
+                          {library
+                            .filter((ex) =>
+                              !exPickerSearch || ex.name.toLowerCase().includes(exPickerSearch.toLowerCase()) ||
+                              ex.category.toLowerCase().includes(exPickerSearch.toLowerCase())
+                            )
+                            .slice(0, 40)
+                            .map((ex) => {
+                              const isSelected = (phase.exerciseRefs ?? []).includes(ex.id);
+                              return (
+                                <div
+                                  key={ex.id}
+                                  className={`tp-ex-picker-item${isSelected ? " selected" : ""}`}
+                                  onClick={() => isSelected ? removeExerciseRef(i, ex.id) : addExerciseRef(i, ex.id)}
+                                >
+                                  <span>{ex.name}{ex.category ? <span style={{ color: "#9a9590", fontWeight: 400 }}> · {ex.category}</span> : null}</span>
+                                  {isSelected
+                                    ? <Check size={13} strokeWidth={2.5} color="#2E8BC0" />
+                                    : <Plus size={13} strokeWidth={2} color="#9a9590" />}
+                                </div>
+                              );
+                            })}
+                          {library.length === 0 && (
+                            <div className="tp-ex-picker-empty">No exercises in library yet.</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {/* Free-text notes */}
+                    <textarea
+                      className="tp-textarea"
+                      rows={2}
+                      placeholder="Additional exercise notes or prescriptions…"
+                      value={phase.exercises}
+                      onChange={(e) => setPhase(i, "exercises", e.target.value)}
+                      style={{ marginTop: 8 }}
+                    />
                   </div>
                   <div className="tp-grid2">
                     <div className="tp-field">

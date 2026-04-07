@@ -15,6 +15,7 @@ export interface ProtocolPhase {
   goals:            string;
   interventions:    string;
   exercises:        string;
+  exerciseRefs:     string[]; // IDs from the exercise library
   precautions:      string;
   progressCriteria: string;   // criteria patient must meet to advance to next phase
 }
@@ -61,7 +62,16 @@ function docToProtocol(id: string, data: Record<string, unknown>): TreatmentProt
     category:  (data.category  as string)   ?? "",
     overview:  (data.overview  as string)   ?? "",
     duration:  (data.duration  as string)   ?? "",
-    phases:    (data.phases    as ProtocolPhase[]) ?? [],
+    phases:    ((data.phases as Array<Record<string, unknown>>) ?? []).map((ph) => ({
+      name:             (ph.name             as string)   ?? "",
+      duration:         (ph.duration         as string)   ?? "",
+      goals:            (ph.goals            as string)   ?? "",
+      interventions:    (ph.interventions    as string)   ?? "",
+      exercises:        (ph.exercises        as string)   ?? "",
+      exerciseRefs:     (ph.exerciseRefs     as string[]) ?? [],
+      precautions:      (ph.precautions      as string)   ?? "",
+      progressCriteria: (ph.progressCriteria as string)   ?? "",
+    })),
     tags:      (data.tags      as string[]) ?? [],
     createdBy: (data.createdBy as string)   ?? "",
     createdAt: (data.createdAt as Timestamp | null) ?? null,
