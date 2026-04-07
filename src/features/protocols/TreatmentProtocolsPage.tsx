@@ -2,7 +2,7 @@
 // Clinic-wide treatment protocol library.
 // All physios can read & assign. Only clinic_manager can create / edit / delete.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Plus, Pencil, Trash2, ChevronDown, X, Check, Search } from "lucide-react";
 import {
@@ -69,6 +69,7 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
   const [form,        setForm]        = useState({ ...BLANK_PROTOCOL });
   const [saving,      setSaving]      = useState(false);
   const [saveError,   setSaveError]   = useState<string | null>(null);
+  const modalBodyRef = useRef<HTMLDivElement>(null);
 
   // Assign modal
   const [assignTarget, setAssignTarget] = useState<TreatmentProtocol | null>(null);
@@ -136,7 +137,8 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
 
   const handleSave = async () => {
     if (!form.title.trim() || !form.injury.trim()) {
-      setSaveError("Title and injury are required.");
+      setSaveError("Protocol Title and Injury / Condition are required.");
+      modalBodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
     setSaving(true); setSaveError(null);
@@ -374,6 +376,9 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
         .tp-modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
         .tp-modal-ft {
           padding: 14px 24px 20px; border-top: 1px solid #f0ede8; flex-shrink: 0;
+          display: flex; flex-direction: column; gap: 0;
+        }
+        .tp-modal-ft-btns {
           display: flex; gap: 10px; justify-content: flex-end;
         }
         .tp-field { margin-bottom: 14px; }
@@ -656,7 +661,7 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
               </button>
             </div>
 
-            <div className="tp-modal-body">
+            <div className="tp-modal-body" ref={modalBodyRef}>
               {/* Basic info */}
               <div className="tp-grid2">
                 <div className="tp-field">
@@ -758,14 +763,16 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
                 <Plus size={13} strokeWidth={2.5} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />
                 Add Phase
               </button>
-              {saveError && <div className="tp-error">{saveError}</div>}
             </div>
 
             <div className="tp-modal-ft">
-              <button className="tp-btn-cancel" onClick={() => setShowEditor(false)} disabled={saving}>Cancel</button>
-              <button className="tp-btn-save" onClick={handleSave} disabled={saving}>
-                {saving ? "Saving…" : editTarget ? "Save Changes" : "Create Protocol"}
-              </button>
+              {saveError && <div className="tp-error" style={{ marginBottom: 10 }}>{saveError}</div>}
+              <div className="tp-modal-ft-btns">
+                <button className="tp-btn-cancel" onClick={() => setShowEditor(false)} disabled={saving}>Cancel</button>
+                <button className="tp-btn-save" onClick={handleSave} disabled={saving}>
+                  {saving ? "Saving…" : editTarget ? "Save Changes" : "Create Protocol"}
+                </button>
+              </div>
             </div>
           </div>
         </div>,
@@ -840,21 +847,23 @@ export default function TreatmentProtocolsPage({ physioId, isManager }: Treatmen
             </div>
 
             <div className="tp-modal-ft">
-              {assignDone ? (
-                <>
-                  <button className="tp-btn-cancel" onClick={() => { setAssignDone(false); setAssignPatient(null); setAssignNotes(""); setAssignSearch(""); }}>
-                    Assign Another
-                  </button>
-                  <button className="tp-btn-save" onClick={() => setAssignTarget(null)}>Done</button>
-                </>
-              ) : (
-                <>
-                  <button className="tp-btn-cancel" onClick={() => setAssignTarget(null)} disabled={assigning}>Cancel</button>
-                  <button className="tp-btn-primary" disabled={assigning || !assignPatient} onClick={handleAssign}>
-                    {assigning ? "Assigning…" : "Assign Protocol"}
-                  </button>
-                </>
-              )}
+              <div className="tp-modal-ft-btns">
+                {assignDone ? (
+                  <>
+                    <button className="tp-btn-cancel" onClick={() => { setAssignDone(false); setAssignPatient(null); setAssignNotes(""); setAssignSearch(""); }}>
+                      Assign Another
+                    </button>
+                    <button className="tp-btn-save" onClick={() => setAssignTarget(null)}>Done</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="tp-btn-cancel" onClick={() => setAssignTarget(null)} disabled={assigning}>Cancel</button>
+                    <button className="tp-btn-primary" disabled={assigning || !assignPatient} onClick={handleAssign}>
+                      {assigning ? "Assigning…" : "Assign Protocol"}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>,
