@@ -220,7 +220,6 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Outfit:wght@400;500;600&display=swap');
 
         .pt-root { font-family: 'Outfit', sans-serif; }
 

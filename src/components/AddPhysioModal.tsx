@@ -109,7 +109,6 @@ export default function AddPhysioModal({ onClose, onCreated }: AddPhysioModalPro
   return createPortal(
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap');
 
         .aph-overlay {
           position: fixed; inset: 0; z-index: 1000;

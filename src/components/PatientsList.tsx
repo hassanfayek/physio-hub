@@ -148,7 +148,6 @@ export default function PatientsList({
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap');
 
         .pl-root { font-family: 'Outfit', sans-serif; }
 

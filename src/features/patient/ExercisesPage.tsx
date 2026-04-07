@@ -197,7 +197,7 @@ export default function ExercisesPage() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap');
+        
 
         .ep-root { font-family: 'Outfit', sans-serif; }
 

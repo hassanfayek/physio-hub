@@ -782,7 +782,6 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
     <>
       {/* ─── STYLES ─────────────────────────────────────────────────── */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Playfair+Display:wght@400;500;600&display=swap');
 
         /* ── Container ── */
         .jas-root { font-family: 'Outfit', sans-serif; color: #1a1a1a; }

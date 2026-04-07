@@ -131,7 +131,7 @@ export default function AppointmentModal({
   return createPortal(
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap');
+        
 
         .am-overlay {
           position: fixed; inset: 0; z-index: 1000;

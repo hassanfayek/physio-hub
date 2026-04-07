@@ -39,7 +39,6 @@ function LoadingScreen() {
       fontFamily: "'Outfit', sans-serif",
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap');
 
         @keyframes ls-fade-in {
           from { opacity: 0; transform: translateY(12px); }
