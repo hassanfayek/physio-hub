@@ -1042,7 +1042,7 @@ export default function ExerciseLibraryPage({
                       </div>
 
                       {ex.videoId && (
-                        <VideoEmbed videoId={ex.videoId} wrapperStyle={{ marginTop: 10 }} />
+                        <VideoEmbed videoId={ex.videoId} wrapperStyle={{ marginTop: 10, width: "100%", flexBasis: "100%" }} />
                       )}
 
                       {/* Actions */}
