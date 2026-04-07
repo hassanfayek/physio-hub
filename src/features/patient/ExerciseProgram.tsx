@@ -396,8 +396,9 @@ export default function ExerciseProgram({
   const [showPicker,   setShowPicker]   = useState(false);
   const [togglingId,   setTogglingId]   = useState<string | null>(null);
   const resetDoneRef = useRef(false);
-  const [removingId,   setRemovingId]   = useState<string | null>(null);
-  const [editingId,    setEditingId]    = useState<string | null>(null);
+  const [removingId,     setRemovingId]     = useState<string | null>(null);
+  const [editingId,      setEditingId]      = useState<string | null>(null);
+  const [programFilter,  setProgramFilter]  = useState<"both" | "clinic" | "home">("both");
   const [editVals,     setEditVals]     = useState<{ sets: string; reps: string; holdTime: string; notes: string; programType: "clinic" | "home" }>({ sets: "", reps: "", holdTime: "", notes: "", programType: "clinic" });
   const [editSaving,   setEditSaving]   = useState(false);
   const [editError,    setEditError]    = useState<string | null>(null);
@@ -640,26 +641,48 @@ export default function ExerciseProgram({
         .ep-remove-btn:hover:not(:disabled) { border-color: #fca5a5; color: #b91c1c; }
         .ep-remove-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* ── Program section dividers (physio/manager view) ── */
-        .ep-section-hd {
-          display: flex; align-items: center; gap: 10px;
-          margin: 18px 0 10px;
+        /* ── Program filter toggle ── */
+        .ep-filter-row {
+          display: flex; gap: 6px; margin-bottom: 18px;
+          background: #f0ede8; padding: 4px; border-radius: 11px;
+          width: fit-content;
         }
-        .ep-section-hd:first-child { margin-top: 0; }
-        .ep-section-pill {
-          display: inline-flex; align-items: center; gap: 5px;
-          font-size: 11px; font-weight: 700; text-transform: uppercase;
-          letter-spacing: 0.07em; padding: 3px 10px; border-radius: 100px;
-          flex-shrink: 0;
+        .ep-filter-btn {
+          padding: 7px 18px; border-radius: 8px; border: none;
+          font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
+          cursor: pointer; transition: all 0.15s; background: transparent; color: #9a9590;
+          display: flex; align-items: center; gap: 5px; white-space: nowrap;
         }
-        .ep-section-pill.clinic { background: #D6EEF8; color: #0C3C60; }
-        .ep-section-pill.home   { background: #d1fae5; color: #065f46; }
-        .ep-section-line {
-          flex: 1; height: 1px; background: #e5e0d8;
+        .ep-filter-btn.active {
+          background: #fff; color: #1a1a1a; font-weight: 600;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.08);
         }
-        .ep-section-count {
-          font-size: 11px; color: #9a9590; flex-shrink: 0;
+        .ep-filter-btn.active.clinic { color: #0C3C60; }
+        .ep-filter-btn.active.home   { color: #065f46; }
+
+        /* ── Side-by-side columns ── */
+        .ep-columns {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+          align-items: start;
         }
+        @media (max-width: 700px) {
+          .ep-columns { grid-template-columns: 1fr; }
+        }
+        .ep-col-header {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 10px;
+        }
+        .ep-col-title {
+          display: inline-flex; align-items: center; gap: 6px;
+          font-size: 12px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.07em; padding: 4px 12px; border-radius: 100px;
+        }
+        .ep-col-title.clinic { background: #D6EEF8; color: #0C3C60; }
+        .ep-col-title.home   { background: #d1fae5; color: #065f46; }
+        .ep-col-count { font-size: 11px; color: #9a9590; }
+        .ep-col-list { display: flex; flex-direction: column; gap: 10px; }
 
         /* Empty state */
         .ep-empty {
@@ -890,70 +913,96 @@ export default function ExerciseProgram({
         )}
 
         {/* Exercise list */}
-        <div className="ep-list">
-          {loading
-            ? Array.from({ length: 3 }).map((_, i) => <div key={i} className="ep-skel" />)
-            : totalCount === 0
-              ? (
-                <div className="ep-empty">
-                  <div className="ep-empty-icon">🏃</div>
-                  <div className="ep-empty-title">No exercises yet</div>
-                  <div className="ep-empty-sub">
-                    {canEdit
-                      ? 'Click "Add Exercise" to assign exercises from the library.'
-                      : "No exercises have been assigned to this patient yet."
-                    }
+        {loading ? (
+          <div className="ep-list">
+            {Array.from({ length: 3 }).map((_, i) => <div key={i} className="ep-skel" />)}
+          </div>
+        ) : totalCount === 0 ? (
+          <div className="ep-empty">
+            <div className="ep-empty-icon">🏃</div>
+            <div className="ep-empty-title">No exercises yet</div>
+            <div className="ep-empty-sub">
+              {canEdit ? 'Click "Add Exercise" to assign exercises from the library.' : "No exercises have been assigned to this patient yet."}
+            </div>
+          </div>
+        ) : viewerRole !== "patient" ? (
+          <>
+            {/* ── Filter toggle ── */}
+            <div className="ep-filter-row">
+              <button className={`ep-filter-btn${programFilter === "both" ? " active" : ""}`} onClick={() => setProgramFilter("both")}>
+                All ({exercises.length})
+              </button>
+              <button className={`ep-filter-btn clinic${programFilter === "clinic" ? " active clinic" : ""}`} onClick={() => setProgramFilter("clinic")}>
+                🏥 Clinic ({clinicExercises.length})
+              </button>
+              <button className={`ep-filter-btn home${programFilter === "home" ? " active home" : ""}`} onClick={() => setProgramFilter("home")}>
+                🏠 Home ({homeExercises.length})
+              </button>
+            </div>
+
+            {/* ── Content ── */}
+            {programFilter === "both" ? (
+              <div className="ep-columns">
+                {/* Clinic column */}
+                <div>
+                  <div className="ep-col-header">
+                    <span className="ep-col-title clinic">🏥 Clinic</span>
+                    <span className="ep-col-count">{clinicExercises.filter(e => e.completed).length}/{clinicExercises.length} done</span>
+                  </div>
+                  <div className="ep-col-list">
+                    {clinicExercises.length === 0 ? (
+                      <div className="ep-empty" style={{ padding: "20px 16px" }}><div className="ep-empty-sub">None assigned.</div></div>
+                    ) : clinicExercises.map((rec) => (
+                      <ExerciseCard key={rec.id} rec={rec} viewerRole={viewerRole} canEdit={canEdit} canComplete_={canComplete_}
+                        togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
+                        removingId={removingId}
+                        onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
+                        onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
+                    ))}
                   </div>
                 </div>
-              )
-              : viewerRole !== "patient"
-              ? (
-                <>
-                  {/* ── Clinic section ── */}
-                  <div className="ep-section-hd">
-                    <span className="ep-section-pill clinic">🏥 Clinic Program</span>
-                    <div className="ep-section-line" />
-                    <span className="ep-section-count">{clinicExercises.filter(e => e.completed).length}/{clinicExercises.length}</span>
+                {/* Home column */}
+                <div>
+                  <div className="ep-col-header">
+                    <span className="ep-col-title home">🏠 Home</span>
+                    <span className="ep-col-count">{homeExercises.filter(e => e.completed).length}/{homeExercises.length} done</span>
                   </div>
-                  {clinicExercises.length === 0 ? (
-                    <div className="ep-empty" style={{ padding: "20px 24px" }}>
-                      <div className="ep-empty-sub">No clinic exercises assigned.</div>
-                    </div>
-                  ) : clinicExercises.map((rec) => (
-                    <ExerciseCard key={rec.id} rec={rec} viewerRole={viewerRole} canEdit={canEdit} canComplete_={canComplete_}
-                      togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
-                      removingId={removingId}
-                      onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
-                      onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
-                  ))}
-
-                  {/* ── Home section ── */}
-                  <div className="ep-section-hd">
-                    <span className="ep-section-pill home">🏠 Home Program</span>
-                    <div className="ep-section-line" />
-                    <span className="ep-section-count">{homeExercises.filter(e => e.completed).length}/{homeExercises.length}</span>
+                  <div className="ep-col-list">
+                    {homeExercises.length === 0 ? (
+                      <div className="ep-empty" style={{ padding: "20px 16px" }}><div className="ep-empty-sub">None assigned.</div></div>
+                    ) : homeExercises.map((rec) => (
+                      <ExerciseCard key={rec.id} rec={rec} viewerRole={viewerRole} canEdit={canEdit} canComplete_={canComplete_}
+                        togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
+                        removingId={removingId}
+                        onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
+                        onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
+                    ))}
                   </div>
-                  {homeExercises.length === 0 ? (
-                    <div className="ep-empty" style={{ padding: "20px 24px" }}>
-                      <div className="ep-empty-sub">No home exercises assigned.</div>
-                    </div>
-                  ) : homeExercises.map((rec) => (
-                    <ExerciseCard key={rec.id} rec={rec} viewerRole={viewerRole} canEdit={canEdit} canComplete_={canComplete_}
-                      togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
-                      removingId={removingId}
-                      onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
-                      onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
-                  ))}
-                </>
-              )
-              : visibleExercises.map((rec) => (
-                <ExerciseCard key={rec.id} rec={rec} viewerRole={viewerRole} canEdit={canEdit} canComplete_={canComplete_}
-                  togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
-                  removingId={removingId}
-                  onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
-                  onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
-              ))}
-        </div>
+                </div>
+              </div>
+            ) : (
+              <div className="ep-list">
+                {(programFilter === "clinic" ? clinicExercises : homeExercises).map((rec) => (
+                  <ExerciseCard key={rec.id} rec={rec} viewerRole={viewerRole} canEdit={canEdit} canComplete_={canComplete_}
+                    togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
+                    removingId={removingId}
+                    onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
+                    onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="ep-list">
+            {visibleExercises.map((rec) => (
+              <ExerciseCard key={rec.id} rec={rec} viewerRole={viewerRole} canEdit={canEdit} canComplete_={canComplete_}
+                togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
+                removingId={removingId}
+                onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
+                onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Library picker modal */}
