@@ -750,6 +750,386 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
 
   const handleCancel = () => { setDraft(doc_data); setEditing(false); };
 
+  // ── Print / PDF ────────────────────────────────────────────────────────────
+  const handlePrint = () => {
+    const data = doc_data;
+
+    const OXFORD = [
+      ["0","No contraction"],["1","Trace / flicker"],["2","Gravity eliminated"],
+      ["3","Against gravity"],["4","Against resistance"],["5","Full normal power"],
+    ];
+
+    const gradeColor = (g: string) => {
+      if (g === "0" || g === "1") return "#ef4444";
+      if (g === "2" || g === "3") return "#f97316";
+      if (g === "4")              return "#eab308";
+      if (g === "5")              return "#22c55e";
+      return "#aaa";
+    };
+
+    const testChip = (result: string) => {
+      if (result === "positive") return `<span style="display:inline-block;font-size:9pt;font-weight:700;padding:1px 8px;border-radius:100px;background:#fee2e2;color:#b91c1c;">Positive +</span>`;
+      if (result === "negative") return `<span style="display:inline-block;font-size:9pt;font-weight:700;padding:1px 8px;border-radius:100px;background:#d1fae5;color:#065f46;">Negative −</span>`;
+      if (result === "unable")   return `<span style="display:inline-block;font-size:9pt;padding:1px 8px;border-radius:100px;background:#f1f5f9;color:#64748b;">N/A</span>`;
+      return `<span style="color:#ccc;font-size:9pt;">—</span>`;
+    };
+
+    const balChip = (r: string) => {
+      if (r === "normal")     return `<span style="display:inline-block;font-size:9pt;padding:1px 8px;border-radius:100px;background:#d1fae5;color:#065f46;">Normal</span>`;
+      if (r === "abnormal")   return `<span style="display:inline-block;font-size:9pt;padding:1px 8px;border-radius:100px;background:#fee2e2;color:#b91c1c;">Abnormal</span>`;
+      if (r === "borderline") return `<span style="display:inline-block;font-size:9pt;padding:1px 8px;border-radius:100px;background:#fef3c7;color:#92400e;">Borderline</span>`;
+      return `<span style="color:#ccc;font-size:9pt;">—</span>`;
+    };
+
+    const cell = (v: string) => v || `<span style="color:#ccc">—</span>`;
+
+    const jointsHtml = JOINT_ORDER.flatMap((jid) => {
+      const jDef = JOINTS[jid];
+      const sides = jDef.bilateral ? ["l","r"] : [""];
+      return sides.map((side) => {
+        const key   = side ? `${jid}_${side}` : jid;
+        const label = side ? `${jDef.label} (${side === "l" ? "Left" : "Right"})` : jDef.label;
+        if (!data.selectedJoints.includes(key)) return "";
+        const jData = data.joints[key] ?? emptyJoint();
+
+        // ROM table
+        const romRows = jDef.motions.map((m) => {
+          const r = jData.rom[m.id] ?? { active:"", passive:"", endFeel:"", pain:"" };
+          const painBg = r.pain === "yes" ? "background:#fff0f0;" : "";
+          return `<tr>
+            <td style="font-weight:500;${painBg}">${m.label}</td>
+            <td style="color:#888;font-style:italic;font-size:8pt;">${m.normal}</td>
+            <td>${cell(r.active)}</td>
+            <td>${cell(r.passive)}</td>
+            <td>${cell(r.endFeel)}</td>
+            <td style="text-align:center;">${r.pain === "yes" ? '<span style="color:#b91c1c;font-weight:700;">✓</span>' : "—"}</td>
+          </tr>`;
+        }).join("");
+
+        // Muscle table
+        const muscleRows = jDef.muscles.map((m) => {
+          const mu = jData.muscles[m.id] ?? { grade:"", force:"" };
+          const col = mu.grade ? gradeColor(mu.grade) : "#ddd";
+          const gradeCell = mu.grade
+            ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:${col};color:#fff;font-weight:700;font-size:11pt;">${mu.grade}</span>`
+            : `<span style="color:#ccc;">—</span>`;
+          return `<tr>
+            <td style="font-weight:500;">${m.label}</td>
+            <td>${gradeCell}</td>
+            <td style="color:#555;font-size:9pt;">${mu.force || "—"}</td>
+          </tr>`;
+        }).join("");
+
+        // Special tests
+        const testCards = jDef.specialTests.map((t) => {
+          const te = jData.tests[t.id] ?? { result:"", notes:"" };
+          const border = te.result === "positive" ? "border:1.5px solid #fca5a5;background:#fff5f5;"
+                       : te.result === "negative" ? "border:1.5px solid #86efac;background:#f0fdf4;"
+                       : "border:1.5px solid #e5e0d8;background:#fafaf8;";
+          return `<div style="${border}border-radius:8px;padding:7px 10px;break-inside:avoid;">
+            <div style="font-size:9pt;font-weight:600;color:#1a1a1a;margin-bottom:5px;">${t.label}</div>
+            ${testChip(te.result)}
+            ${te.notes ? `<div style="font-size:8pt;color:#666;margin-top:4px;">${te.notes}</div>` : ""}
+          </div>`;
+        }).join("");
+
+        // Balance table
+        const balRows = jDef.balanceTests.map((t) => {
+          const be = jData.balance[t.id] ?? { value:"", result:"", notes:"" };
+          return `<tr>
+            <td style="font-weight:500;">${t.label}</td>
+            <td style="color:#888;font-size:8pt;">${t.unit}</td>
+            <td>${cell(be.value)}</td>
+            <td>${balChip(be.result)}</td>
+            <td style="color:#555;font-size:9pt;">${be.notes || "—"}</td>
+          </tr>`;
+        }).join("");
+
+        const hasRomData  = Object.values(jData.rom).some((r) => r.active || r.passive);
+        const posCount    = Object.values(jData.tests).filter((t) => t.result === "positive").length;
+
+        return `
+          <div class="joint-section" style="background:#fff;border:1.5px solid #d0d4dc;border-radius:12px;margin-bottom:14px;overflow:hidden;break-inside:avoid;">
+            <div style="background:linear-gradient(135deg,#0C3C60,#2E8BC0);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
+              <div style="font-family:Georgia,serif;font-size:13pt;font-weight:600;color:#fff;">${label}</div>
+              <div style="display:flex;gap:8px;">
+                ${hasRomData ? `<span style="font-size:9pt;font-weight:600;padding:2px 10px;border-radius:100px;background:rgba(255,255,255,0.2);color:#fff;">${Object.values(jData.rom).filter(r=>r.active||r.passive).length} ROM readings</span>` : ""}
+                ${posCount   ? `<span style="font-size:9pt;font-weight:600;padding:2px 10px;border-radius:100px;background:#ef444460;color:#fff;">${posCount} positive</span>` : ""}
+              </div>
+            </div>
+
+            <div style="padding:12px 14px;">
+              <!-- Meta -->
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+                ${[["Pain (NRS 0–10)","pain"],["Swelling","swelling"],["Local Notes","notes"]].map(([lbl,f])=>`
+                  <div style="background:#f5f7fa;border:1px solid #e5e8ef;border-radius:8px;padding:7px 10px;">
+                    <div style="font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#9a9590;margin-bottom:3px;">${lbl}</div>
+                    <div style="font-size:10pt;font-weight:500;color:#1a1a1a;">${(jData as unknown as Record<string,string>)[f] || "—"}</div>
+                  </div>`).join("")}
+              </div>
+
+              <!-- ROM -->
+              <div class="subsection-label">Range of Motion</div>
+              <table class="data-table">
+                <thead><tr>
+                  <th style="width:28%;">Motion</th>
+                  <th style="width:16%;color:#888;font-style:italic;">Normal</th>
+                  <th style="width:13%;">Active ROM</th>
+                  <th style="width:13%;">Passive ROM</th>
+                  <th style="width:12%;">End Feel</th>
+                  <th style="width:8%;text-align:center;">Pain</th>
+                </tr></thead>
+                <tbody>${romRows}</tbody>
+              </table>
+
+              <!-- Muscle Power -->
+              <div class="subsection-label" style="margin-top:10px;">Muscle Power</div>
+              <table class="data-table">
+                <thead><tr>
+                  <th style="width:40%;">Muscle Group</th>
+                  <th style="width:30%;">Oxford Grade</th>
+                  <th style="width:30%;">Force (kg)</th>
+                </tr></thead>
+                <tbody>${muscleRows}</tbody>
+              </table>
+
+              <!-- Special Tests -->
+              <div class="subsection-label" style="margin-top:10px;">Special Tests</div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;">${testCards}</div>
+
+              <!-- Balance -->
+              <div class="subsection-label" style="margin-top:10px;">Balance & Proprioception</div>
+              <table class="data-table">
+                <thead><tr>
+                  <th style="width:28%;">Test</th>
+                  <th style="width:14%;">Unit</th>
+                  <th style="width:13%;">Value</th>
+                  <th style="width:15%;">Result</th>
+                  <th style="width:30%;">Notes</th>
+                </tr></thead>
+                <tbody>${balRows}</tbody>
+              </table>
+            </div>
+          </div>`;
+      });
+    }).join("");
+
+    const infoItems = [
+      ["Assessment Date", data.date],
+      ["Assessor",        data.assessor],
+      ["Sport / Activity",data.sport],
+      ["Dominant Side",   data.dominantSide || "right"],
+      ["Mechanism of Injury", data.mechanism],
+    ];
+
+    const logoUrl = `${window.location.origin}/physio-logo.svg`;
+    const printDate = new Date().toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" });
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Body Profile — ${patientName}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: 'Outfit', Arial, sans-serif; font-size: 10pt; color: #1a1a1a; background: #fff; }
+
+  @page { size: A4 portrait; margin: 12mm 13mm 14mm 13mm; }
+
+  /* ── Header ── */
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 10px; margin-bottom: 14px;
+    border-bottom: 3px solid #0C3C60;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .clinic-logo { height: 48px; width: auto; }
+  .clinic-name { font-family: 'Playfair Display', Georgia, serif; font-size: 20pt; font-weight: 600; color: #0C3C60; line-height: 1; }
+  .clinic-tagline { font-size: 8pt; color: #2E8BC0; font-weight: 500; letter-spacing: 0.05em; margin-top: 2px; }
+  .doc-badge {
+    text-align: right;
+    background: linear-gradient(135deg,#0C3C60,#2E8BC0);
+    padding: 8px 16px; border-radius: 10px; color: #fff;
+  }
+  .doc-badge-title { font-size: 11pt; font-weight: 700; letter-spacing: 0.02em; }
+  .doc-badge-sub   { font-size: 8pt; opacity: 0.8; margin-top: 2px; }
+
+  /* ── Patient banner ── */
+  .patient-banner {
+    background: #f0f5fa; border: 1.5px solid #d0dae8;
+    border-radius: 10px; padding: 10px 14px; margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .patient-name  { font-family: 'Playfair Display', Georgia, serif; font-size: 16pt; font-weight: 500; color: #0C3C60; }
+  .patient-label { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #2E8BC0; margin-bottom: 2px; }
+  .print-meta    { font-size: 8pt; color: #888; text-align: right; }
+
+  /* ── Info grid ── */
+  .info-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; margin-bottom: 13px;
+  }
+  .info-card {
+    background: #fafaf8; border: 1px solid #e5e0d8; border-radius: 8px; padding: 7px 10px;
+  }
+  .info-label { font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #9a9590; margin-bottom: 3px; }
+  .info-val   { font-size: 10pt; font-weight: 500; color: #1a1a1a; }
+
+  /* ── Oxford legend ── */
+  .oxford-bar {
+    display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+    background: #f0f5fa; border-radius: 8px; padding: 6px 12px; margin-bottom: 12px;
+  }
+  .oxford-bar-title { font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #9a9590; margin-right: 6px; }
+  .oxford-item { font-size: 8pt; color: #5a5550; }
+  .oxford-num  { font-weight: 700; color: #0C3C60; }
+
+  /* ── Subsection label ── */
+  .subsection-label {
+    font-size: 8pt; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: #2E8BC0;
+    border-top: 1.5px solid #e5e8ef; padding-top: 8px; margin-top: 8px; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .subsection-label::before {
+    content: ""; display: inline-block;
+    width: 6px; height: 6px; border-radius: 50%; background: #2E8BC0;
+  }
+
+  /* ── Data table ── */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  .data-table th {
+    background: #eef2f8; font-size: 7.5pt; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.07em; color: #7a8090;
+    padding: 5px 8px; text-align: left; border-bottom: 1.5px solid #d0d4dc;
+  }
+  .data-table td {
+    padding: 5px 8px; border-bottom: 1px solid #f0f2f5; vertical-align: middle;
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:nth-child(even) td { background: #fafbfc; }
+
+  /* ── Impression ── */
+  .impression-section {
+    background: #fff; border: 1.5px solid #d0d4dc; border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 14px; break-inside: avoid;
+  }
+  .impression-title {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 13pt; font-weight: 500; color: #0C3C60; margin-bottom: 8px;
+    border-bottom: 1.5px solid #e5e0d8; padding-bottom: 6px;
+  }
+  .impression-text { font-size: 9.5pt; color: #1a1a1a; line-height: 1.6; white-space: pre-wrap; }
+
+  /* ── Signature row ── */
+  .sig-row {
+    display: flex; gap: 30px; margin-top: 28px;
+    border-top: 1.5px solid #d0d4dc; padding-top: 14px;
+    break-inside: avoid;
+  }
+  .sig-box { flex: 1; }
+  .sig-line { border-bottom: 1.5px solid #555; height: 36px; margin-bottom: 5px; }
+  .sig-label { font-size: 8pt; color: #666; }
+
+  /* ── Footer ── */
+  .page-footer {
+    text-align: center; font-size: 7.5pt; color: #bbb;
+    border-top: 1px solid #eee; margin-top: 20px; padding-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-left">
+      <img src="${logoUrl}" class="clinic-logo" alt="Physio+" />
+      <div>
+        <div class="clinic-name">Physio+</div>
+        <div class="clinic-tagline">Sports & Rehabilitation Centre</div>
+      </div>
+    </div>
+    <div class="doc-badge">
+      <div class="doc-badge-title">Body Profile Sheet</div>
+      <div class="doc-badge-sub">Sports & Athletic Joint Assessment</div>
+    </div>
+  </div>
+
+  <!-- Patient banner -->
+  <div class="patient-banner">
+    <div>
+      <div class="patient-label">Patient</div>
+      <div class="patient-name">${patientName}</div>
+    </div>
+    <div class="print-meta">
+      Printed: ${printDate}<br/>
+      Document generated by Physio+ Hub
+    </div>
+  </div>
+
+  <!-- Info grid -->
+  <div class="info-grid">
+    ${infoItems.filter(([,v])=>v).map(([l,v])=>`
+      <div class="info-card">
+        <div class="info-label">${l}</div>
+        <div class="info-val">${v}</div>
+      </div>`).join("")}
+  </div>
+
+  <!-- Oxford legend -->
+  ${data.selectedJoints.length > 0 ? `
+  <div class="oxford-bar">
+    <span class="oxford-bar-title">Oxford Scale</span>
+    ${OXFORD.map(([n,d])=>`<span class="oxford-item"><span class="oxford-num">${n}</span> = ${d}</span>`).join("")}
+  </div>` : ""}
+
+  <!-- Joint sections -->
+  ${data.selectedJoints.length === 0
+    ? `<div style="text-align:center;padding:40px;color:#aaa;font-size:11pt;border:1.5px dashed #e5e0d8;border-radius:12px;">No joints assessed.</div>`
+    : jointsHtml}
+
+  <!-- Clinical impression -->
+  ${data.impression ? `
+  <div class="impression-section">
+    <div class="impression-title">Clinical Impression &amp; Recommendations</div>
+    <div class="impression-text">${data.impression}</div>
+  </div>` : ""}
+
+  <!-- Signatures -->
+  <div class="sig-row">
+    <div class="sig-box">
+      <div class="sig-line"></div>
+      <div class="sig-label">Assessor Signature &amp; Stamp</div>
+    </div>
+    <div class="sig-box">
+      <div class="sig-line"></div>
+      <div class="sig-label">Patient Signature</div>
+    </div>
+    <div class="sig-box">
+      <div class="sig-line"></div>
+      <div class="sig-label">Date</div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="page-footer">
+    Physio+ Hub · Sports &amp; Athletic Joint Assessment · ${patientName} · ${printDate}
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() { window.print(); }, 400);
+    };
+  </script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) { alert("Pop-up blocked. Please allow pop-ups for this site."); return; }
+    win.document.write(html);
+    win.document.close();
+  };
+
   const d = editing ? draft : doc_data;
 
   const toggleJoint = useCallback((key: string, checked: boolean) => {
@@ -1337,7 +1717,7 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
                 </button>
               </>
             )}
-            <button className="jas-btn jas-btn-print" onClick={() => window.print()}>
+            <button className="jas-btn jas-btn-print" onClick={handlePrint}>
               <Printer size={13} strokeWidth={2} />
               Print / PDF
             </button>

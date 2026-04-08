@@ -50,15 +50,17 @@ const MOODS = [
   { value: 5, emoji: "😄", label: "Great"      },
 ];
 
-// Time-of-day buckets — we split exercises into Morning / Afternoon / Evening
-// based on a `timeOfDay` field; if absent, default to "Morning".
-const TIME_BUCKETS = ["Morning", "Afternoon", "Evening"] as const;
-type TimeBucket = typeof TIME_BUCKETS[number];
+const PROGRAM_BUCKETS = ["home", "clinic"] as const;
+type ProgramBucket = typeof PROGRAM_BUCKETS[number];
 
-const BUCKET_ICON: Record<TimeBucket, string> = {
-  Morning:   "🌅",
-  Afternoon: "☀️",
-  Evening:   "🌙",
+const BUCKET_LABEL: Record<ProgramBucket, string> = {
+  home:   "Home Exercises",
+  clinic: "Clinic Exercises",
+};
+
+const BUCKET_ICON: Record<ProgramBucket, string> = {
+  home:   "🏠",
+  clinic: "🏥",
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -81,10 +83,8 @@ function formatApptShort(dateStr: string, hour: number): string {
   return `${parseInt(d, 10)} ${MONTH_NAMES[parseInt(m, 10) - 1] ?? ""} · ${fmtHour(hour)}`;
 }
 
-function bucketFor(ex: PatientExercise): TimeBucket {
-  if (ex.timeOfDay === "Afternoon") return "Afternoon";
-  if (ex.timeOfDay === "Evening")   return "Evening";
-  return "Morning";
+function bucketFor(ex: PatientExercise): ProgramBucket {
+  return ex.programType === "home" ? "home" : "clinic";
 }
 
 const PAIN_COLORS = ["#22c55e","#4ade80","#86efac","#fde047","#facc15","#fb923c","#f97316","#ef4444","#dc2626","#b91c1c","#7f1d1d"];
@@ -161,9 +161,6 @@ function ExCard({
               ex.reps  && `${ex.reps} reps`,
               ex.holdTime && `${ex.holdTime}s hold`,
             ].filter(Boolean).join(" · ")}
-            {ex.programType === "home" && (
-              <span className="pth-ex-badge-home">Home</span>
-            )}
           </div>
         </div>
 
@@ -334,8 +331,8 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
   const completedEx   = exercises.filter((e) => e.completed ?? false);
   const completionPct = exercises.length > 0 ? Math.round((completedEx.length / exercises.length) * 100) : 0;
 
-  // Group exercises by time bucket
-  const byBucket: Record<TimeBucket, PatientExercise[]> = { Morning: [], Afternoon: [], Evening: [] };
+  // Group exercises by program type
+  const byBucket: Record<ProgramBucket, PatientExercise[]> = { home: [], clinic: [] };
   exercises.forEach((ex) => { byBucket[bucketFor(ex)].push(ex); });
 
   const { current: streak, best: bestStreak, last7 } = calcStreak(streakDates);
@@ -589,7 +586,7 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
             No exercises assigned yet.
           </div>
         ) : (
-          TIME_BUCKETS.map((bucket) => {
+          PROGRAM_BUCKETS.map((bucket) => {
             const exs = byBucket[bucket];
             if (exs.length === 0) return null;
             const doneCount = exs.filter((e) => e.completed).length;
@@ -598,7 +595,7 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
               <div key={bucket} className="pth-ex-section">
                 <div className="pth-ex-section-hd">
                   <div className="pth-ex-section-icon">{BUCKET_ICON[bucket]}</div>
-                  <span className="pth-ex-section-name">{bucket}</span>
+                  <span className="pth-ex-section-name">{BUCKET_LABEL[bucket]}</span>
                   <span className={`pth-ex-section-count${allDone ? " complete" : ""}`}>
                     {allDone ? "✓ All done" : `${doneCount}/${exs.length}`}
                   </span>
