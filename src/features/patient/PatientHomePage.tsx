@@ -55,12 +55,6 @@ const MOODS = [
 const TIME_BUCKETS = ["Morning", "Afternoon", "Evening"] as const;
 type TimeBucket = typeof TIME_BUCKETS[number];
 
-const BUCKET_GRADIENT: Record<TimeBucket, string> = {
-  Morning:   "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
-  Afternoon: "linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)",
-  Evening:   "linear-gradient(135deg, #0C3C60 0%, #2E8BC0 100%)",
-};
-
 const BUCKET_ICON: Record<TimeBucket, string> = {
   Morning:   "🌅",
   Afternoon: "☀️",
@@ -143,57 +137,59 @@ function ExCard({
   ex: PatientExercise;
   onComplete: (id: string, val: boolean) => void;
 }) {
-  const bucket = bucketFor(ex);
-  const grad   = BUCKET_GRADIENT[bucket];
+  const [expanded, setExpanded] = useState(false);
+  const done = ex.completed ?? false;
 
   return (
-    <div style={{
-      flexShrink: 0,
-      width: 200,
-      borderRadius: 18,
-      overflow: "hidden",
-      background: grad,
-      position: "relative",
-      display: "flex",
-      flexDirection: "column",
-    }}>
-      {/* Main content */}
-      <div style={{ padding: "16px 16px 10px", flex: 1 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.65)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
-          {ex.programType === "home" ? "Home" : "Clinic"}
-        </div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", lineHeight: 1.25, marginBottom: 4 }}>
-          {ex.name}
-        </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", lineHeight: 1.4 }}>
-          {[ex.sets && `${ex.sets} sets`, ex.reps && `${ex.reps} reps`, ex.holdTime && `${ex.holdTime}s hold`].filter(Boolean).join(" · ") || "See instructions"}
-        </div>
-        {ex.notes && (
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 6, lineHeight: 1.4 }}>
-            {ex.notes}
-          </div>
-        )}
-      </div>
-
-      {ex.videoId && (
-        <VideoEmbed videoId={ex.videoId} wrapperStyle={{ padding: "0 16px 6px" }} />
-      )}
-
-      {/* Complete button only */}
-      <div style={{ padding: "8px 16px 14px" }}>
+    <div className={`pth-ex-card${done ? " pth-ex-card-done" : ""}`}>
+      <div className="pth-ex-card-row" onClick={() => setExpanded((v) => !v)}>
+        {/* Checkbox */}
         <button
-          onClick={() => onComplete(ex.id, !(ex.completed ?? false))}
-          title={ex.completed ? "Mark incomplete" : "Mark complete"}
-          style={{
-            width: 36, height: 36, borderRadius: "50%", border: "none",
-            background: ex.completed ? "#fbbf24" : "rgba(255,255,255,0.18)",
-            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-            transition: "all 0.15s",
-          }}
+          className={`pth-ex-check${done ? " pth-ex-check-done" : ""}`}
+          onClick={(e) => { e.stopPropagation(); onComplete(ex.id, !done); }}
+          title={done ? "Mark incomplete" : "Mark complete"}
         >
-          <Check size={16} strokeWidth={3} color={ex.completed ? "#fff" : "rgba(255,255,255,0.85)"} />
+          {done && <Check size={13} strokeWidth={3} color="#fff" />}
         </button>
+
+        {/* Info */}
+        <div className="pth-ex-info">
+          <div className="pth-ex-name">{ex.name}</div>
+          <div className="pth-ex-meta">
+            {[
+              ex.sets  && `${ex.sets} sets`,
+              ex.reps  && `${ex.reps} reps`,
+              ex.holdTime && `${ex.holdTime}s hold`,
+            ].filter(Boolean).join(" · ")}
+            {ex.programType === "home" && (
+              <span className="pth-ex-badge-home">Home</span>
+            )}
+          </div>
+        </div>
+
+        {/* Expand chevron */}
+        <svg
+          width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          style={{ color: "#c0bbb4", flexShrink: 0, transition: "transform 0.2s", transform: expanded ? "rotate(180deg)" : "none" }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
       </div>
+
+      {expanded && (
+        <div className="pth-ex-expanded">
+          {ex.notes && (
+            <div className="pth-ex-notes">{ex.notes}</div>
+          )}
+          {ex.videoId && (
+            <VideoEmbed videoId={ex.videoId} wrapperStyle={{ marginTop: 10 }} />
+          )}
+          {!ex.videoId && !ex.notes && (
+            <div style={{ fontSize: 12, color: "#b0aca6" }}>No additional details.</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -407,18 +403,57 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
         /* ── Exercise section ── */
         .pth-ex-section { margin-bottom:22px; }
         .pth-ex-section-hd {
-          display:flex; align-items:center; gap:8px; margin-bottom:12px;
+          display:flex; align-items:center; gap:8px; margin-bottom:10px;
         }
-        .pth-ex-section-icon { font-size:18px; }
-        .pth-ex-section-name { font-size:17px; font-weight:700; color:#1a1a1a; }
-        .pth-ex-section-count { font-size:12px; color:#9a9590; margin-left:auto; }
-        .pth-ex-scroll {
-          display:flex; gap:12px; overflow-x:auto; padding:4px 2px 12px;
-          scroll-snap-type:x mandatory; scrollbar-width:none;
+        .pth-ex-section-icon {
+          width:30px; height:30px; border-radius:8px; font-size:14px;
+          display:flex; align-items:center; justify-content:center;
+          background:#f0ede8; flex-shrink:0;
         }
-        .pth-ex-scroll::-webkit-scrollbar { display:none; }
-        .pth-ex-scroll > * { scroll-snap-align:start; }
-        .pth-ex-empty { font-size:13px; color:#b0aca6; padding:12px 0; }
+        .pth-ex-section-name { font-size:15px; font-weight:700; color:#1a1a1a; }
+        .pth-ex-section-count {
+          font-size:11px; font-weight:600; color:#9a9590;
+          background:#f0ede8; padding:2px 8px; border-radius:100px; margin-left:auto;
+        }
+        .pth-ex-section-count.complete { background:#d1fae5; color:#065f46; }
+        .pth-ex-list { display:flex; flex-direction:column; gap:8px; }
+
+        /* Exercise card */
+        .pth-ex-card {
+          background:#fff; border:1.5px solid #e5e0d8; border-radius:14px;
+          overflow:hidden; transition:border-color 0.15s;
+        }
+        .pth-ex-card-done { background:#fafaf8; border-color:#e5e0d8; }
+        .pth-ex-card:hover { border-color:#B3DEF0; }
+        .pth-ex-card-row {
+          display:flex; align-items:center; gap:12px;
+          padding:13px 14px; cursor:pointer;
+        }
+        .pth-ex-check {
+          width:26px; height:26px; border-radius:50%; flex-shrink:0;
+          border:2px solid #e5e0d8; background:#fff;
+          display:flex; align-items:center; justify-content:center;
+          cursor:pointer; transition:all 0.15s;
+        }
+        .pth-ex-check:hover { border-color:#2E8BC0; }
+        .pth-ex-check-done { background:#2E8BC0; border-color:#2E8BC0; }
+        .pth-ex-info { flex:1; min-width:0; }
+        .pth-ex-name {
+          font-size:14px; font-weight:600; color:#1a1a1a; margin-bottom:2px;
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+        .pth-ex-card-done .pth-ex-name { color:#9a9590; text-decoration:line-through; }
+        .pth-ex-meta { font-size:12px; color:#9a9590; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+        .pth-ex-badge-home {
+          font-size:10px; font-weight:700; padding:1px 7px; border-radius:100px;
+          background:#d1fae5; color:#065f46; text-transform:uppercase; letter-spacing:0.04em;
+        }
+        .pth-ex-expanded {
+          padding:0 14px 14px 52px;
+        }
+        .pth-ex-notes {
+          font-size:13px; color:#5a5550; line-height:1.5;
+        }
 
         /* ── Stats row ── */
         .pth-stats-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px; }
@@ -544,22 +579,31 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
 
         {/* ── Exercise sections by time of day ── */}
         {exLoading ? (
-          <div style={{ display: "flex", gap: 12, overflow: "hidden", marginBottom: 22 }}>
-            {[1,2].map((n) => <div key={n} style={{ flexShrink: 0, width: 200, height: 160, borderRadius: 18, background: "linear-gradient(90deg,#e5e0d8 0%,#f0ede8 50%,#e5e0d8 100%)", backgroundSize: "200% 100%", animation: "pthShimmer 1.4s ease infinite" }} />)}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 22 }}>
+            {[1,2,3].map((n) => (
+              <div key={n} style={{ height: 64, borderRadius: 14, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "pthShimmer 1.4s ease infinite" }} />
+            ))}
+          </div>
+        ) : exercises.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "28px 0 22px", color: "#b0aca6", fontSize: 14 }}>
+            No exercises assigned yet.
           </div>
         ) : (
           TIME_BUCKETS.map((bucket) => {
             const exs = byBucket[bucket];
             if (exs.length === 0) return null;
-            const done = exs.filter((e) => e.completed).length;
+            const doneCount = exs.filter((e) => e.completed).length;
+            const allDone   = doneCount === exs.length;
             return (
               <div key={bucket} className="pth-ex-section">
                 <div className="pth-ex-section-hd">
-                  <span className="pth-ex-section-icon">{BUCKET_ICON[bucket]}</span>
+                  <div className="pth-ex-section-icon">{BUCKET_ICON[bucket]}</div>
                   <span className="pth-ex-section-name">{bucket}</span>
-                  <span className="pth-ex-section-count">{done}/{exs.length} done</span>
+                  <span className={`pth-ex-section-count${allDone ? " complete" : ""}`}>
+                    {allDone ? "✓ All done" : `${doneCount}/${exs.length}`}
+                  </span>
                 </div>
-                <div className="pth-ex-scroll">
+                <div className="pth-ex-list">
                   {exs.map((ex) => (
                     <ExCard key={ex.id} ex={ex} onComplete={handleComplete} />
                   ))}
