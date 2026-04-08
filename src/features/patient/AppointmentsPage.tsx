@@ -357,6 +357,7 @@ export default function AppointmentsPage() {
           cursor: pointer; transition: all 0.15s; min-height: 44px;
           font-family: 'Outfit', sans-serif; color: #1a1a1a; background: #fff;
           display: flex; align-items: center; justify-content: center;
+          user-select: none; -webkit-user-select: none;
         }
         .ap-slot:hover:not(.unavailable) { border-color: #5BC0BE; color: #2E8BC0; }
         .ap-slot.selected   { background: #2E8BC0; border-color: #2E8BC0; color: #fff; }
