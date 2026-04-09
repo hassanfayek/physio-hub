@@ -30,7 +30,7 @@ import TreatmentProtocolsPage from "../protocols/TreatmentProtocolsPage";
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
-type Tab = "overview" | "patients" | "team" | "schedule" | "exercises" | "reports" | "billing" | "protocols";
+type Tab = "overview" | "patients" | "people" | "schedule" | "exercises" | "reports" | "billing" | "protocols";
 
 interface TabDef {
   id:    Tab;
@@ -46,7 +46,6 @@ function IconExercises() { return <Dumbbell size={18} strokeWidth={1.8} color="c
 function IconReports()   { return <BarChart2 size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconBilling()   { return <Receipt size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconProtocols() { return <BookOpen size={18} strokeWidth={1.8} color="currentColor" />; }
-function IconTeam()      { return <Users size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconAdd()       { return <Plus size={14} strokeWidth={2.5} color="currentColor" />; }
 
 // ─── Team tab (manager only) ─────────────────────────────────────────────────
@@ -505,6 +504,50 @@ function TeamTab() {
   );
 }
 
+// ─── People tab (manager only — combines Patients + Team) ────────────────────
+
+interface PeopleTabProps {
+  physioId:      string;
+  isManager:     boolean;
+  isSenior:      boolean;
+  isSecretary:   boolean;
+  onViewPatient: (id: string) => void;
+}
+
+function PeopleTab({ physioId, isManager, isSenior, isSecretary, onViewPatient }: PeopleTabProps) {
+  const [sub, setSub] = React.useState<"patients" | "team">("patients");
+  return (
+    <>
+      <style>{`
+        .ppt-toggle {
+          display: inline-flex; background: #f0ede8; border-radius: 10px;
+          padding: 3px; gap: 3px; margin-bottom: 18px;
+        }
+        .ppt-pill {
+          padding: 7px 20px; border-radius: 8px; border: none;
+          font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 500;
+          cursor: pointer; transition: all 0.15s; color: #9a9590; background: transparent;
+        }
+        .ppt-pill.active { background: #fff; color: #1a1a1a; box-shadow: 0 1px 4px rgba(0,0,0,0.10); }
+      `}</style>
+      <div className="ppt-toggle">
+        <button className={`ppt-pill${sub === "patients" ? " active" : ""}`} onClick={() => setSub("patients")}>Patients</button>
+        <button className={`ppt-pill${sub === "team"     ? " active" : ""}`} onClick={() => setSub("team")}>Team</button>
+      </div>
+      {sub === "patients" && (
+        <PatientsTab
+          physioId={physioId}
+          isManager={isManager}
+          isSenior={isSenior}
+          isSecretary={isSecretary}
+          onViewPatient={onViewPatient}
+        />
+      )}
+      {sub === "team" && <TeamTab />}
+    </>
+  );
+}
+
 // ─── Overview tab ─────────────────────────────────────────────────────────────
 
 // ─── Status display helper ─────────────────────────────────────────────────────
@@ -844,8 +887,10 @@ export default function PhysioDashboard() {
 
   const TABS: TabDef[] = [
     { id: "overview",  label: t("nav.overview"),       icon: <IconOverview /> },
-    { id: "patients",  label: t("nav.patients"),       icon: <IconPatients /> },
-    ...(isManager ? [{ id: "team" as Tab, label: t("nav.team"), icon: <IconTeam /> }] : []),
+    ...(isManager
+      ? [{ id: "people" as Tab, label: "People", icon: <IconPatients /> }]
+      : [{ id: "patients" as Tab, label: t("nav.patients"), icon: <IconPatients /> }]
+    ),
     { id: "schedule",  label: t("nav.schedule"),       icon: <IconSchedule /> },
     ...(!isSecretary ? [{ id: "exercises" as Tab, label: t("nav.exercises.lib"), icon: <IconExercises /> }] : []),
     ...(!isSecretary ? [{ id: "reports"   as Tab, label: t("nav.reports"),       icon: <IconReports /> }]   : []),
@@ -1222,8 +1267,17 @@ export default function PhysioDashboard() {
             ) : (
               <>
                 {activeTab === "overview"  && <OverviewTab physio={physio} isManager={isManager} isSenior={isSenior} isSecretary={isSecretary} onViewPatient={(id) => setViewingPatientId(id)} />}
-                {activeTab === "patients"  && (
+                {activeTab === "patients"  && !isManager && (
                   <PatientsTab
+                    physioId={physio.uid}
+                    isManager={isManager}
+                    isSenior={isSenior}
+                    isSecretary={isSecretary}
+                    onViewPatient={(id) => setViewingPatientId(id)}
+                  />
+                )}
+                {activeTab === "people" && isManager && (
+                  <PeopleTab
                     physioId={physio.uid}
                     isManager={isManager}
                     isSenior={isSenior}
@@ -1243,7 +1297,6 @@ export default function PhysioDashboard() {
                     onViewPatientSection={(id, section) => { setViewingPatientSection(section); setViewingPatientId(id); }}
                   />
                 )}
-                {activeTab === "team"      && isManager && <TeamTab />}
                 {activeTab === "exercises" && !isSecretary && (
                   <ExerciseLibraryPage
                     physioId={physio.uid}
