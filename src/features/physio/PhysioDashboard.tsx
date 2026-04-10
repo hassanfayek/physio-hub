@@ -122,6 +122,7 @@ function TeamTab() {
       });
       await updateDoc(doc(db, "users", editingPhysio.uid), {
         displayName,
+        role:      editForm.rank === "manager" ? "clinic_manager" : "physiotherapist",
         updatedAt: serverTimestamp(),
       });
       setEditingPhysio(null);
