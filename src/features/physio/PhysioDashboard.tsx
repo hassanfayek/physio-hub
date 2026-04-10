@@ -242,6 +242,7 @@ function TeamTab() {
         .tm-rank-senior  { background: #fef3c7; color: #92400e; }
         .tm-rank-junior  { background: #D6EEF8; color: #0C3C60; }
         .tm-rank-trainee { background: #f3f4f6; color: #374151; }
+        .tm-rank-manager { background: #ede9fe; color: #5b21b6; }
 
         /* Modal */
         .tm-modal-overlay {
@@ -467,6 +468,7 @@ function TeamTab() {
               <select className="tm-input" value={editForm.rank}
                 onChange={(e) => setEditForm({ ...editForm, rank: e.target.value })}
                 style={{ cursor: "pointer" }}>
+                <option value="manager">Manager (Full Access)</option>
                 <option value="senior">Senior Physiotherapist</option>
                 <option value="junior">Junior Physiotherapist</option>
                 <option value="trainee">Trainee Physiotherapist</option>
@@ -878,7 +880,8 @@ export default function PhysioDashboard() {
       getDoc(doc(db, "physiotherapists", user.uid)).then((snap) => {
         if (snap.exists()) {
           const rank = snap.data().rank as string | undefined;
-          setIsSenior(rank === "senior");
+          setIsSenior(rank === "senior" || rank === "manager");
+          if (rank === "manager") setIsManager(true);
         }
       });
     }

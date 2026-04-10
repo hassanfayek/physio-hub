@@ -40,7 +40,7 @@ export interface Patient {
   hideBodyProfile?: boolean;
 }
 
-export type PhysioRank = "senior" | "junior" | "trainee";
+export type PhysioRank = "manager" | "senior" | "junior" | "trainee";
 
 export interface Physiotherapist {
   uid:             string;
