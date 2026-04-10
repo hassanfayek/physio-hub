@@ -172,12 +172,37 @@ export function subscribeToEnrollments(
 
 // ─── Program CRUD ─────────────────────────────────────────────────────────────
 
+// Firestore rejects `undefined` — strip optional fields that were never set.
+function sanitiseExercise(ex: RehabExercise): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    id:       ex.id,
+    name:     ex.name,
+    sets:     ex.sets,
+    reps:     ex.reps,
+    duration: ex.duration,
+    rest:     ex.rest,
+    notes:    ex.notes,
+  };
+  if (ex.exerciseId !== undefined) out.exerciseId = ex.exerciseId;
+  if (ex.videoId    !== undefined) out.videoId    = ex.videoId;
+  return out;
+}
+
+function sanitiseDays(days: DayPlan[]): Record<string, unknown>[] {
+  return days.map((d) => ({
+    day:       d.day,
+    isRest:    d.isRest,
+    exercises: d.exercises.map(sanitiseExercise),
+  }));
+}
+
 export async function createProgram(
   payload: Omit<WeeklyProgram, "id" | "createdAt">,
 ): Promise<{ id: string; error?: never } | { id?: never; error: string }> {
   try {
     const ref = await addDoc(collection(db, "onlineRehabPrograms"), {
       ...payload,
+      days:      sanitiseDays(payload.days),
       createdAt: serverTimestamp(),
     });
     return { id: ref.id };
@@ -193,6 +218,7 @@ export async function updateProgram(
   try {
     await updateDoc(doc(db, "onlineRehabPrograms", id), {
       ...payload,
+      ...(payload.days ? { days: sanitiseDays(payload.days) } : {}),
       updatedAt: serverTimestamp(),
     });
     return {};
