@@ -119,8 +119,9 @@ function docToPhysio(id: string, data: Record<string, unknown>): Physiotherapist
     licenseNumber:   (data.licenseNumber   as string)   ?? "",
     phone:           (data.phone           as string)   ?? "",
     specializations: (data.specializations as string[]) ?? [],
-    rank:            ((data.rank as string) === "junior" ? "junior"
+    rank:            ((data.rank as string) === "junior"  ? "junior"
                    : (data.rank as string) === "trainee" ? "trainee"
+                   : (data.rank as string) === "manager" ? "manager"
                    : "senior") as PhysioRank,
   };
 }
