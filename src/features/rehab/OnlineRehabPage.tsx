@@ -1,7 +1,7 @@
 // FILE: src/features/rehab/OnlineRehabPage.tsx
 // Online rehabilitation — assign patients, build & print weekly exercise programs.
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeft, Plus, Trash2, Printer, ChevronDown, Pencil, X } from "lucide-react";
 import {
   subscribeToEnrollments, enrollPatient, deleteEnrollment, updateEnrollmentStatus,
@@ -710,7 +710,7 @@ export default function OnlineRehabPage({
       assignedByName: physioName,
       notes:          enrollNotes,
     });
-    if ("error" in result) { setEnrollErr(result.error); setEnrollSaving(false); return; }
+    if ("error" in result) { setEnrollErr(result.error ?? null); setEnrollSaving(false); return; }
     setShowEnroll(false);
     setEnrollTarget(null); setEnrollSearch(""); setEnrollNotes("");
     setEnrollSaving(false);
