@@ -168,6 +168,17 @@ service cloud.firestore {
       allow delete:        if isManager();
     }
 
+    // ── Online Rehabilitation ─────────────────────────────────────────────────
+    match /onlineRehabEnrollments/{docId} {
+      allow read:  if isStaff();
+      allow write: if isManager() || isPhysio();
+    }
+
+    match /onlineRehabPrograms/{docId} {
+      allow read:  if isStaff();
+      allow write: if isManager() || isPhysio();
+    }
+
     // ── WhatsApp Sessions ─────────────────────────────────────────────────────
     // Doc ID: normalized phone number — stores conversation history
     // Only Cloud Functions (admin SDK) write here; no client access needed.
