@@ -244,11 +244,15 @@ export function subscribeToPatientPrograms(
   const q = query(
     collection(db, "onlineRehabPrograms"),
     where("patientId", "==", patientId),
-    orderBy("createdAt", "desc"),
   );
   return onSnapshot(
     q,
-    (snap) => onData(snap.docs.map((d) => docToProgram(d.id, d.data()))),
+    (snap) => {
+      const sorted = snap.docs
+        .map((d) => docToProgram(d.id, d.data()))
+        .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0));
+      onData(sorted);
+    },
     (err)  => onError?.(err),
   );
 }
