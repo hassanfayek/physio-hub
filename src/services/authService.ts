@@ -470,11 +470,9 @@ export async function registerSecretary(
 
   await updateProfile(user, { displayName });
 
-  const secondaryApp = secondaryAuth.app;
-  const secondaryDb  = getFirestore(secondaryApp);
   const now = serverTimestamp();
 
-  await setDoc(doc(secondaryDb, "users", user.uid), {
+  await setDoc(doc(db, "users", user.uid), {
     email:       data.email,
     role:        "secretary" as UserRole,
     displayName,
@@ -482,7 +480,7 @@ export async function registerSecretary(
     updatedAt:   now,
   });
 
-  await setDoc(doc(secondaryDb, "secretaries", user.uid), {
+  await setDoc(doc(db, "secretaries", user.uid), {
     firstName: data.firstName,
     lastName:  data.lastName,
     phone:     data.phone,
