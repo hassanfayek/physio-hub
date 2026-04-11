@@ -1149,7 +1149,8 @@ export default function PhysioDashboard() {
         @media (max-width: 768px) {
           .phd-body { grid-template-columns: 1fr; }
           .phd-sidebar { display: none !important; }
-          .phd-logout-btn { display: none; }
+          .phd-logout-btn { padding: 8px; }
+          .phd-logout-btn .phd-logout-text { display: none; }
           .phd-user-name { max-width: 90px; }
           .phd-user-chip { padding: 5px 10px; }
           .phd-main { padding: 14px 12px 80px; }
@@ -1217,7 +1218,7 @@ export default function PhysioDashboard() {
             </button>
             <button className="phd-logout-btn" onClick={() => setShowSignOutConfirm(true)}>
               <LogOut size={13} strokeWidth={2} color="currentColor" />
-              {t("common.signOut")}
+              <span className="phd-logout-text">{t("common.signOut")}</span>
             </button>
           </div>
         </header>

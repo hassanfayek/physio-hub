@@ -136,6 +136,7 @@ export default function PatientDashboard() {
           min-height: 44px;
           cursor: pointer;
           transition: all 0.15s;
+          display: flex; align-items: center; gap: 6px;
         }
         .pd2-logout:hover { border-color: #fca5a5; color: #b91c1c; background: #fff5f5; }
 
@@ -319,7 +320,8 @@ export default function PatientDashboard() {
         @media (max-width: 768px) {
           .pd2-body { grid-template-columns: 1fr; }
           .pd2-sidebar { display: none !important; }
-          .pd2-logout { display: none; }
+          .pd2-logout { padding: 8px; min-height: 36px; }
+          .pd2-logout-text { display: none; }
           .pd2-user-name { max-width: 90px; }
 
           .pd2-main { padding: 14px 12px 80px; }
@@ -377,7 +379,10 @@ export default function PatientDashboard() {
             <button className="lang-toggle" onClick={toggleLang} title="Switch language">
               {lang === "en" ? "🌐 العربية" : "🌐 English"}
             </button>
-            <button className="pd2-logout" onClick={() => setShowSignOutConfirm(true)}>Sign out</button>
+            <button className="pd2-logout" onClick={() => setShowSignOutConfirm(true)}>
+              <LogOut size={15} strokeWidth={2} color="currentColor" style={{ flexShrink: 0 }} />
+              <span className="pd2-logout-text">Sign out</span>
+            </button>
           </div>
         </header>
 
