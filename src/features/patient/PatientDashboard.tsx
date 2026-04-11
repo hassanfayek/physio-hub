@@ -34,6 +34,8 @@ export default function PatientDashboard() {
   const navigate = useNavigate();
   const { lang, toggleLang, t } = useLang();
 
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+
   const handleLogout = async () => {
     await logout();
     navigate("/", { replace: true });
@@ -135,7 +137,36 @@ export default function PatientDashboard() {
           cursor: pointer;
           transition: all 0.15s;
         }
-        .pd2-logout:hover { border-color: #c0bbb4; color: #5a5550; }
+        .pd2-logout:hover { border-color: #fca5a5; color: #b91c1c; background: #fff5f5; }
+
+        .pd2-signout-overlay {
+          position: fixed; inset: 0; z-index: 500;
+          background: rgba(0,0,0,0.4); backdrop-filter: blur(3px);
+          display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .pd2-signout-dialog {
+          background: #fff; border-radius: 18px; padding: 28px 28px 22px;
+          width: min(360px, 100%); box-shadow: 0 24px 80px rgba(0,0,0,0.18);
+          animation: pd2SOIn 0.2s cubic-bezier(0.16,1,0.3,1) both;
+          text-align: center;
+        }
+        @keyframes pd2SOIn { from { opacity:0; transform:scale(0.93) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        .pd2-signout-icon  { font-size: 36px; margin-bottom: 12px; }
+        .pd2-signout-title { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 500; color: #1a1a1a; margin-bottom: 6px; }
+        .pd2-signout-sub   { font-size: 13.5px; color: #9a9590; margin-bottom: 22px; }
+        .pd2-signout-btns  { display: flex; gap: 10px; }
+        .pd2-signout-cancel {
+          flex: 1; padding: 11px; border-radius: 10px; border: 1.5px solid #e5e0d8;
+          background: #fff; font-family: 'Outfit', sans-serif; font-size: 14px;
+          color: #5a5550; cursor: pointer; transition: background 0.15s;
+        }
+        .pd2-signout-cancel:hover { background: #f5f3ef; }
+        .pd2-signout-confirm {
+          flex: 1; padding: 11px; border-radius: 10px; border: none;
+          background: #b91c1c; color: #fff; font-family: 'Outfit', sans-serif;
+          font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s;
+        }
+        .pd2-signout-confirm:hover { background: #991b1b; }
 
         /* ── BODY LAYOUT ── */
         .pd2-body {
@@ -312,7 +343,6 @@ export default function PatientDashboard() {
           }
           .pd2-bn-item:hover { color: #2E8BC0; }
           .pd2-bn-item.active { color: #2E8BC0; }
-          .pd2-bn-item.signout:hover { color: #b91c1c; }
           .pd2-bn-icon {
             width: 26px; height: 26px; border-radius: 8px;
             display: flex; align-items: center; justify-content: center;
@@ -347,7 +377,7 @@ export default function PatientDashboard() {
             <button className="lang-toggle" onClick={toggleLang} title="Switch language">
               {lang === "en" ? "🌐 العربية" : "🌐 English"}
             </button>
-            <button className="pd2-logout" onClick={handleLogout}>Sign out</button>
+            <button className="pd2-logout" onClick={() => setShowSignOutConfirm(true)}>Sign out</button>
           </div>
         </header>
 
@@ -441,12 +471,22 @@ export default function PatientDashboard() {
               </button>
             );
           })}
-          <button className="pd2-bn-item signout" onClick={handleLogout}>
-            <div className="pd2-bn-icon"><LogOut size={18} strokeWidth={1.8} color="currentColor" /></div>
-            <span className="pd2-bn-label">Sign Out</span>
-          </button>
         </nav>
       </div>
+
+      {showSignOutConfirm && (
+        <div className="pd2-signout-overlay" onClick={() => setShowSignOutConfirm(false)}>
+          <div className="pd2-signout-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="pd2-signout-icon">👋</div>
+            <div className="pd2-signout-title">Sign out?</div>
+            <div className="pd2-signout-sub">You'll be returned to the login screen.</div>
+            <div className="pd2-signout-btns">
+              <button className="pd2-signout-cancel" onClick={() => setShowSignOutConfirm(false)}>Cancel</button>
+              <button className="pd2-signout-confirm" onClick={handleLogout}>Sign Out</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

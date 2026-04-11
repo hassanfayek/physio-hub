@@ -31,6 +31,7 @@ export default function AddPatientModal({
   const [occupation,  setOccupation]  = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [phone,       setPhone]       = useState("");
+  const [referredBy,  setReferredBy]  = useState("");
   const [assignedPhysioId, setAssignedPhysioId] = useState(physioId);
 
   const [loading, setLoading] = useState(false);
@@ -66,6 +67,7 @@ export default function AddPatientModal({
       physioId:   isManager ? assignedPhysioId : physioId,
       dateOfBirth,
       phone,
+      referredBy: referredBy.trim(),
     };
 
     const result = await createPatient(payload);
@@ -321,6 +323,12 @@ export default function AddPatientModal({
                   <label className="apm-label">Occupation</label>
                   <input className="apm-input" placeholder="e.g. Teacher, Engineer…" value={occupation}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setOccupation(e.target.value)} />
+                </div>
+
+                <div className="apm-field">
+                  <label className="apm-label">Referred By</label>
+                  <input className="apm-input" placeholder="e.g. Dr. Ahmed, Google, Word of mouth…" value={referredBy}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setReferredBy(e.target.value)} />
                 </div>
 
                 {isManager && (

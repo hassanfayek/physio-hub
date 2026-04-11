@@ -283,6 +283,7 @@ interface PatientExtProfile {
   emergencyContact: string;
   emergencyPhone:   string;
   notes:        string;
+  referredBy:   string;
 }
 
 const EMPTY_EXT: PatientExtProfile = {
@@ -295,6 +296,7 @@ const EMPTY_EXT: PatientExtProfile = {
   emergencyContact: "",
   emergencyPhone:   "",
   notes:            "",
+  referredBy:       "",
 };
 
 // ─── Diagnosis data structure ────────────────────────────────────────────────
@@ -450,7 +452,12 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       (snap) => {
         if (snap.exists()) {
           const d = snap.data() as Partial<PatientExtProfile>;
-          const filled: PatientExtProfile = { ...EMPTY_EXT, ...d };
+          // Seed referredBy from the patients doc if not yet saved in the profile
+          const filled: PatientExtProfile = {
+            ...EMPTY_EXT,
+            ...d,
+            referredBy: d.referredBy ?? (patient?.referredBy ?? ""),
+          };
           setExtProfile(filled);
           setExtDraft(filled);
         }
@@ -1855,6 +1862,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                 { key: "Gender",            val: extProfile.gender       },
                 { key: "Occupation",        val: extProfile.occupation   },
                 { key: "Nationality",       val: extProfile.nationality  },
+                { key: "Referred By",       val: extProfile.referredBy   },
               ].map(({ key, val }) => (
                 <div key={key} className="ps-profile-card">
                   <div className="ps-profile-key">{key}</div>
@@ -1958,6 +1966,12 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                 </div>
               </div>
               <div className="ps-field-row-2">
+                <div className="ps-field-group">
+                  <label className="ps-field-label">Referred By</label>
+                  <input className="ps-field-input" value={extDraft.referredBy}
+                    onChange={(e) => setExtDraft({ ...extDraft, referredBy: e.target.value })}
+                    placeholder="e.g. Dr. Ahmed, Google, Word of mouth…" />
+                </div>
                 {isManager && (
                   <div className="ps-field-group">
                     <label className="ps-field-label">Phone</label>
@@ -1966,7 +1980,9 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                       placeholder="+20 100 000 0000" />
                   </div>
                 )}
-                <div className="ps-field-group">
+              </div>
+              <div className="ps-field-row-2">
+                <div className="ps-field-group" style={{ gridColumn: "1 / -1" }}>
                   <label className="ps-field-label">Condition / Reason for Referral</label>
                   <input className="ps-field-input" value={extDraft.notes}
                     onChange={(e) => setExtDraft({ ...extDraft, notes: e.target.value })}

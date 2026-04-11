@@ -138,6 +138,16 @@ export default function SchedulePage({
   const [cursor,  setCursor]  = useState(today);       // month/week navigator
   const [dayDate, setDayDate] = useState<string | null>(null);
 
+  // Intercept Android/browser back button when in day view — go back to week instead of crashing
+  useEffect(() => {
+    if (view === "day") {
+      window.history.pushState({ scheduleDay: true }, "");
+      const onPop = () => setView("week");
+      window.addEventListener("popstate", onPop);
+      return () => window.removeEventListener("popstate", onPop);
+    }
+  }, [view]);
+
   const [settings,  setSettings]  = useState<ClinicSettings>({ maxPatientsPerHour: 4, openingHour: 9, closingHour: 21 });
   const [patients,  setPatients]  = useState<Patient[]>([]);
   const [physios,   setPhysios]   = useState<Physiotherapist[]>([]);

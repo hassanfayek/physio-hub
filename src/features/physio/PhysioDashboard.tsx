@@ -905,6 +905,8 @@ export default function PhysioDashboard() {
     ...(!isSecretary ? [{ id: "rehab"     as Tab, label: "Online Rehab",          icon: <IconRehab /> }]     : []),
   ];
 
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+
   const handleLogout = async () => {
     await logout();
     navigate("/", { replace: true });
@@ -956,7 +958,37 @@ export default function PhysioDashboard() {
           color: #9a9590; cursor: pointer; min-height: 40px;
           transition: all 0.15s; display: flex; align-items: center; gap: 6px;
         }
-        .phd-logout-btn:hover { border-color: #c0bbb4; color: #5a5550; }
+        .phd-logout-btn:hover { border-color: #fca5a5; color: #b91c1c; background: #fff5f5; }
+
+        /* ── Sign-out confirm dialog ── */
+        .phd-signout-overlay {
+          position: fixed; inset: 0; z-index: 500;
+          background: rgba(0,0,0,0.4); backdrop-filter: blur(3px);
+          display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .phd-signout-dialog {
+          background: #fff; border-radius: 18px; padding: 28px 28px 22px;
+          width: min(360px, 100%); box-shadow: 0 24px 80px rgba(0,0,0,0.18);
+          animation: phdSOIn 0.2s cubic-bezier(0.16,1,0.3,1) both;
+          text-align: center;
+        }
+        @keyframes phdSOIn { from { opacity:0; transform:scale(0.93) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        .phd-signout-icon { font-size: 36px; margin-bottom: 12px; }
+        .phd-signout-title { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 500; color: #1a1a1a; margin-bottom: 6px; }
+        .phd-signout-sub { font-size: 13.5px; color: #9a9590; margin-bottom: 22px; }
+        .phd-signout-btns { display: flex; gap: 10px; }
+        .phd-signout-cancel {
+          flex: 1; padding: 11px; border-radius: 10px; border: 1.5px solid #e5e0d8;
+          background: #fff; font-family: 'Outfit', sans-serif; font-size: 14px;
+          color: #5a5550; cursor: pointer; transition: background 0.15s;
+        }
+        .phd-signout-cancel:hover { background: #f5f3ef; }
+        .phd-signout-confirm {
+          flex: 1; padding: 11px; border-radius: 10px; border: none;
+          background: #b91c1c; color: #fff; font-family: 'Outfit', sans-serif;
+          font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s;
+        }
+        .phd-signout-confirm:hover { background: #991b1b; }
 
         .phd-body {
           display: grid; grid-template-columns: 240px 1fr;
@@ -1142,7 +1174,6 @@ export default function PhysioDashboard() {
           }
           .phd-bn-item:hover { color: #2E8BC0; }
           .phd-bn-item.active { color: #2E8BC0; }
-          .phd-bn-item.signout:hover { color: #b91c1c; }
           .phd-bn-icon {
             width: 26px; height: 26px; border-radius: 8px;
             display: flex; align-items: center; justify-content: center;
@@ -1184,8 +1215,8 @@ export default function PhysioDashboard() {
             <button className="lang-toggle" onClick={toggleLang} title="Switch language">
               {lang === "en" ? "🌐 العربية" : "🌐 English"}
             </button>
-            <button className="phd-logout-btn" onClick={handleLogout}>
-              <LogOut size={13} strokeWidth={2} color="#9a9590" />
+            <button className="phd-logout-btn" onClick={() => setShowSignOutConfirm(true)}>
+              <LogOut size={13} strokeWidth={2} color="currentColor" />
               {t("common.signOut")}
             </button>
           </div>
@@ -1352,12 +1383,23 @@ export default function PhysioDashboard() {
               </button>
             );
           })}
-          <button className="phd-bn-item signout" onClick={handleLogout}>
-            <div className="phd-bn-icon"><LogOut size={18} strokeWidth={1.8} color="currentColor" /></div>
-            <span className="phd-bn-label">Sign Out</span>
-          </button>
         </nav>
       </div>
+
+      {/* ── Sign-out confirmation ── */}
+      {showSignOutConfirm && (
+        <div className="phd-signout-overlay" onClick={() => setShowSignOutConfirm(false)}>
+          <div className="phd-signout-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="phd-signout-icon">👋</div>
+            <div className="phd-signout-title">Sign out?</div>
+            <div className="phd-signout-sub">You'll be returned to the login screen.</div>
+            <div className="phd-signout-btns">
+              <button className="phd-signout-cancel" onClick={() => setShowSignOutConfirm(false)}>Cancel</button>
+              <button className="phd-signout-confirm" onClick={handleLogout}>Sign Out</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

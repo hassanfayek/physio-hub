@@ -38,6 +38,7 @@ export interface Patient {
   traineeId:        string | null;
   traineeName:      string | null;
   hideBodyProfile?: boolean;
+  referredBy?:      string;
 }
 
 export type PhysioRank = "manager" | "senior" | "junior" | "trainee";
@@ -60,6 +61,7 @@ export interface CreatePatientPayload {
   physioId:   string;
   dateOfBirth?: string;
   phone?:       string;
+  referredBy?:  string;
 }
 
 export interface CreatePatientResult {
@@ -107,6 +109,7 @@ function docToPatient(id: string, data: Record<string, unknown>): Patient {
     traineeId:        (data.traineeId        as string | null) ?? null,
     traineeName:      (data.traineeName      as string | null) ?? null,
     hideBodyProfile:  (data.hideBodyProfile  as boolean | undefined) ?? true,
+    referredBy:       (data.referredBy       as string | undefined)  ?? "",
   };
 }
 
@@ -184,6 +187,7 @@ export async function createPatient(
       phone:        payload.phone ?? "",
       accessCode:   code,
       status:       "active",
+      referredBy:   payload.referredBy ?? "",
       createdAt:    serverTimestamp(),
     });
 
