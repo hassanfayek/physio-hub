@@ -312,6 +312,7 @@ export default function PatientDashboard() {
           }
           .pd2-bn-item:hover { color: #2E8BC0; }
           .pd2-bn-item.active { color: #2E8BC0; }
+          .pd2-bn-item.signout:hover { color: #b91c1c; }
           .pd2-bn-icon {
             width: 26px; height: 26px; border-radius: 8px;
             display: flex; align-items: center; justify-content: center;
@@ -440,6 +441,10 @@ export default function PatientDashboard() {
               </button>
             );
           })}
+          <button className="pd2-bn-item signout" onClick={handleLogout}>
+            <div className="pd2-bn-icon"><LogOut size={18} strokeWidth={1.8} color="currentColor" /></div>
+            <span className="pd2-bn-label">Sign Out</span>
+          </button>
         </nav>
       </div>
     </>
