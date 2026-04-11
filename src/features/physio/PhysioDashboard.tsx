@@ -902,7 +902,7 @@ export default function PhysioDashboard() {
     ...(!isSecretary ? [{ id: "reports"   as Tab, label: t("nav.reports"),       icon: <IconReports /> }]   : []),
     ...(isManager    ? [{ id: "billing"   as Tab, label: "Billing",              icon: <IconBilling /> }]   : []),
     ...(!isSecretary ? [{ id: "protocols" as Tab, label: "Protocols",            icon: <IconProtocols /> }] : []),
-    ...(!isSecretary ? [{ id: "rehab"     as Tab, label: "Online Rehab",          icon: <IconRehab /> }]     : []),
+    ...((isManager || isSenior) ? [{ id: "rehab" as Tab, label: "Online Rehab", icon: <IconRehab /> }] : []),
   ];
 
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
@@ -1351,7 +1351,7 @@ export default function PhysioDashboard() {
                 {activeTab === "protocols" && !isSecretary && (
                   <TreatmentProtocolsPage physioId={physio.uid} isManager={isManager} />
                 )}
-                {activeTab === "rehab" && !isSecretary && (
+                {activeTab === "rehab" && (isManager || isSenior) && (
                   <OnlineRehabPage
                     physioId={physio.uid}
                     physioName={`Dr. ${physio.firstName} ${physio.lastName}`}
