@@ -1142,6 +1142,7 @@ export default function PhysioDashboard() {
           }
           .phd-bn-item:hover { color: #2E8BC0; }
           .phd-bn-item.active { color: #2E8BC0; }
+          .phd-bn-item.signout:hover { color: #b91c1c; }
           .phd-bn-icon {
             width: 26px; height: 26px; border-radius: 8px;
             display: flex; align-items: center; justify-content: center;
@@ -1351,6 +1352,10 @@ export default function PhysioDashboard() {
               </button>
             );
           })}
+          <button className="phd-bn-item signout" onClick={handleLogout}>
+            <div className="phd-bn-icon"><LogOut size={18} strokeWidth={1.8} color="currentColor" /></div>
+            <span className="phd-bn-label">Sign Out</span>
+          </button>
         </nav>
       </div>
     </>
