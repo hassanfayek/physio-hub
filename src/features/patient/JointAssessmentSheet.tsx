@@ -792,58 +792,78 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
         if (!data.selectedJoints.includes(key)) return "";
         const jData = data.joints[key] ?? emptyJoint();
 
-        // ROM table
-        const romRows = jDef.motions.map((m) => {
-          const r = jData.rom[m.id] ?? { active:"", passive:"", endFeel:"", pain:"" };
-          const painBg = r.pain === "yes" ? "background:#fff0f0;" : "";
-          return `<tr>
-            <td style="font-weight:500;${painBg}">${m.label}</td>
-            <td style="color:#888;font-style:italic;font-size:8pt;">${m.normal}</td>
-            <td>${cell(r.active)}</td>
-            <td>${cell(r.passive)}</td>
-            <td>${cell(r.endFeel)}</td>
-            <td style="text-align:center;">${r.pain === "yes" ? '<span style="color:#b91c1c;font-weight:700;">✓</span>' : "—"}</td>
-          </tr>`;
-        }).join("");
+        // ROM table — only rows with at least one value entered
+        const romRows = jDef.motions
+          .filter((m) => {
+            const r = jData.rom[m.id] ?? { active:"", passive:"", endFeel:"", pain:"" };
+            return r.active || r.passive || r.endFeel || r.pain === "yes";
+          })
+          .map((m) => {
+            const r = jData.rom[m.id] ?? { active:"", passive:"", endFeel:"", pain:"" };
+            const painBg = r.pain === "yes" ? "background:#fff0f0;" : "";
+            return `<tr>
+              <td style="font-weight:500;${painBg}">${m.label}</td>
+              <td style="color:#888;font-style:italic;font-size:8pt;">${m.normal}</td>
+              <td>${cell(r.active)}</td>
+              <td>${cell(r.passive)}</td>
+              <td>${cell(r.endFeel)}</td>
+              <td style="text-align:center;">${r.pain === "yes" ? '<span style="color:#b91c1c;font-weight:700;">✓</span>' : "—"}</td>
+            </tr>`;
+          }).join("");
 
-        // Muscle table
-        const muscleRows = jDef.muscles.map((m) => {
-          const mu = jData.muscles[m.id] ?? { grade:"", force:"" };
-          const col = mu.grade ? gradeColor(mu.grade) : "#ddd";
-          const gradeCell = mu.grade
-            ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:${col};color:#fff;font-weight:700;font-size:11pt;">${mu.grade}</span>`
-            : `<span style="color:#ccc;">—</span>`;
-          return `<tr>
-            <td style="font-weight:500;">${m.label}</td>
-            <td>${gradeCell}</td>
-            <td style="color:#555;font-size:9pt;">${mu.force || "—"}</td>
-          </tr>`;
-        }).join("");
+        // Muscle table — only rows with at least grade or force
+        const muscleRows = jDef.muscles
+          .filter((m) => {
+            const mu = jData.muscles[m.id] ?? { grade:"", force:"" };
+            return mu.grade || mu.force;
+          })
+          .map((m) => {
+            const mu = jData.muscles[m.id] ?? { grade:"", force:"" };
+            const col = mu.grade ? gradeColor(mu.grade) : "#ddd";
+            const gradeCell = mu.grade
+              ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:${col};color:#fff;font-weight:700;font-size:11pt;">${mu.grade}</span>`
+              : `<span style="color:#ccc;">—</span>`;
+            return `<tr>
+              <td style="font-weight:500;">${m.label}</td>
+              <td>${gradeCell}</td>
+              <td style="color:#555;font-size:9pt;">${mu.force || "—"}</td>
+            </tr>`;
+          }).join("");
 
-        // Special tests
-        const testCards = jDef.specialTests.map((t) => {
-          const te = jData.tests[t.id] ?? { result:"", notes:"" };
-          const border = te.result === "positive" ? "border:1.5px solid #fca5a5;background:#fff5f5;"
-                       : te.result === "negative" ? "border:1.5px solid #86efac;background:#f0fdf4;"
-                       : "border:1.5px solid #e5e0d8;background:#fafaf8;";
-          return `<div style="${border}border-radius:8px;padding:7px 10px;break-inside:avoid;">
-            <div style="font-size:9pt;font-weight:600;color:#1a1a1a;margin-bottom:5px;">${t.label}</div>
-            ${testChip(te.result)}
-            ${te.notes ? `<div style="font-size:8pt;color:#666;margin-top:4px;">${te.notes}</div>` : ""}
-          </div>`;
-        }).join("");
+        // Special tests — only cards where a result was recorded
+        const testCards = jDef.specialTests
+          .filter((t) => {
+            const te = jData.tests[t.id] ?? { result:"", notes:"" };
+            return te.result && te.result !== "";
+          })
+          .map((t) => {
+            const te = jData.tests[t.id] ?? { result:"", notes:"" };
+            const border = te.result === "positive" ? "border:1.5px solid #fca5a5;background:#fff5f5;"
+                         : te.result === "negative" ? "border:1.5px solid #86efac;background:#f0fdf4;"
+                         : "border:1.5px solid #e5e0d8;background:#fafaf8;";
+            return `<div style="${border}border-radius:8px;padding:7px 10px;break-inside:avoid;">
+              <div style="font-size:9pt;font-weight:600;color:#1a1a1a;margin-bottom:5px;">${t.label}</div>
+              ${testChip(te.result)}
+              ${te.notes ? `<div style="font-size:8pt;color:#666;margin-top:4px;">${te.notes}</div>` : ""}
+            </div>`;
+          }).join("");
 
-        // Balance table
-        const balRows = jDef.balanceTests.map((t) => {
-          const be = jData.balance[t.id] ?? { value:"", result:"", notes:"" };
-          return `<tr>
-            <td style="font-weight:500;">${t.label}</td>
-            <td style="color:#888;font-size:8pt;">${t.unit}</td>
-            <td>${cell(be.value)}</td>
-            <td>${balChip(be.result)}</td>
-            <td style="color:#555;font-size:9pt;">${be.notes || "—"}</td>
-          </tr>`;
-        }).join("");
+        // Balance table — only rows with a value or result entered
+        const balRows = jDef.balanceTests
+          .filter((t) => {
+            const be = jData.balance[t.id] ?? { value:"", result:"", notes:"" };
+            return be.value || be.result || be.notes;
+          })
+          .map((t) => {
+            const be = jData.balance[t.id] ?? { value:"", result:"", notes:"" };
+            return `<tr>
+              <td style="font-weight:500;">${t.label}</td>
+              <td style="color:#888;font-size:8pt;">${t.unit}</td>
+              <td>${cell(be.value)}</td>
+              <td>${balChip(be.result)}</td>
+              <td style="color:#555;font-size:9pt;">${be.notes || "—"}</td>
+            </tr>`;
+          }).join("");
 
         const hasRomData  = Object.values(jData.rom).some((r) => r.active || r.passive);
         const posCount    = Object.values(jData.tests).filter((t) => t.result === "positive").length;
@@ -859,16 +879,22 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
             </div>
 
             <div style="padding:12px 14px;">
-              <!-- Meta -->
-              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
-                ${[["Pain (NRS 0–10)","pain"],["Swelling","swelling"],["Local Notes","notes"]].map(([lbl,f])=>`
-                  <div style="background:#f5f7fa;border:1px solid #e5e8ef;border-radius:8px;padding:7px 10px;">
-                    <div style="font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#9a9590;margin-bottom:3px;">${lbl}</div>
-                    <div style="font-size:10pt;font-weight:500;color:#1a1a1a;">${(jData as unknown as Record<string,string>)[f] || "—"}</div>
-                  </div>`).join("")}
-              </div>
+              <!-- Meta — only show fields with values -->
+              ${(() => {
+                const metaFields: [string, string][] = [["Pain (NRS 0–10)","pain"],["Swelling","swelling"],["Local Notes","notes"]];
+                const filledMeta = metaFields.filter(([,f]) => (jData as unknown as Record<string,string>)[f]);
+                if (!filledMeta.length) return "";
+                return `<div style="display:grid;grid-template-columns:repeat(${filledMeta.length},1fr);gap:8px;margin-bottom:12px;">
+                  ${filledMeta.map(([lbl,f])=>`
+                    <div style="background:#f5f7fa;border:1px solid #e5e8ef;border-radius:8px;padding:7px 10px;">
+                      <div style="font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#9a9590;margin-bottom:3px;">${lbl}</div>
+                      <div style="font-size:10pt;font-weight:500;color:#1a1a1a;">${(jData as unknown as Record<string,string>)[f]}</div>
+                    </div>`).join("")}
+                </div>`;
+              })()}
 
-              <!-- ROM -->
+              <!-- ROM — only if any rows exist -->
+              ${romRows ? `
               <div class="subsection-label">Range of Motion</div>
               <table class="data-table">
                 <thead><tr>
@@ -880,9 +906,10 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
                   <th style="width:8%;text-align:center;">Pain</th>
                 </tr></thead>
                 <tbody>${romRows}</tbody>
-              </table>
+              </table>` : ""}
 
-              <!-- Muscle Power -->
+              <!-- Muscle Power — only if any rows exist -->
+              ${muscleRows ? `
               <div class="subsection-label" style="margin-top:10px;">Muscle Power</div>
               <table class="data-table">
                 <thead><tr>
@@ -891,13 +918,15 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
                   <th style="width:30%;">Force (kg)</th>
                 </tr></thead>
                 <tbody>${muscleRows}</tbody>
-              </table>
+              </table>` : ""}
 
-              <!-- Special Tests -->
+              <!-- Special Tests — only if any cards exist -->
+              ${testCards ? `
               <div class="subsection-label" style="margin-top:10px;">Special Tests</div>
-              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;">${testCards}</div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;">${testCards}</div>` : ""}
 
-              <!-- Balance -->
+              <!-- Balance — only if any rows exist -->
+              ${balRows ? `
               <div class="subsection-label" style="margin-top:10px;">Balance & Proprioception</div>
               <table class="data-table">
                 <thead><tr>
@@ -908,7 +937,7 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
                   <th style="width:30%;">Notes</th>
                 </tr></thead>
                 <tbody>${balRows}</tbody>
-              </table>
+              </table>` : ""}
             </div>
           </div>`;
       });
