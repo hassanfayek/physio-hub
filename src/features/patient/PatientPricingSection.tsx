@@ -3,14 +3,10 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Trash2, Check, X, Eye, EyeOff, DollarSign, Package, ClipboardList } from "lucide-react";
+import { Plus, Trash2, Check, X, Eye, EyeOff, Package, ClipboardList } from "lucide-react";
 import {
-  subscribeToPatientBilling,
   subscribeToBillingSettings,
   saveBillingSettings,
-  addBillingEntry,
-  updateBillingEntry,
-  deleteBillingEntry,
   subscribeToSessionPrices,
   setSessionPrice,
   deleteSessionPrice,
@@ -18,7 +14,6 @@ import {
   addSessionPackage,
   updateSessionPackage,
   deleteSessionPackage,
-  type BillingEntry,
   type SessionPrice,
   type SessionPackage,
 } from "../../services/priceService";
@@ -55,11 +50,7 @@ export default function PatientPricingSection({
   patientName,
 }: PatientPricingSectionProps) {
 
-// ── Billing entries ─────────────────────────────────────────────────────────
-  const [entries,  setEntries]  = useState<BillingEntry[]>([]);
-  const [entryLoading, setEntryLoading] = useState(true);
-
-  // ── Session prices ──────────────────────────────────────────────────────────
+// ── Session prices ──────────────────────────────────────────────────────────
   const [sessionPrices, setSessionPrices] = useState<SessionPrice[]>([]);
   const [completedAppts, setCompletedAppts] = useState<Appointment[]>([]);
   const [apptLoading,    setApptLoading]    = useState(true);
@@ -71,16 +62,6 @@ export default function PatientPricingSection({
   // ── Visibility ─────────────────────────────────────────────────────────────
   const [secretaryCanView, setSecretaryCanView] = useState(true);
   const [togglingVis,      setTogglingVis]      = useState(false);
-
-  // ── Billing form ────────────────────────────────────────────────────────────
-  const EMPTY_FORM = { date: new Date().toISOString().slice(0, 10), description: "", amount: "", paid: false, paidDate: "", notes: "" };
-  const [showBillingForm, setShowBillingForm] = useState(false);
-  const [editEntry,       setEditEntry]       = useState<BillingEntry | null>(null);
-  const [billingForm,     setBillingForm]     = useState({ ...EMPTY_FORM });
-  const [billingSaving,   setBillingSaving]   = useState(false);
-  const [billingError,    setBillingError]    = useState<string | null>(null);
-  const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
-  const [deletingEntry,   setDeletingEntry]   = useState(false);
 
   // ── Session price form ──────────────────────────────────────────────────────
   const [sessionPriceAppt,   setSessionPriceAppt]   = useState<Appointment | null>(null);
@@ -106,12 +87,6 @@ export default function PatientPricingSection({
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
   // ── Subscriptions ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!patientId) return;
-    setEntryLoading(true);
-    return subscribeToPatientBilling(patientId, (d) => { setEntries(d); setEntryLoading(false); }, () => setEntryLoading(false));
-  }, [patientId]);
-
   useEffect(() => {
     if (!patientId) return;
     return subscribeToSessionPrices(patientId, setSessionPrices);
@@ -141,10 +116,6 @@ export default function PatientPricingSection({
   }, []);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
-  const totalBilled = entries.reduce((s, e) => s + e.amount, 0);
-  const totalPaid   = entries.filter((e) => e.paid).reduce((s, e) => s + e.amount, 0);
-  const balance     = totalBilled - totalPaid;
-
   const activePackages  = packages.filter((p) => p.active);
   const sessionPriceMap = new Map(sessionPrices.map((sp) => [sp.appointmentId, sp]));
   const sessionTotal    = sessionPrices.reduce((s, sp) => s + sp.amount, 0);
@@ -157,53 +128,6 @@ export default function PatientPricingSection({
     await saveBillingSettings({ secretaryCanView: next });
     setTogglingVis(false);
     showToast(next ? "Secretary can now view pricing" : "Pricing hidden from secretary");
-  };
-
-  // ── Billing CRUD ─────────────────────────────────────────────────────────────
-  const openAddBilling = () => {
-    setBillingForm({ ...EMPTY_FORM });
-    setEditEntry(null);
-    setBillingError(null);
-    setShowBillingForm(true);
-  };
-
-  const openEditBilling = (entry: BillingEntry) => {
-    setBillingForm({ date: entry.date, description: entry.description, amount: String(entry.amount), paid: entry.paid, paidDate: entry.paidDate, notes: entry.notes });
-    setEditEntry(entry);
-    setBillingError(null);
-    setShowBillingForm(true);
-  };
-
-  const handleSaveBilling = async () => {
-    if (!billingForm.description.trim() || !billingForm.amount || !billingForm.date) { setBillingError("Date, description and amount are required."); return; }
-    const amount = parseFloat(billingForm.amount);
-    if (isNaN(amount) || amount < 0) { setBillingError("Please enter a valid amount."); return; }
-    setBillingSaving(true); setBillingError(null);
-    const payload = { patientId, date: billingForm.date, description: billingForm.description.trim(), amount, paid: billingForm.paid, paidDate: billingForm.paid ? (billingForm.paidDate || billingForm.date) : "", notes: billingForm.notes.trim() };
-    if (editEntry) {
-      const { error } = await updateBillingEntry(editEntry.id, payload);
-      if (error) { setBillingError(error); setBillingSaving(false); return; }
-      showToast("Entry updated");
-    } else {
-      const result = await addBillingEntry(payload);
-      if ("error" in result && result.error) { setBillingError(result.error); setBillingSaving(false); return; }
-      showToast("Entry added");
-    }
-    setBillingSaving(false); setShowBillingForm(false); setEditEntry(null);
-  };
-
-  const handleToggleBillingPaid = async (entry: BillingEntry) => {
-    const paid = !entry.paid;
-    const paidDate = paid ? (entry.paidDate || new Date().toISOString().slice(0, 10)) : "";
-    await updateBillingEntry(entry.id, { paid, paidDate });
-    showToast(paid ? "Marked as paid" : "Marked as unpaid");
-  };
-
-  const handleDeleteBilling = async (id: string) => {
-    setDeletingEntry(true);
-    await deleteBillingEntry(id);
-    setDeletingEntry(false); setDeletingEntryId(null);
-    showToast("Entry deleted");
   };
 
   // ── Session price CRUD ───────────────────────────────────────────────────────
@@ -722,107 +646,7 @@ export default function PatientPricingSection({
           )}
         </div>
 
-        {/* ── BILLING ENTRIES SECTION ── */}
-        <div className="pps-section">
-          <div className="pps-section-header">
-            <div className="pps-section-title"><DollarSign size={15} strokeWidth={2} /> Billing Entries</div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span className="pps-section-meta">{entries.length} entr{entries.length !== 1 ? "ies" : "y"} · {fmt(totalBilled)} billed · {fmt(totalPaid)} paid</span>
-              <button className="pps-add-btn" onClick={openAddBilling}><Plus size={13} strokeWidth={2.5} /> Add Entry</button>
-            </div>
-          </div>
-          {entryLoading ? (
-            <div style={{ height: 80, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "ppsShimmer 1.4s ease infinite", borderRadius: 14 }} />
-          ) : entries.length === 0 ? (
-            <div className="pps-section-empty"><DollarSign size={22} strokeWidth={1.5} /> No billing entries yet</div>
-          ) : (
-            <div className="pps-table-wrap">
-              <table className="pps-table">
-                <thead>
-                  <tr><th>Date</th><th>Description</th><th>Amount</th><th>Status</th><th>Paid On</th><th>Actions</th></tr>
-                </thead>
-                <tbody>
-                  {entries.map((entry) => (
-                    <tr key={entry.id}>
-                      <td style={{ whiteSpace: "nowrap", color: "#5a5550" }}>{entry.date}</td>
-                      <td><div className="pps-desc">{entry.description}</div>{entry.notes && <div className="pps-notes">{entry.notes}</div>}</td>
-                      <td><span className="pps-amount">{fmt(entry.amount)}</span></td>
-                      <td>
-                        <button className={`pps-paid-badge ${entry.paid ? "paid" : "unpaid"}`} onClick={() => handleToggleBillingPaid(entry)}>
-                          {entry.paid ? <><Check size={10} strokeWidth={3} /> Paid</> : <><X size={10} strokeWidth={3} /> Unpaid</>}
-                        </button>
-                      </td>
-                      <td style={{ color: "#9a9590", fontSize: 12 }}>{entry.paidDate || "—"}</td>
-                      <td>
-                        <div className="pps-action-row">
-                          <button className="pps-edit-btn" onClick={() => openEditBilling(entry)}>Edit</button>
-                          {(isManager || isSecretary) && (
-                            <button className="pps-del-btn" onClick={() => setDeletingEntryId(entry.id)} disabled={deletingEntry && deletingEntryId === entry.id}><Trash2 size={12} strokeWidth={2} /></button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan={2} style={{ fontWeight: 600, fontSize: 13, color: "#5a5550" }}>Total</td>
-                    <td><span className="pps-amount">{fmt(totalBilled)}</span></td>
-                    <td><span style={{ fontSize: 12, color: "#1b4332", fontWeight: 600 }}>{fmt(totalPaid)} paid</span></td>
-                    <td /><td><span style={{ fontSize: 12, color: balance > 0 ? "#b91c1c" : "#1b4332", fontWeight: 700 }}>{balance > 0 ? `${fmt(balance)} due` : "✓ Settled"}</span></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </div>
       </div>
-
-      {/* ── Billing Add/Edit Modal ── */}
-      {showBillingForm && createPortal(
-        <div className="pps-overlay" onClick={(e) => { if (e.target === e.currentTarget && !billingSaving) setShowBillingForm(false); }}>
-          <div className="pps-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="pps-modal-title">{editEntry ? "Edit Entry" : "Add Billing Entry"}</div>
-            <div className="pps-modal-sub">{patientName}</div>
-            <div className="pps-field-row">
-              <div className="pps-field">
-                <label className="pps-label">Date</label>
-                <input className="pps-input" type="date" value={billingForm.date} onChange={(e) => setBillingForm({ ...billingForm, date: e.target.value })} />
-              </div>
-              <div className="pps-field">
-                <label className="pps-label">Amount</label>
-                <input className="pps-input" type="number" min="0" step="0.01" placeholder="0.00" value={billingForm.amount} onChange={(e) => setBillingForm({ ...billingForm, amount: e.target.value })} />
-              </div>
-            </div>
-            <div className="pps-field">
-              <label className="pps-label">Description</label>
-              <input className="pps-input" type="text" placeholder="e.g. Manual Therapy Session..." value={billingForm.description} onChange={(e) => setBillingForm({ ...billingForm, description: e.target.value })} />
-            </div>
-            <div className="pps-field">
-              <label className="pps-label">Notes (optional)</label>
-              <input className="pps-input" type="text" placeholder="Any additional notes..." value={billingForm.notes} onChange={(e) => setBillingForm({ ...billingForm, notes: e.target.value })} />
-            </div>
-            <div className="pps-field">
-              <div className="pps-checkbox-row" onClick={() => setBillingForm({ ...billingForm, paid: !billingForm.paid, paidDate: !billingForm.paid ? (billingForm.paidDate || new Date().toISOString().slice(0, 10)) : "" })}>
-                <input type="checkbox" checked={billingForm.paid} readOnly />
-                <label>Mark as Paid</label>
-              </div>
-            </div>
-            {billingForm.paid && (
-              <div className="pps-field">
-                <label className="pps-label">Paid On</label>
-                <input className="pps-input" type="date" value={billingForm.paidDate} onChange={(e) => setBillingForm({ ...billingForm, paidDate: e.target.value })} />
-              </div>
-            )}
-            {billingError && <div className="pps-modal-error">{billingError}</div>}
-            <div className="pps-modal-actions">
-              <button className="pps-modal-cancel" onClick={() => setShowBillingForm(false)}>Cancel</button>
-              <button className="pps-modal-save" disabled={billingSaving} onClick={handleSaveBilling}>{billingSaving ? "Saving…" : editEntry ? "Save Changes" : "Add Entry"}</button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {/* ── Session Price Modal ── */}
       {sessionPriceAppt && createPortal(
@@ -1069,20 +893,6 @@ export default function PatientPricingSection({
       )}
 
       {/* ── Delete confirms ── */}
-      {deletingEntryId && createPortal(
-        <div className="pps-del-overlay">
-          <div className="pps-del-modal">
-            <div className="pps-del-title">Delete Entry?</div>
-            <div className="pps-del-sub">This billing entry will be permanently removed.</div>
-            <div className="pps-del-actions">
-              <button className="pps-del-back" onClick={() => setDeletingEntryId(null)}>Cancel</button>
-              <button className="pps-del-confirm" disabled={deletingEntry} onClick={() => handleDeleteBilling(deletingEntryId)}>{deletingEntry ? "Deleting…" : "Delete"}</button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
       {deletingSpId && createPortal(
         <div className="pps-del-overlay">
           <div className="pps-del-modal">
