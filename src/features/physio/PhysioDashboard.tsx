@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Calendar, Dumbbell, BarChart2, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen, Wifi } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, Dumbbell, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen, Wifi } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
 import { doc, getDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -31,7 +31,7 @@ import OnlineRehabPage from "../rehab/OnlineRehabPage";
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
-type Tab = "overview" | "patients" | "people" | "schedule" | "exercises" | "reports" | "billing" | "protocols" | "rehab";
+type Tab = "overview" | "patients" | "people" | "schedule" | "exercises" | "billing" | "protocols" | "rehab";
 
 interface TabDef {
   id:    Tab;
@@ -44,7 +44,6 @@ function IconOverview()  { return <LayoutDashboard size={18} strokeWidth={1.8} c
 function IconPatients()  { return <Users size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconSchedule()  { return <Calendar size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconExercises() { return <Dumbbell size={18} strokeWidth={1.8} color="currentColor" />; }
-function IconReports()   { return <BarChart2 size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconBilling()   { return <Receipt size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconProtocols() { return <BookOpen size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconRehab()     { return <Wifi size={18} strokeWidth={1.8} color="currentColor" />; }
@@ -840,17 +839,6 @@ function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false,
   );
 }
 
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <div style={{ textAlign: "center", padding: "80px 24px" }}>
-      <div style={{ fontSize: 40, marginBottom: 16 }}>🚧</div>
-      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#1a1a1a", marginBottom: 8 }}>
-        {label} — Coming Soon
-      </div>
-      <div style={{ fontSize: 14, color: "#9a9590" }}>This section is under development.</div>
-    </div>
-  );
-}
 
 // ─── Dashboard shell ──────────────────────────────────────────────────────────
 
@@ -899,7 +887,6 @@ export default function PhysioDashboard() {
     ),
     { id: "schedule",  label: t("nav.schedule"),       icon: <IconSchedule /> },
     ...(!isSecretary ? [{ id: "exercises" as Tab, label: t("nav.exercises.lib"), icon: <IconExercises /> }] : []),
-    ...(!isSecretary ? [{ id: "reports"   as Tab, label: t("nav.reports"),       icon: <IconReports /> }]   : []),
     ...(isManager    ? [{ id: "billing"   as Tab, label: "Billing",              icon: <IconBilling /> }]   : []),
     ...(!isSecretary ? [{ id: "protocols" as Tab, label: "Protocols",            icon: <IconProtocols /> }] : []),
     ...((isManager || isSenior) ? [{ id: "rehab" as Tab, label: "Online Rehab", icon: <IconRehab /> }] : []),
@@ -1346,7 +1333,6 @@ export default function PhysioDashboard() {
                     isSenior={isSenior}
                   />
                 )}
-                {activeTab === "reports"   && !isSecretary && <ComingSoon label="Reports" />}
                 {activeTab === "billing"   && isManager   && <ClinicBillingPage />}
                 {activeTab === "protocols" && !isSecretary && (
                   <TreatmentProtocolsPage physioId={physio.uid} isManager={isManager} />
