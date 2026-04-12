@@ -1,6 +1,6 @@
 // FILE: src/features/physio/ClinicBillingPage.tsx
 // Clinic-wide billing dashboard — clinic manager only.
-// Shows daily / weekly / monthly revenue across billingEntries, sessionPrices, packages.
+// Shows daily / weekly / monthly revenue across session charges and packages.
 
 import { useState, useEffect, useMemo } from "react";
 import {
@@ -15,11 +15,6 @@ import { subscribeToAllPatients } from "../../services/patientService";
 
 // ─── Local types (raw Firestore shapes) ──────────────────────────────────────
 
-interface RawBillingEntry {
-  id: string; patientId: string; date: string; description: string;
-  amount: number; paid: boolean; paidDate: string; notes: string;
-  createdAt: Timestamp | null;
-}
 interface RawSessionPrice {
   id: string; patientId: string; appointmentId: string; date: string;
   sessionType: string; physioName: string; amount: number; paid: boolean;
@@ -64,14 +59,13 @@ export default function ClinicBillingPage() {
   const [customTo,      setCustomTo]      = useState(today);
 
   // ── Source data ─────────────────────────────────────────────────────────
-  const [billingEntries,  setBillingEntries]  = useState<RawBillingEntry[]>([]);
   const [sessionPrices,   setSessionPrices]   = useState<RawSessionPrice[]>([]);
   const [packages,        setPackages]        = useState<RawPackage[]>([]);
   const [loading,         setLoading]         = useState(true);
   const [patientMap,      setPatientMap]      = useState<Map<string, string>>(new Map());
 
   // ── Active section detail ───────────────────────────────────────────────
-  const [activeSection, setActiveSection] = useState<"overview" | "entries" | "sessions" | "packages">("overview");
+  const [activeSection, setActiveSection] = useState<"overview" | "sessions" | "packages">("overview");
 
   // ── Session charge edit modal ────────────────────────────────────────────
   const [editingSession,    setEditingSession]    = useState<RawSessionPrice | null>(null);
@@ -118,24 +112,19 @@ export default function ClinicBillingPage() {
 
   useEffect(() => {
     let done = 0;
-    const check = () => { done++; if (done === 3) setLoading(false); };
+    const check = () => { done++; if (done === 2) setLoading(false); };
 
     const u1 = onSnapshot(
-      query(collection(db, "patientBilling"), orderBy("date", "desc")),
-      (s) => { setBillingEntries(s.docs.map((d) => ({ id: d.id, ...d.data() } as RawBillingEntry))); check(); },
-      () => check()
-    );
-    const u2 = onSnapshot(
       query(collection(db, "patientSessionPrices"), orderBy("date", "desc")),
       (s) => { setSessionPrices(s.docs.map((d) => ({ id: d.id, ...d.data() } as RawSessionPrice))); check(); },
       () => check()
     );
-    const u3 = onSnapshot(
+    const u2 = onSnapshot(
       query(collection(db, "patientPackages"), orderBy("createdAt", "desc")),
       (s) => { setPackages(s.docs.map((d) => ({ id: d.id, ...d.data() } as RawPackage))); check(); },
       () => check()
     );
-    return () => { u1(); u2(); u3(); };
+    return () => { u1(); u2(); };
   }, []);
 
   useEffect(() => {
@@ -155,26 +144,23 @@ export default function ClinicBillingPage() {
     return isInMonth(date, selectedMonth);
   };
 
-  const filteredEntries  = useMemo(() => billingEntries.filter((e) => inPeriod(e.date)),   [billingEntries, period, selectedDay, selectedWeek, selectedMonth, customFrom, customTo]);
   const filteredSessions = useMemo(() => sessionPrices.filter((s) => inPeriod(s.date)),   [sessionPrices,  period, selectedDay, selectedWeek, selectedMonth, customFrom, customTo]);
   const filteredPackages = useMemo(() => packages.filter((p) => inPeriod(p.startDate)),   [packages,       period, selectedDay, selectedWeek, selectedMonth, customFrom, customTo]);
 
   // ── Aggregates ────────────────────────────────────────────────────────────
-  const entryTotal    = filteredEntries.reduce((s, e) => s + e.amount, 0);
-  const entryPaid     = filteredEntries.filter((e) => e.paid).reduce((s, e) => s + e.amount, 0);
   const sessionTotal  = filteredSessions.reduce((s, e) => s + e.amount, 0);
   const sessionPaid   = filteredSessions.filter((e) => e.paid).reduce((s, e) => s + e.amount, 0);
   const pkgTotal      = filteredPackages.reduce((s, p) => s + p.totalAmount, 0);
   const pkgPaid       = filteredPackages.reduce((s, p) => s + p.paidAmount, 0);
-  const grandTotal    = entryTotal + sessionTotal + pkgTotal;
-  const grandPaid     = entryPaid  + sessionPaid  + pkgPaid;
+  const grandTotal    = sessionTotal + pkgTotal;
+  const grandPaid     = sessionPaid  + pkgPaid;
   const grandBalance  = grandTotal - grandPaid;
 
   // ── Weekly/Monthly trend for chart-like rows ──────────────────────────────
   // Group all-time session prices by month for a mini trend
   const monthlyRevenue = useMemo(() => {
     const map = new Map<string, { billed: number; collected: number }>();
-    [...billingEntries, ...sessionPrices].forEach((e) => {
+    [...sessionPrices].forEach((e) => {
       const ym = (e.date || "").slice(0, 7);
       if (!ym) return;
       const cur = map.get(ym) ?? { billed: 0, collected: 0 };
@@ -186,7 +172,7 @@ export default function ClinicBillingPage() {
       .sort(([a], [b]) => b.localeCompare(a))
       .slice(0, 6)
       .reverse();
-  }, [billingEntries, sessionPrices]);
+  }, [sessionPrices]);
 
   const maxRevenue = Math.max(...monthlyRevenue.map((m) => m[1].billed), 1);
 
@@ -341,7 +327,7 @@ export default function ClinicBillingPage() {
         .cb-pkg-row strong { color: #1a1a1a; }
 
         /* Summary breakdown */
-        .cb-breakdown { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+        .cb-breakdown { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
         @media (max-width: 640px) { .cb-breakdown { grid-template-columns: 1fr; } }
         .cb-breakdown-card { background: #fff; border: 1.5px solid #e5e0d8; border-radius: 12px; padding: 14px 16px; }
         .cb-breakdown-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #c0bbb4; font-weight: 700; margin-bottom: 6px; }
@@ -355,7 +341,7 @@ export default function ClinicBillingPage() {
       <div className="cb-root">
         <div className="cb-page-header">
           <div className="cb-page-title">Clinic Billing</div>
-          <div className="cb-page-sub">Complete financial overview — all billing entries, session charges and packages</div>
+          <div className="cb-page-sub">Complete financial overview — session charges and packages</div>
         </div>
 
         {/* Period selector */}
@@ -427,7 +413,7 @@ export default function ClinicBillingPage() {
               <div className="cb-kpi total">
                 <div className="cb-kpi-label">Total Billed</div>
                 <div className="cb-kpi-value">{fmt(grandTotal)}</div>
-                <div className="cb-kpi-sub">{filteredEntries.length + filteredSessions.length} charges · {filteredPackages.length} pkg{filteredPackages.length !== 1 ? "s" : ""}</div>
+                <div className="cb-kpi-sub">{filteredSessions.length} charges · {filteredPackages.length} pkg{filteredPackages.length !== 1 ? "s" : ""}</div>
               </div>
               <div className="cb-kpi paid">
                 <div className="cb-kpi-label">Collected</div>
@@ -439,7 +425,7 @@ export default function ClinicBillingPage() {
               <div className="cb-kpi balance">
                 <div className="cb-kpi-label">Outstanding</div>
                 <div className="cb-kpi-value" style={{ color: grandBalance > 0 ? "#b91c1c" : "#1b4332" }}>{fmt(grandBalance)}</div>
-                <div className="cb-kpi-sub">{(filteredEntries.filter((e) => !e.paid).length + filteredSessions.filter((s) => !s.paid).length)} unpaid items</div>
+                <div className="cb-kpi-sub">{filteredSessions.filter((s) => !s.paid).length} unpaid items</div>
               </div>
               <div className="cb-kpi sessions">
                 <div className="cb-kpi-label">Sessions Done</div>
@@ -450,12 +436,6 @@ export default function ClinicBillingPage() {
 
             {/* Breakdown by source */}
             <div className="cb-breakdown">
-              <div className="cb-breakdown-card">
-                <div className="cb-breakdown-label">Billing Entries</div>
-                <div className="cb-breakdown-row"><span>Billed</span><strong>{fmt(entryTotal)}</strong></div>
-                <div className="cb-breakdown-row"><span>Paid</span><strong style={{ color: "#1b4332" }}>{fmt(entryPaid)}</strong></div>
-                <div className="cb-breakdown-row"><span>Owed</span><strong style={{ color: entryTotal - entryPaid > 0 ? "#b91c1c" : "#1b4332" }}>{fmt(entryTotal - entryPaid)}</strong></div>
-              </div>
               <div className="cb-breakdown-card">
                 <div className="cb-breakdown-label">Session Charges</div>
                 <div className="cb-breakdown-row"><span>Billed</span><strong>{fmt(sessionTotal)}</strong></div>
@@ -507,7 +487,6 @@ export default function ClinicBillingPage() {
             <div className="cb-section-tabs">
               {[
                 { id: "overview",  label: "Overview" },
-                { id: "entries",   label: "Billing Entries",  count: filteredEntries.length },
                 { id: "sessions",  label: "Session Charges",  count: filteredSessions.length },
                 { id: "packages",  label: "Packages",         count: filteredPackages.length },
               ].map((s) => (
@@ -528,7 +507,7 @@ export default function ClinicBillingPage() {
                 {/* Top unpaid entries */}
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#9a9590", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Unpaid This Period</div>
-                  {filteredEntries.filter((e) => !e.paid).length + filteredSessions.filter((s) => !s.paid).length === 0 ? (
+                  {filteredSessions.filter((s) => !s.paid).length === 0 ? (
                     <div className="cb-empty" style={{ padding: "24px 20px" }}>✓ All charges collected for this period</div>
                   ) : (
                     <div className="cb-table-wrap">
@@ -537,16 +516,6 @@ export default function ClinicBillingPage() {
                           <tr><th>Date</th><th>Patient</th><th>Type</th><th>Description</th><th>Amount</th><th>Status</th></tr>
                         </thead>
                         <tbody>
-                          {filteredEntries.filter((e) => !e.paid).map((e) => (
-                            <tr key={e.id}>
-                              <td style={{ color: "#5a5550", whiteSpace: "nowrap" }}>{e.date}</td>
-                              <td style={{ fontWeight: 500 }}>{patientMap.get(e.patientId) ?? "—"}</td>
-                              <td><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 100, background: "#EAF5FC", color: "#2E8BC0" }}>Entry</span></td>
-                              <td>{e.description}</td>
-                              <td><span className="cb-amount">{fmt(e.amount)}</span></td>
-                              <td><span className="cb-paid-pill unpaid">Unpaid</span></td>
-                            </tr>
-                          ))}
                           {filteredSessions.filter((s) => !s.paid).map((s) => (
                             <tr key={s.id}>
                               <td style={{ color: "#5a5550", whiteSpace: "nowrap" }}>{s.date}</td>
@@ -570,43 +539,6 @@ export default function ClinicBillingPage() {
                   )}
                 </div>
               </div>
-            )}
-
-            {/* ── Billing Entries section ── */}
-            {activeSection === "entries" && (
-              filteredEntries.length === 0 ? (
-                <div className="cb-empty">No billing entries for this period.</div>
-              ) : (
-                <div className="cb-table-wrap">
-                  <table className="cb-table">
-                    <thead>
-                      <tr><th>Date</th><th>Patient</th><th>Description</th><th>Amount</th><th>Status</th><th>Paid On</th><th>Notes</th></tr>
-                    </thead>
-                    <tbody>
-                      {filteredEntries.map((e) => (
-                        <tr key={e.id}>
-                          <td style={{ whiteSpace: "nowrap", color: "#5a5550" }}>{e.date}</td>
-                          <td style={{ fontWeight: 500 }}>{patientMap.get(e.patientId) ?? "—"}</td>
-                          <td style={{ fontWeight: 500 }}>{e.description}</td>
-                          <td><span className="cb-amount">{fmt(e.amount)}</span></td>
-                          <td><span className={`cb-paid-pill ${e.paid ? "paid" : "unpaid"}`}>{e.paid ? "✓ Paid" : "Unpaid"}</span></td>
-                          <td style={{ color: "#9a9590", fontSize: 12 }}>{e.paidDate || "—"}</td>
-                          <td style={{ color: "#9a9590", fontSize: 12 }}>{e.notes || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr>
-                        <td colSpan={3}>Total</td>
-                        <td><span className="cb-amount">{fmt(entryTotal)}</span></td>
-                        <td><span style={{ fontSize: 12, color: "#1b4332" }}>{fmt(entryPaid)} paid</span></td>
-                        <td><span style={{ fontSize: 12, color: entryTotal - entryPaid > 0 ? "#b91c1c" : "#1b4332" }}>{entryTotal - entryPaid > 0 ? `${fmt(entryTotal - entryPaid)} due` : "✓ Settled"}</span></td>
-                        <td />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )
             )}
 
             {/* ── Session Charges section ── */}
