@@ -16,9 +16,10 @@ import {
   type PatientProfile,
   type PhysioProfile,
   type SecretaryProfile,
+  type PhysicianProfile,
 } from "../services/authService";
 
-type Profile = PatientProfile | PhysioProfile | SecretaryProfile | null;
+type Profile = PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | null;
 
 interface AuthContextValue {
   user:    Profile;

@@ -132,16 +132,18 @@ function ProtectedRoute({
   if (!user) return <Navigate to="/" replace />;
 
   if (requiredRole) {
+    const userRole = user.role as string;
     const allowed =
       requiredRole === "physiotherapist"
-        ? PHYSIO_PORTAL_ROLES.has(user.role)
+        ? PHYSIO_PORTAL_ROLES.has(userRole)
         : requiredRole === "physician"
-        ? PHYSICIAN_PORTAL_ROLES.has(user.role)
-        : user.role === requiredRole;
+        ? PHYSICIAN_PORTAL_ROLES.has(userRole)
+        : userRole === requiredRole;
 
     if (!allowed) {
-      const dest = user.role === "patient" ? "/patient"
-                 : user.role === "physician" ? "/physician"
+      const role = user.role as string;
+      const dest = role === "patient" ? "/patient"
+                 : role === "physician" ? "/physician"
                  : "/physio";
       return <Navigate to={dest} replace />;
     }
@@ -159,8 +161,9 @@ function PublicRoute({ children }: { children: ReactNode }) {
   if (loading) return <LoadingScreen />;
 
   if (user) {
-    const dest = user.role === "patient" ? "/patient"
-               : user.role === "physician" ? "/physician"
+    const role = user.role as string;
+    const dest = role === "patient" ? "/patient"
+               : role === "physician" ? "/physician"
                : "/physio";
     return <Navigate to={dest} replace />;
   }

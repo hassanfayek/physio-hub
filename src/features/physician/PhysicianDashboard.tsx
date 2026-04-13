@@ -68,11 +68,11 @@ function PatientExercisesPanel({ patient, onClose }: { patient: Patient; onClose
                     {items.map((ex) => (
                       <div key={ex.id} style={{ background: "#f5f3ef", border: "1px solid #e5e0d8", borderRadius: 12, padding: "12px 14px" }}>
                         <div style={{ fontWeight: 600, fontSize: 14, color: "#1a1a1a", marginBottom: 4 }}>{ex.name}</div>
-                        {ex.description && <div style={{ fontSize: 12, color: "#9a9590", marginBottom: 6 }}>{ex.description}</div>}
+                        {ex.notes && <div style={{ fontSize: 12, color: "#9a9590", marginBottom: 6 }}>{ex.notes}</div>}
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                           {ex.sets  ? <span style={{ fontSize: 11, background: "#EAF5FC", color: "#2E8BC0", borderRadius: 100, padding: "2px 8px", fontWeight: 600 }}>{ex.sets} sets</span>   : null}
                           {ex.reps  ? <span style={{ fontSize: 11, background: "#EAF5FC", color: "#2E8BC0", borderRadius: 100, padding: "2px 8px", fontWeight: 600 }}>{ex.reps} reps</span>   : null}
-                          {ex.hold  ? <span style={{ fontSize: 11, background: "#EAF5FC", color: "#2E8BC0", borderRadius: 100, padding: "2px 8px", fontWeight: 600 }}>{ex.hold}s hold</span>  : null}
+                          {ex.holdTime  ? <span style={{ fontSize: 11, background: "#EAF5FC", color: "#2E8BC0", borderRadius: 100, padding: "2px 8px", fontWeight: 600 }}>{ex.holdTime}s hold</span>  : null}
                           <span style={{ fontSize: 11, background: ex.completed ? "#d8f3dc" : "#f5f3ef", color: ex.completed ? "#1b4332" : "#9a9590", borderRadius: 100, padding: "2px 8px", fontWeight: 600, border: "1px solid #e5e0d8" }}>
                             {ex.completed ? "✓ Done" : "Pending"}
                           </span>
