@@ -56,7 +56,7 @@ import { getFirestore } from "firebase/firestore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type UserRole = "patient" | "physiotherapist" | "clinic_manager" | "secretary";
+export type UserRole = "patient" | "physiotherapist" | "clinic_manager" | "secretary" | "physician";
 
 export interface UserProfile {
   uid:         string;
@@ -93,6 +93,25 @@ export interface SecretaryProfile extends UserProfile {
   firstName: string;
   lastName:  string;
   phone:     string;
+}
+
+export interface PhysicianProfile extends UserProfile {
+  role:           "physician";
+  firstName:      string;
+  lastName:       string;
+  phone:          string;
+  specialization: string;
+  clinicName:     string;
+}
+
+export interface RegisterPhysicianData {
+  email:          string;
+  password:       string;
+  firstName:      string;
+  lastName:       string;
+  phone:          string;
+  specialization: string;
+  clinicName:     string;
 }
 
 export interface RegisterSecretaryData {
@@ -385,7 +404,7 @@ async function getDocWithRetry(
 
 export async function loadUserProfile(
   user: User
-): Promise<PatientProfile | PhysioProfile | SecretaryProfile | null> {
+): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | null> {
   const userSnap = await getDocWithRetry(doc(db, "users", user.uid));
 
   if (!userSnap.exists()) return null;
@@ -451,6 +470,22 @@ export async function loadUserProfile(
     } as SecretaryProfile;
   }
 
+  if (role === "physician") {
+    const phySnap = await getDocWithRetry(doc(db, "physicians", user.uid));
+    if (!phySnap.exists()) return null;
+    const p = phySnap.data() as DocumentData;
+
+    return {
+      ...base,
+      role:           "physician",
+      firstName:      p.firstName,
+      lastName:       p.lastName,
+      phone:          p.phone ?? "",
+      specialization: p.specialization ?? "",
+      clinicName:     p.clinicName ?? "",
+    } as PhysicianProfile;
+  }
+
   return null;
 }
 
@@ -500,6 +535,59 @@ export async function registerSecretary(
     phone:       data.phone,
     createdAt:   null,
     updatedAt:   null,
+  };
+}
+
+// ─── Register physician (manager-initiated) ───────────────────────────────────
+
+export async function registerPhysician(
+  data: RegisterPhysicianData
+): Promise<PhysicianProfile> {
+  const credential = await createUserWithEmailAndPassword(
+    secondaryAuth,
+    data.email,
+    data.password
+  );
+
+  const { user } = credential;
+  const displayName = `Dr. ${data.firstName} ${data.lastName}`;
+
+  await updateProfile(user, { displayName });
+
+  const now = serverTimestamp();
+
+  await setDoc(doc(db, "users", user.uid), {
+    email:       data.email,
+    role:        "physician" as UserRole,
+    displayName,
+    createdAt:   now,
+    updatedAt:   now,
+  });
+
+  await setDoc(doc(db, "physicians", user.uid), {
+    firstName:      data.firstName,
+    lastName:       data.lastName,
+    phone:          data.phone,
+    email:          data.email,
+    specialization: data.specialization,
+    clinicName:     data.clinicName,
+    createdAt:      now,
+  });
+
+  await secondaryAuth.signOut();
+
+  return {
+    uid:            user.uid,
+    email:          data.email,
+    role:           "physician",
+    displayName,
+    firstName:      data.firstName,
+    lastName:       data.lastName,
+    phone:          data.phone,
+    specialization: data.specialization,
+    clinicName:     data.clinicName,
+    createdAt:      null,
+    updatedAt:      null,
   };
 }
 

@@ -22,6 +22,8 @@ import logo from "../../assets/physio-logo.svg";
 import { subscribeToPhysiotherapists, subscribeToPhysioPatients, subscribeToAllPatients, type Physiotherapist, type Patient } from "../../services/patientService";
 import { registerSecretary } from "../../services/authService";
 import { subscribeToSecretaries, deleteSecretary, type Secretary } from "../../services/secretaryService";
+import { subscribeToPhysicians, deletePhysician, type Physician } from "../../services/physicianService";
+import { registerPhysician, type RegisterPhysicianData } from "../../services/authService";
 import AddPhysioModal from "../../components/AddPhysioModal";
 import { createPortal } from "react-dom";
 import ClinicBillingPage from "./ClinicBillingPage";
@@ -73,6 +75,14 @@ function TeamTab() {
   const [secretaryError,    setSecretaryError]    = React.useState<string | null>(null);
   const [deletingSecUid,    setDeletingSecUid]    = React.useState<string | null>(null);
 
+  // ── Physician state ───────────────────────────────────────────────────────
+  const [physicians,        setPhysicians]        = React.useState<Physician[]>([]);
+  const [showAddPhysician,  setShowAddPhysician]  = React.useState(false);
+  const [physicianForm,     setPhysicianForm]     = React.useState<RegisterPhysicianData>({ firstName: "", lastName: "", email: "", password: "", phone: "", specialization: "", clinicName: "" });
+  const [physicianSaving,   setPhysicianSaving]   = React.useState(false);
+  const [physicianError,    setPhysicianError]    = React.useState<string | null>(null);
+  const [deletingPhyUid,    setDeletingPhyUid]    = React.useState<string | null>(null);
+
   React.useEffect(() => {
     return subscribeToPhysiotherapists(setPhysios, () => {});
   }, []);
@@ -80,6 +90,40 @@ function TeamTab() {
   React.useEffect(() => {
     return subscribeToSecretaries(setSecretaries, () => {});
   }, []);
+
+  React.useEffect(() => {
+    return subscribeToPhysicians(setPhysicians, () => {});
+  }, []);
+
+  const handleAddPhysician = async () => {
+    if (!physicianForm.email || !physicianForm.password || !physicianForm.firstName || !physicianForm.lastName) {
+      setPhysicianError("First name, last name, email and password are required."); return;
+    }
+    setPhysicianSaving(true); setPhysicianError(null);
+    try {
+      await registerPhysician(physicianForm);
+      setSaveSuccess(`Dr. ${physicianForm.firstName} ${physicianForm.lastName} added as physician.`);
+      setPhysicianForm({ firstName: "", lastName: "", email: "", password: "", phone: "", specialization: "", clinicName: "" });
+      setShowAddPhysician(false);
+      setTimeout(() => setSaveSuccess(null), 4000);
+    } catch (err: unknown) {
+      const msg = (err as { message?: string }).message ?? "";
+      setPhysicianError(
+        msg.includes("email-already-in-use")
+          ? "This email is already registered."
+          : msg || "Failed to add physician."
+      );
+    }
+    setPhysicianSaving(false);
+  };
+
+  const handleDeletePhysician = async (uid: string, name: string) => {
+    if (!window.confirm(`Remove Dr. ${name}? This will permanently delete their account.`)) return;
+    setDeletingPhyUid(uid);
+    const { error } = await deletePhysician(uid);
+    if (error) alert(error);
+    setDeletingPhyUid(null);
+  };
 
   const handleDeletePhysio = async (uid: string, name: string) => {
     if (!window.confirm(`Remove Dr. ${name} from the team? This will permanently delete their account.`)) return;
@@ -300,6 +344,9 @@ function TeamTab() {
         <button className="tm-add-btn patient" onClick={() => { setShowAddSecretary(true); setSecretaryError(null); }}>
           <IconAdd /> Add Secretary
         </button>
+        <button className="tm-add-btn patient" onClick={() => { setShowAddPhysician(true); setPhysicianError(null); }} style={{ background: "#f0fdf4", color: "#2d7a3a", borderColor: "#b7e4c7" }}>
+          <IconAdd /> Add Physician
+        </button>
       </div>
 
       <div className="tm-section-label" style={{ color: "#9a9590", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: 12 }}>
@@ -413,6 +460,43 @@ function TeamTab() {
         </div>
       )}
 
+      {/* ── Physicians section ── */}
+      <div className="tm-section-label" style={{ color: "#9a9590", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: 12, marginTop: 24 }}>
+        Physicians ({physicians.length})
+      </div>
+      {physicians.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "24px 0", color: "#9a9590", fontSize: 14, marginBottom: 16 }}>No physicians added yet.</div>
+      ) : (
+        <div className="tm-grid" style={{ marginBottom: 16 }}>
+          {physicians.map((p) => (
+            <div key={p.uid} className="tm-card">
+              <div className="tm-card-header" style={{ cursor: "default" }}>
+                <div className="tm-avatar" style={{ background: "linear-gradient(135deg, #2d7a3a, #52b788)" }}>
+                  {p.firstName[0]}{p.lastName[0]}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div className="tm-name">Dr. {p.firstName} {p.lastName}</div>
+                  <div className="tm-spec">{p.email}</div>
+                  <div style={{ marginTop: 4 }}>
+                    <span className="tm-badge" style={{ background: "#dcfce7", color: "#166534" }}>Physician</span>
+                    {p.specialization && <span className="tm-badge" style={{ marginLeft: 4 }}>{p.specialization}</span>}
+                  </div>
+                </div>
+                <button
+                  className="tm-del-btn"
+                  style={{ position: "static", marginLeft: 4 }}
+                  disabled={deletingPhyUid === p.uid}
+                  onClick={() => handleDeletePhysician(p.uid, `${p.firstName} ${p.lastName}`)}
+                  title="Remove physician"
+                >
+                  {deletingPhyUid === p.uid ? "…" : "✕"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Add Physio Modal */}
       {showAddPhysio && (
         <AddPhysioModal
@@ -442,6 +526,35 @@ function TeamTab() {
               <button className="tm-modal-cancel" onClick={() => setShowAddSecretary(false)}>Cancel</button>
               <button className="tm-modal-save" disabled={secretarySaving} onClick={handleAddSecretary}>
                 {secretarySaving ? "Creating account…" : "Create Account"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Add Physician Modal */}
+      {showAddPhysician && createPortal(
+        <div className="tm-modal-overlay" onClick={() => !physicianSaving && setShowAddPhysician(false)}>
+          <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="tm-modal-title">Add Physician</div>
+            <div className="tm-modal-sub">Create a physician account. They can log in to view their referred patients.</div>
+            <div className="tm-field-row">
+              <div className="tm-field"><label className="tm-label">First Name</label><input className="tm-input" value={physicianForm.firstName} onChange={(e) => setPhysicianForm({ ...physicianForm, firstName: e.target.value })} placeholder="Ahmed" /></div>
+              <div className="tm-field"><label className="tm-label">Last Name</label><input className="tm-input" value={physicianForm.lastName} onChange={(e) => setPhysicianForm({ ...physicianForm, lastName: e.target.value })} placeholder="Hassan" /></div>
+            </div>
+            <div className="tm-field"><label className="tm-label">Email Address</label><input className="tm-input" type="email" value={physicianForm.email} onChange={(e) => setPhysicianForm({ ...physicianForm, email: e.target.value })} placeholder="doctor@hospital.com" /></div>
+            <div className="tm-field"><label className="tm-label">Password</label><input className="tm-input" type="password" value={physicianForm.password} onChange={(e) => setPhysicianForm({ ...physicianForm, password: e.target.value })} placeholder="Min. 6 characters" /></div>
+            <div className="tm-field-row">
+              <div className="tm-field"><label className="tm-label">Specialization</label><input className="tm-input" value={physicianForm.specialization} onChange={(e) => setPhysicianForm({ ...physicianForm, specialization: e.target.value })} placeholder="e.g. Orthopaedics" /></div>
+              <div className="tm-field"><label className="tm-label">Phone (optional)</label><input className="tm-input" value={physicianForm.phone} onChange={(e) => setPhysicianForm({ ...physicianForm, phone: e.target.value })} placeholder="+20 100 000 0000" /></div>
+            </div>
+            <div className="tm-field"><label className="tm-label">Clinic / Hospital (optional)</label><input className="tm-input" value={physicianForm.clinicName} onChange={(e) => setPhysicianForm({ ...physicianForm, clinicName: e.target.value })} placeholder="e.g. Cairo Medical Center" /></div>
+            {physicianError && <div className="tm-modal-error">{physicianError}</div>}
+            <div className="tm-modal-actions">
+              <button className="tm-modal-cancel" onClick={() => setShowAddPhysician(false)}>Cancel</button>
+              <button className="tm-modal-save" disabled={physicianSaving} onClick={handleAddPhysician}>
+                {physicianSaving ? "Creating account…" : "Create Account"}
               </button>
             </div>
           </div>

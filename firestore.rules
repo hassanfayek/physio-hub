@@ -16,6 +16,7 @@ service cloud.firestore {
     function isPhysio()     { return isAuth() && role() == 'physiotherapist';  }
     function isSecretary()  { return isAuth() && role() == 'secretary';        }
     function isPatient()    { return isAuth() && role() == 'patient';          }
+    function isPhysician()  { return isAuth() && role() == 'physician';        }
     function isStaff()      { return isManager() || isPhysio() || isSecretary(); }
 
     // ── Users ─────────────────────────────────────────────────────────────────
@@ -37,6 +38,12 @@ service cloud.firestore {
       allow write: if isManager();
     }
 
+    // ── Physicians ────────────────────────────────────────────────────────────
+    match /physicians/{uid} {
+      allow read:  if isStaff() || isPhysician();
+      allow write: if isManager();
+    }
+
     // ── Patients ──────────────────────────────────────────────────────────────
     match /patients/{patientId} {
       allow read:            if isAuth();
@@ -51,29 +58,29 @@ service cloud.firestore {
     }
 
     match /patientAssessments/{patientId} {
-      allow read:  if isStaff();
+      allow read:  if isStaff() || isPhysician();
       allow write: if isManager() || isPhysio();
     }
 
     match /patientDiagnosis/{patientId} {
-      allow read:  if isStaff();
+      allow read:  if isStaff() || isPhysician();
       allow write: if isManager() || isPhysio();
     }
 
     match /patientSessions/{docId} {
-      allow read:  if isStaff() || isPatient();
+      allow read:  if isStaff() || isPatient() || isPhysician();
       allow write: if isManager() || isPhysio();
     }
 
     match /patientDocuments/{docId} {
-      allow read:   if isStaff() || isPatient();
+      allow read:   if isStaff() || isPatient() || isPhysician();
       allow create: if isStaff() || (isPatient() && request.resource.data.uploadedBy == request.auth.uid && request.resource.data.patientId == request.auth.uid);
       allow update: if isStaff();
       allow delete: if isStaff() || (isPatient() && resource.data.patientId == request.auth.uid && resource.data.uploadedBy == request.auth.uid);
     }
 
     match /patientExercises/{docId} {
-      allow read:          if isStaff() || isPatient();
+      allow read:          if isStaff() || isPatient() || isPhysician();
       allow create, delete: if isManager() || isPhysio();
       allow update:        if isManager() || isPhysio() || isPatient();
     }
@@ -170,12 +177,12 @@ service cloud.firestore {
 
     // ── Online Rehabilitation ─────────────────────────────────────────────────
     match /onlineRehabEnrollments/{docId} {
-      allow read:  if isStaff();
+      allow read:  if isStaff() || isPhysician();
       allow write: if isManager() || isPhysio();
     }
 
     match /onlineRehabPrograms/{docId} {
-      allow read:  if isStaff();
+      allow read:  if isStaff() || isPhysician();
       allow write: if isManager() || isPhysio();
     }
 

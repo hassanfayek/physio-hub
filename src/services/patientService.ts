@@ -37,8 +37,9 @@ export interface Patient {
   juniorName:       string | null;
   traineeId:        string | null;
   traineeName:      string | null;
-  hideBodyProfile?: boolean;
-  referredBy?:      string;
+  hideBodyProfile?:        boolean;
+  referredBy?:             string;
+  referredByPhysicianId?:  string;
 }
 
 export type PhysioRank = "manager" | "senior" | "junior" | "trainee";
@@ -61,7 +62,8 @@ export interface CreatePatientPayload {
   physioId:   string;
   dateOfBirth?: string;
   phone?:       string;
-  referredBy?:  string;
+  referredBy?:            string;
+  referredByPhysicianId?: string;
 }
 
 export interface CreatePatientResult {
@@ -108,8 +110,9 @@ function docToPatient(id: string, data: Record<string, unknown>): Patient {
     juniorName:       (data.juniorName       as string | null) ?? null,
     traineeId:        (data.traineeId        as string | null) ?? null,
     traineeName:      (data.traineeName      as string | null) ?? null,
-    hideBodyProfile:  (data.hideBodyProfile  as boolean | undefined) ?? true,
-    referredBy:       (data.referredBy       as string | undefined)  ?? "",
+    hideBodyProfile:       (data.hideBodyProfile       as boolean | undefined) ?? true,
+    referredBy:            (data.referredBy            as string | undefined)  ?? "",
+    referredByPhysicianId: (data.referredByPhysicianId as string | undefined)  ?? "",
   };
 }
 
@@ -185,10 +188,11 @@ export async function createPatient(
       physioId:     payload.physioId,
       dateOfBirth:  payload.dateOfBirth ?? "",
       phone:        payload.phone ?? "",
-      accessCode:   code,
-      status:       "active",
-      referredBy:   payload.referredBy ?? "",
-      createdAt:    serverTimestamp(),
+      accessCode:            code,
+      status:                "active",
+      referredBy:            payload.referredBy ?? "",
+      referredByPhysicianId: payload.referredByPhysicianId ?? "",
+      createdAt:             serverTimestamp(),
     });
 
     return {
@@ -405,6 +409,33 @@ export function subscribeToAllPatients(
     q,
     (snap) => onData(snap.docs.map((d) => docToPatient(d.id, d.data()))),
     (err)  => onError?.(err)
+  );
+}
+
+// ─── Realtime listener: patients referred by a specific physician ─────────────
+
+export function subscribeToPhysicianPatients(
+  physicianId: string,
+  onData:      (patients: Patient[]) => void,
+  onError?:    (err: Error) => void
+): () => void {
+  const q = query(
+    collection(db, "patients"),
+    where("referredByPhysicianId", "==", physicianId)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs
+        .map((d) => docToPatient(d.id, d.data()))
+        .sort((a, b) => {
+          const ta = (a.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+          const tb = (b.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+          return tb - ta;
+        });
+      onData(list);
+    },
+    (err) => onError?.(err)
   );
 }
 

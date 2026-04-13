@@ -4,6 +4,7 @@ import { useState, useEffect, type FormEvent, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { createPatient, type CreatePatientPayload, type Physiotherapist } from "../services/patientService";
 import type { Patient } from "../services/patientService";
+import { subscribeToPhysicians, type Physician } from "../services/physicianService";
 import { X, AlertCircle, Copy, Check } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -32,6 +33,8 @@ export default function AddPatientModal({
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [phone,       setPhone]       = useState("");
   const [referredBy,  setReferredBy]  = useState("");
+  const [referredByPhysicianId, setReferredByPhysicianId] = useState("");
+  const [physicians,  setPhysicians]  = useState<Physician[]>([]);
   const [assignedPhysioId, setAssignedPhysioId] = useState(physioId);
 
   const [loading, setLoading] = useState(false);
@@ -41,6 +44,10 @@ export default function AddPatientModal({
   const [createdCode,    setCreatedCode]    = useState<string | null>(null);
   const [createdPatient, setCreatedPatient] = useState<Patient | null>(null);
   const [copied,         setCopied]         = useState(false);
+
+  useEffect(() => {
+    return subscribeToPhysicians(setPhysicians, () => {});
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -67,7 +74,8 @@ export default function AddPatientModal({
       physioId:   isManager ? assignedPhysioId : physioId,
       dateOfBirth,
       phone,
-      referredBy: referredBy.trim(),
+      referredBy:            referredBy.trim(),
+      referredByPhysicianId: referredByPhysicianId || undefined,
     };
 
     const result = await createPatient(payload);
@@ -330,6 +338,21 @@ export default function AddPatientModal({
                   <input className="apm-input" placeholder="e.g. Dr. Ahmed, Google, Word of mouth…" value={referredBy}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setReferredBy(e.target.value)} />
                 </div>
+
+                {physicians.length > 0 && (
+                  <div className="apm-field">
+                    <label className="apm-label">Referring Physician (optional)</label>
+                    <div className="apm-select-wrap">
+                      <select className="apm-select" value={referredByPhysicianId}
+                        onChange={(e: ChangeEvent<HTMLSelectElement>) => setReferredByPhysicianId(e.target.value)}>
+                        <option value="">— None —</option>
+                        {physicians.map((p) => (
+                          <option key={p.uid} value={p.uid}>Dr. {p.firstName} {p.lastName}{p.specialization ? ` · ${p.specialization}` : ""}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
 
                 {isManager && (
                   <div className="apm-field">

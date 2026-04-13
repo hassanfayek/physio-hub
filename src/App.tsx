@@ -21,8 +21,9 @@ import RegisterPage from "./features/auth/RegisterPage";
 import logo from "./assets/physio-logo.svg";
 
 // Truly lazy-load the heavy dashboards — they ship in separate JS chunks
-const PatientDashboard = lazy(() => import("./features/patient/PatientDashboard"));
-const PhysioDashboard  = lazy(() => import("./features/physio/PhysioDashboard"));
+const PatientDashboard   = lazy(() => import("./features/patient/PatientDashboard"));
+const PhysioDashboard    = lazy(() => import("./features/physio/PhysioDashboard"));
+const PhysicianDashboard = lazy(() => import("./features/physician/PhysicianDashboard"));
 
 // ─── Loading screen (shown while Firebase resolves auth state) ────────────────
 
@@ -114,13 +115,15 @@ function LoadingScreen() {
 
 // Roles that can access the /physio portal
 const PHYSIO_PORTAL_ROLES = new Set(["physiotherapist", "clinic_manager", "secretary"]);
+// Roles that can access the /physician portal
+const PHYSICIAN_PORTAL_ROLES = new Set(["physician"]);
 
 function ProtectedRoute({
   children,
   requiredRole,
 }: {
   children:      ReactNode;
-  requiredRole?: "patient" | "physiotherapist";
+  requiredRole?: "patient" | "physiotherapist" | "physician";
 }) {
   const { user, loading } = useAuth();
 
@@ -129,14 +132,18 @@ function ProtectedRoute({
   if (!user) return <Navigate to="/" replace />;
 
   if (requiredRole) {
-    // "physiotherapist" gate also admits clinic_manager
     const allowed =
       requiredRole === "physiotherapist"
         ? PHYSIO_PORTAL_ROLES.has(user.role)
+        : requiredRole === "physician"
+        ? PHYSICIAN_PORTAL_ROLES.has(user.role)
         : user.role === requiredRole;
 
     if (!allowed) {
-      return <Navigate to={user.role === "patient" ? "/patient" : "/physio"} replace />;
+      const dest = user.role === "patient" ? "/patient"
+                 : user.role === "physician" ? "/physician"
+                 : "/physio";
+      return <Navigate to={dest} replace />;
     }
   }
 
@@ -152,7 +159,10 @@ function PublicRoute({ children }: { children: ReactNode }) {
   if (loading) return <LoadingScreen />;
 
   if (user) {
-    return <Navigate to={user.role === "patient" ? "/patient" : "/physio"} replace />;
+    const dest = user.role === "patient" ? "/patient"
+               : user.role === "physician" ? "/physician"
+               : "/physio";
+    return <Navigate to={dest} replace />;
   }
 
   return <>{children}</>;
@@ -185,6 +195,12 @@ function AppRoutes() {
         <Route path="/physio" element={
           <ProtectedRoute requiredRole="physiotherapist">
             <PhysioDashboard />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/physician" element={
+          <ProtectedRoute requiredRole="physician">
+            <PhysicianDashboard />
           </ProtectedRoute>
         } />
 
