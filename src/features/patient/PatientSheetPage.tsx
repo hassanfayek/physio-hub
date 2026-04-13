@@ -470,10 +470,17 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
   const handleSaveExtProfile = async () => {
     if (!patientId) return;
     setExtSaving(true);
-    await setDoc(doc(db, "patientProfiles", patientId), {
-      ...extDraft,
-      updatedAt: serverTimestamp(),
-    });
+    await Promise.all([
+      setDoc(doc(db, "patientProfiles", patientId), {
+        ...extDraft,
+        updatedAt: serverTimestamp(),
+      }),
+      // Keep phone in the main patients document so patient lists stay in sync
+      updateDoc(doc(db, "patients", patientId), {
+        phone: extDraft.phone,
+        updatedAt: serverTimestamp(),
+      }),
+    ]);
     setExtProfile(extDraft);
     setExtEditing(false);
     setExtSaving(false);
