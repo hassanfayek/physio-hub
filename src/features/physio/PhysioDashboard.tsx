@@ -854,26 +854,32 @@ export default function PhysioDashboard() {
   const [isManager,   setIsManager]   = useState(false);
   const [isSenior,    setIsSenior]    = useState(false);
   const [isSecretary, setIsSecretary] = useState(false);
+  const [roleLoading, setRoleLoading] = useState(true);
 
   useEffect(() => {
     if (!user?.uid) return;
-    getDoc(doc(db, "users", user.uid)).then((snap) => {
+    setRoleLoading(true);
+    const isSecretaryRole = user.role === "secretary";
+
+    const userPromise = getDoc(doc(db, "users", user.uid)).then((snap) => {
       if (snap.exists()) {
         const role = snap.data().role as string | undefined;
         setIsManager(role === "manager" || role === "clinic_manager");
         setIsSecretary(role === "secretary");
       }
     });
-    // Read rank from physiotherapists collection (skip for secretary)
-    if (user.role !== "secretary") {
-      getDoc(doc(db, "physiotherapists", user.uid)).then((snap) => {
-        if (snap.exists()) {
-          const rank = snap.data().rank as string | undefined;
-          setIsSenior(rank === "senior" || rank === "manager");
-          if (rank === "manager") setIsManager(true);
-        }
-      });
-    }
+
+    const physioPromise = !isSecretaryRole
+      ? getDoc(doc(db, "physiotherapists", user.uid)).then((snap) => {
+          if (snap.exists()) {
+            const rank = snap.data().rank as string | undefined;
+            setIsSenior(rank === "senior" || rank === "manager");
+            if (rank === "manager") setIsManager(true);
+          }
+        })
+      : Promise.resolve();
+
+    Promise.all([userPromise, physioPromise]).finally(() => setRoleLoading(false));
   }, [user?.uid, user?.role]);
 
   const physio = user as unknown as PhysioProfile | null;
@@ -1293,7 +1299,7 @@ export default function PhysioDashboard() {
               </>
             ) : (
               <>
-                {activeTab === "overview"  && <OverviewTab physio={physio} isManager={isManager} isSenior={isSenior} isSecretary={isSecretary} onViewPatient={(id) => setViewingPatientId(id)} />}
+                {activeTab === "overview"  && (roleLoading ? null : <OverviewTab physio={physio} isManager={isManager} isSenior={isSenior} isSecretary={isSecretary} onViewPatient={(id) => setViewingPatientId(id)} />)}
                 {activeTab === "patients"  && !isManager && (
                   <PatientsTab
                     physioId={physio.uid}
