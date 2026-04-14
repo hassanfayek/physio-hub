@@ -3,7 +3,8 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Users, Dumbbell, User, ChevronDown, ChevronRight, FileText } from "lucide-react";
+import { LogOut, Users, Dumbbell, User, ChevronDown, ChevronRight, FileText, ArrowLeft, ClipboardList } from "lucide-react";
+import PatientSheetPage from "../patient/PatientSheetPage";
 import { useAuth } from "../../hooks/useAuth";
 import { subscribeToPhysicianPatients, type Patient } from "../../services/patientService";
 import { subscribeToPatientExercises, type PatientExercise } from "../../services/exerciseService";
@@ -253,9 +254,10 @@ export default function PhysicianDashboard() {
   const [activeTab, setActiveTab]   = useState<Tab>("patients");
   const [patients,  setPatients]    = useState<Patient[]>([]);
   const [loading,   setLoading]     = useState(true);
-  const [expanded,  setExpanded]    = useState<string | null>(null);
+  const [expanded,      setExpanded]      = useState<string | null>(null);
   const [viewExercises, setViewExercises] = useState<Patient | null>(null);
   const [viewNotes,     setViewNotes]     = useState<Patient | null>(null);
+  const [viewingPatientId, setViewingPatientId] = useState<string | null>(null);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   useEffect(() => {
@@ -274,6 +276,31 @@ export default function PhysicianDashboard() {
   };
 
   if (!physician) return null;
+
+  // ── Patient sheet view ──────────────────────────────────────────────────────
+  if (viewingPatientId) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f8f6f2", fontFamily: "'Outfit', sans-serif" }}>
+        <header style={{
+          position: "sticky", top: 0, zIndex: 100,
+          background: "#fff", borderBottom: "1px solid #e5e0d8",
+          display: "flex", alignItems: "center", gap: 14,
+          padding: "0 24px", height: 60,
+        }}>
+          <img src={logo} alt="Physio+ Hub" style={{ height: 32 }} />
+          <button
+            onClick={() => setViewingPatientId(null)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: "1.5px solid #e5e0d8", background: "#fff", fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 500, color: "#5a5550", cursor: "pointer" }}
+          >
+            <ArrowLeft size={14} strokeWidth={2} /> Back to Patients
+          </button>
+        </header>
+        <div style={{ padding: "20px 24px", maxWidth: 900, margin: "0 auto" }}>
+          <PatientSheetPage patientId={viewingPatientId} onBack={() => setViewingPatientId(null)} />
+        </div>
+      </div>
+    );
+  }
 
   const active     = patients.filter((p) => p.status === "active");
   const discharged = patients.filter((p) => p.status === "discharged");
@@ -454,8 +481,11 @@ export default function PhysicianDashboard() {
                                   <div className="phd-detail-val">{ss.label}</div>
                                 </div>
                                 <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                  <button className="phd-ex-btn" onClick={() => setViewingPatientId(p.uid)}>
+                                    <ClipboardList size={12} strokeWidth={2} /> View Patient Sheet
+                                  </button>
                                   <button className="phd-ex-btn" onClick={() => setViewExercises(p)}>
-                                    <Dumbbell size={12} strokeWidth={2} /> View Exercise Program
+                                    <Dumbbell size={12} strokeWidth={2} /> Exercises
                                   </button>
                                   <button className="phd-ex-btn" style={{ borderColor: "#c4b5fd", background: "#f5f0fb", color: "#6d28d9" }} onClick={() => setViewNotes(p)}>
                                     <FileText size={12} strokeWidth={2} /> My Notes

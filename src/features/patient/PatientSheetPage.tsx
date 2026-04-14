@@ -708,12 +708,13 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
   // canEditProfile: can edit patient profile & manage documents (non-clinical)
   const canEditProfile: boolean = canEdit || isSecretary;
 
-  // canViewPatient: true for any physio assigned to this patient in any role
+  // canViewPatient: true for any physio assigned to this patient in any role, or assigned physician
   const myUid = (user as PhysioProfile)?.uid ?? "";
   const canViewPatient: boolean =
     role === "clinic_manager" ||
     role === "patient" ||
     role === "secretary" ||
+    role === "physician" ||
     (role === "physiotherapist" && !!(
       (patient?.seniorEditorId && patient.seniorEditorId === myUid) ||
       (patient?.juniorId        && patient.juniorId        === myUid) ||
