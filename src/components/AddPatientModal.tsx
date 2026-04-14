@@ -30,7 +30,7 @@ export default function AddPatientModal({
   const [firstName,   setFirstName]   = useState("");
   const [lastName,    setLastName]    = useState("");
   const [occupation,  setOccupation]  = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [age,         setAge]         = useState("");
   const [phone,       setPhone]       = useState("");
   const [referredBy,  setReferredBy]  = useState("");
   const [referredByPhysicianId, setReferredByPhysicianId] = useState("");
@@ -72,7 +72,7 @@ export default function AddPatientModal({
       lastName:   lastName.trim(),
       occupation: occupation.trim(),
       physioId:   isManager ? assignedPhysioId : physioId,
-      dateOfBirth,
+      age,
       phone,
       referredBy:            referredBy.trim(),
       referredByPhysicianId: referredByPhysicianId || undefined,
@@ -316,9 +316,9 @@ export default function AddPatientModal({
 
                 <div className="apm-grid2">
                   <div className="apm-field">
-                    <label className="apm-label">Date of Birth</label>
-                    <input className="apm-input" type="date" value={dateOfBirth}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setDateOfBirth(e.target.value)} />
+                    <label className="apm-label">Age</label>
+                    <input className="apm-input" type="number" min="0" max="120" placeholder="e.g. 35" value={age}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setAge(e.target.value)} />
                   </div>
                   <div className="apm-field">
                     <label className="apm-label">Phone</label>

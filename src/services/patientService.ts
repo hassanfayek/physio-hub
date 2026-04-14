@@ -61,8 +61,8 @@ export interface CreatePatientPayload {
   lastName:   string;
   occupation: string;
   physioId:   string;
-  dateOfBirth?: string;
-  phone?:       string;
+  age?:   string;
+  phone?: string;
   referredBy?:            string;
   referredByPhysicianId?: string;
 }
@@ -188,7 +188,7 @@ export async function createPatient(
       email,
       occupation:   payload.occupation,
       physioId:     payload.physioId,
-      dateOfBirth:  payload.dateOfBirth ?? "",
+      age:          payload.age ?? "",
       phone:        payload.phone ?? "",
       accessCode:            code,
       status:                "active",

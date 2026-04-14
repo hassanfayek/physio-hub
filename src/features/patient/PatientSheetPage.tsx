@@ -350,7 +350,7 @@ const TREATMENT_TYPES = [
 // ─── Patient extended profile ────────────────────────────────────────────────
 
 interface PatientExtProfile {
-  dateOfBirth:  string;
+  age:          string;
   gender:       string;
   occupation:   string;
   phone:        string;
@@ -363,7 +363,7 @@ interface PatientExtProfile {
 }
 
 const EMPTY_EXT: PatientExtProfile = {
-  dateOfBirth:      "",
+  age:              "",
   gender:           "",
   occupation:       "",
   phone:            "",
@@ -1972,7 +1972,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
 
               {/* Personal info — all physios can see */}
               {[
-                { key: "Date of Birth",     val: extProfile.dateOfBirth  },
+                { key: "Age",               val: extProfile.age ? `${extProfile.age} years` : "" },
                 { key: "Gender",            val: extProfile.gender       },
                 { key: "Occupation",        val: extProfile.occupation   },
                 { key: "Nationality",       val: extProfile.nationality  },
@@ -2053,10 +2053,10 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
             <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 14, padding: 16 }}>
               <div className="ps-field-row-2">
                 <div className="ps-field-group">
-                  <label className="ps-field-label">Date of Birth</label>
-                  <input className="ps-field-input" value={extDraft.dateOfBirth}
-                    onChange={(e) => setExtDraft({ ...extDraft, dateOfBirth: e.target.value })}
-                    placeholder="e.g. 15 March 1990" />
+                  <label className="ps-field-label">Age</label>
+                  <input className="ps-field-input" type="number" min="0" max="120" value={extDraft.age}
+                    onChange={(e) => setExtDraft({ ...extDraft, age: e.target.value })}
+                    placeholder="e.g. 35" />
                 </div>
                 <div className="ps-field-group">
                   <label className="ps-field-label">Gender</label>
