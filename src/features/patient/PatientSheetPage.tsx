@@ -6,9 +6,17 @@ import {
   subscribeToPatient,
   subscribeToPhysiotherapists,
   assignSeniorEditor,
+  assignPhysician,
   type Patient,
   type Physiotherapist,
 } from "../../services/patientService";
+import {
+  subscribeToPhysicians,
+  subscribeToPhysicianNotes,
+  deletePhysicianNote,
+  type Physician,
+  type PhysicianNote,
+} from "../../services/physicianService";
 import type { PhysioProfile } from "../../services/authService";
 import ExerciseProgram        from "./ExerciseProgram";
 import JointAssessmentSheet  from "./JointAssessmentSheet";
@@ -194,6 +202,74 @@ function SeniorAssignPanel({
           Edit access granted to {seniorEditorName}
         </div>
       )}
+      {error && <div className="ps-senior-error">{error}</div>}
+    </div>
+  );
+}
+
+// ─── Physician Assignment panel (clinic_manager only) ─────────────────────────
+
+interface PhysicianAssignPanelProps {
+  patientId:            string;
+  physicians:           Physician[];
+  assignedPhysicianId:  string | null;
+}
+
+function PhysicianAssignPanel({ patientId, physicians, assignedPhysicianId }: PhysicianAssignPanelProps) {
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+  const [error,  setError]  = useState<string | null>(null);
+
+  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedId = e.target.value;
+    setSaving(true); setError(null); setSaved(false);
+
+    if (!selectedId) {
+      const result = await assignPhysician(patientId, null, null);
+      setSaving(false);
+      if (result.error) { setError(result.error); return; }
+    } else {
+      const p = physicians.find((ph) => ph.uid === selectedId);
+      if (!p) { setSaving(false); return; }
+      const result = await assignPhysician(patientId, p.uid, `Dr. ${p.firstName} ${p.lastName}`);
+      setSaving(false);
+      if (result.error) { setError(result.error); return; }
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  return (
+    <div className="ps-senior-panel" style={{ background: "#f5f0fb", borderColor: "#c4b5fd" }}>
+      <div className="ps-senior-label" style={{ color: "#6d28d9" }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+        </svg>
+        Assigned Physician
+      </div>
+      <div className="ps-senior-row">
+        <select
+          className="ps-senior-select"
+          style={{ borderColor: "#c4b5fd" }}
+          value={assignedPhysicianId ?? ""}
+          onChange={handleChange}
+          disabled={saving}
+        >
+          <option value="">— Unassigned —</option>
+          {physicians.map((p) => (
+            <option key={p.uid} value={p.uid}>
+              Dr. {p.firstName} {p.lastName}{p.specialization ? ` · ${p.specialization}` : ""}
+            </option>
+          ))}
+        </select>
+        {saving && <span className="ps-senior-spinner" />}
+        {saved && !saving && (
+          <span className="ps-senior-saved" style={{ color: "#6d28d9" }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Saved
+          </span>
+        )}
+      </div>
       {error && <div className="ps-senior-error">{error}</div>}
     </div>
   );
@@ -387,8 +463,9 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
   const patientId = patientIdProp ?? user?.uid ?? "";
 
   // ── Live patient document ──────────────────────────────────────────────────
-  const [patient, setPatient] = useState<Patient | null>(null);
-  const [physios, setPhysios] = useState<Physiotherapist[]>([]);
+  const [patient,    setPatient]    = useState<Patient | null>(null);
+  const [physios,    setPhysios]    = useState<Physiotherapist[]>([]);
+  const [physicians, setPhysicians] = useState<Physician[]>([]);
 
   useEffect(() => {
     if (!patientId) return;
@@ -592,10 +669,12 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     setTimeout(() => setDiagSaved(false), 2500);
   };
 
-  // Load physio roster only when the current user is a manager (for assignment dropdown)
+  // Load physio + physician rosters only when the current user is a manager (for assignment dropdowns)
   useEffect(() => {
     if (user?.role !== "clinic_manager") return;
-    return subscribeToPhysiotherapists(setPhysios);
+    const unsubPhysios = subscribeToPhysiotherapists(setPhysios);
+    const unsubPhysicians = subscribeToPhysicians(setPhysicians);
+    return () => { unsubPhysios(); unsubPhysicians(); };
   }, [user?.role]);
 
   // ── Billing visibility for secretary ──────────────────────────────────────
@@ -642,6 +721,22 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       (patient?.physioId        && patient.physioId        === myUid)
     ));
 
+  // ── Physician Notes state ──────────────────────────────────────────────────
+  const [physicianNotes, setPhysicianNotes] = useState<PhysicianNote[]>([]);
+  const [pnDeleting,     setPnDeleting]     = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!patientId) return;
+    return subscribeToPhysicianNotes(patientId, setPhysicianNotes, () => {});
+  }, [patientId]);
+
+  const handleDeletePhysicianNote = async (noteId: string) => {
+    if (!window.confirm("Delete this physician note? This cannot be undone.")) return;
+    setPnDeleting(noteId);
+    await deletePhysicianNote(noteId);
+    setPnDeleting(null);
+  };
+
   // ── Diagnosis state (editable by canEdit) ─────────────────────────────────
   const [diagData,     setDiagData]     = useState<DiagnosisData>(EMPTY_DIAGNOSIS);
   const [diagEditing,  setDiagEditing]  = useState(false);
@@ -686,6 +781,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     { id: "exercises",         label: "Exercises" },
     { id: "joint-assessment",  label: "Body Profile",     physioOnly: patient?.hideBodyProfile !== false },
     { id: "pricing",           label: "Price Sheet",       billingOnly: true },
+    { id: "physician-notes",   label: "Physician Notes",   hideFromPatient: true },
   ];
   // Filter sections by role:
   //   physioOnly  → hidden from patients and secretaries (clinical data)
@@ -694,6 +790,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
   const sections = allSections.filter((sec) => {
     if (sec.physioOnly  && (role === "patient" || isSecretary)) return false;
     if (sec.managerOnly && role === "physiotherapist") return false;
+    if ((sec as { hideFromPatient?: boolean }).hideFromPatient && role === "patient") return false;
     if (sec.billingOnly) {
       if (role === "clinic_manager") return true;
       if (isSecretary) return secretaryCanViewPricing;
@@ -1748,6 +1845,15 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         />
       )}
 
+      {/* ── Manager assigns physician ── */}
+      {isManager && physicians.length > 0 && (
+        <PhysicianAssignPanel
+          patientId={patientId}
+          physicians={physicians}
+          assignedPhysicianId={patient?.referredByPhysicianId ?? null}
+        />
+      )}
+
       {/* ── Read-only banner for non-editors ── */}
       {!canEdit && !isSecretary && <ReadOnlyBanner role={role} />}
       {isSecretary && (
@@ -1919,7 +2025,13 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                       Trainee: {patient.traineeName}
                     </span>
                   )}
-                  {!patient?.seniorEditorName && !patient?.juniorName && !patient?.traineeName && (
+                  {patient?.referredByPhysicianName && (
+                    <span className="ps-profile-team-chip" style={{ background: "#f5f0fb", color: "#6d28d9" }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                      Physician: {patient.referredByPhysicianName}
+                    </span>
+                  )}
+                  {!patient?.seniorEditorName && !patient?.juniorName && !patient?.traineeName && !patient?.referredByPhysicianName && (
                     <span style={{ fontSize: 13, color: "#c0bbb4", fontStyle: "italic" }}>No team assigned yet</span>
                   )}
                 </div>
@@ -3053,6 +3165,60 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
           )}
         </>
       )}
+      {/* ── PHYSICIAN NOTES ── */}
+      {activeSection === "physician-notes" && role !== "patient" && (
+        <>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 500, color: "#1a1a1a", marginBottom: 4 }}>
+            Physician Notes
+          </div>
+          <div style={{ fontSize: 13, color: "#9a9590", marginBottom: 20 }}>
+            Clinical notes written by the referring physician.
+          </div>
+
+          {physicianNotes.length === 0 ? (
+            <div style={{
+              textAlign: "center", padding: "44px 24px",
+              background: "#fafaf8", borderRadius: 14,
+              border: "1.5px dashed #e5e0d8",
+              fontSize: 14, color: "#c0bbb4",
+            }}>
+              No physician notes recorded yet.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {physicianNotes.map((n) => (
+                <div key={n.id} style={{
+                  background: "#fff", border: "1px solid #e5e0d8",
+                  borderRadius: 14, padding: "16px 18px", position: "relative",
+                }}>
+                  <div style={{ position: "absolute", left: 0, top: 16, bottom: 16, width: 3, background: "linear-gradient(180deg,#6d28d9,#a78bfa)", borderRadius: 3 }} />
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 600, background: "#f5f0fb", color: "#6d28d9", padding: "2px 10px", borderRadius: 100 }}>
+                        {n.physicianName}
+                      </span>
+                      <span style={{ fontSize: 12, color: "#9a9590" }}>{n.date}</span>
+                    </div>
+                    {isManager && (
+                      <button
+                        disabled={pnDeleting === n.id}
+                        onClick={() => handleDeletePhysicianNote(n.id)}
+                        style={{ width: 28, height: 28, borderRadius: 8, border: "1.5px solid #e5e0d8", background: "#fff", cursor: "pointer", color: "#9a9590", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}
+                        onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#fca5a5"; (e.currentTarget as HTMLButtonElement).style.color = "#b91c1c"; }}
+                        onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#e5e0d8"; (e.currentTarget as HTMLButtonElement).style.color = "#9a9590"; }}
+                      >
+                        {pnDeleting === n.id ? "…" : "✕"}
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 14, color: "#1a1a1a", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{n.note}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
       {/* ── PRICING ── */}
       {activeSection === "pricing" && (role === "clinic_manager" || role === "secretary") && (
         <PatientPricingSection

@@ -37,9 +37,10 @@ export interface Patient {
   juniorName:       string | null;
   traineeId:        string | null;
   traineeName:      string | null;
-  hideBodyProfile?:        boolean;
-  referredBy?:             string;
-  referredByPhysicianId?:  string;
+  hideBodyProfile?:          boolean;
+  referredBy?:               string;
+  referredByPhysicianId?:    string;
+  referredByPhysicianName?:  string;
 }
 
 export type PhysioRank = "manager" | "senior" | "junior" | "trainee";
@@ -110,9 +111,10 @@ function docToPatient(id: string, data: Record<string, unknown>): Patient {
     juniorName:       (data.juniorName       as string | null) ?? null,
     traineeId:        (data.traineeId        as string | null) ?? null,
     traineeName:      (data.traineeName      as string | null) ?? null,
-    hideBodyProfile:       (data.hideBodyProfile       as boolean | undefined) ?? true,
-    referredBy:            (data.referredBy            as string | undefined)  ?? "",
-    referredByPhysicianId: (data.referredByPhysicianId as string | undefined)  ?? "",
+    hideBodyProfile:          (data.hideBodyProfile          as boolean | undefined) ?? true,
+    referredBy:               (data.referredBy               as string | undefined)  ?? "",
+    referredByPhysicianId:    (data.referredByPhysicianId    as string | undefined)  ?? "",
+    referredByPhysicianName:  (data.referredByPhysicianName  as string | undefined)  ?? "",
   };
 }
 
@@ -279,6 +281,25 @@ export async function assignSeniorEditor(
     await updateDoc(doc(db, "patients", patientId), {
       seniorEditorId,
       seniorEditorName,
+      updatedAt: serverTimestamp(),
+    });
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+// ─── Assign physician to an existing patient ─────────────────────────────────
+
+export async function assignPhysician(
+  patientId:           string,
+  physicianId:         string | null,
+  physicianName:       string | null,
+): Promise<{ error?: string }> {
+  try {
+    await updateDoc(doc(db, "patients", patientId), {
+      referredByPhysicianId:   physicianId  ?? "",
+      referredByPhysicianName: physicianName ?? "",
       updatedAt: serverTimestamp(),
     });
     return {};

@@ -44,6 +44,14 @@ service cloud.firestore {
       allow write: if isManager();
     }
 
+    // ── Physician Notes ───────────────────────────────────────────────────────
+    match /physicianNotes/{docId} {
+      allow read:   if isStaff() || isPhysician();
+      allow create: if isPhysician() && request.resource.data.physicianId == request.auth.uid;
+      allow update: if isManager() || (isPhysician() && resource.data.physicianId == request.auth.uid);
+      allow delete: if isManager() || (isPhysician() && resource.data.physicianId == request.auth.uid);
+    }
+
     // ── Patients ──────────────────────────────────────────────────────────────
     match /patients/{patientId} {
       allow read:            if isAuth();

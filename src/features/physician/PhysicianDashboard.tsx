@@ -3,10 +3,16 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Users, Dumbbell, User, ChevronDown, ChevronRight } from "lucide-react";
+import { LogOut, Users, Dumbbell, User, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { subscribeToPhysicianPatients, type Patient } from "../../services/patientService";
 import { subscribeToPatientExercises, type PatientExercise } from "../../services/exerciseService";
+import {
+  subscribeToPhysicianNotes,
+  addPhysicianNote,
+  deletePhysicianNote,
+  type PhysicianNote,
+} from "../../services/physicianService";
 import type { PhysicianProfile } from "../../services/authService";
 import logo from "../../assets/physio-logo.svg";
 import { createPortal } from "react-dom";
@@ -91,6 +97,152 @@ function PatientExercisesPanel({ patient, onClose }: { patient: Patient; onClose
   );
 }
 
+// ─── Physician notes panel ───────────────────────────────────────────────────
+
+function PatientNotesPanel({
+  patient,
+  physician,
+  onClose,
+}: {
+  patient:   Patient;
+  physician: PhysicianProfile;
+  onClose:   () => void;
+}) {
+  const [notes,   setNotes]   = useState<PhysicianNote[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [draft,   setDraft]   = useState("");
+  const [date,    setDate]    = useState(() => new Date().toISOString().slice(0, 10));
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    return subscribeToPhysicianNotes(
+      patient.uid,
+      (data) => { setNotes(data.filter((n) => n.physicianId === physician.uid)); setLoading(false); },
+      () => setLoading(false)
+    );
+  }, [patient.uid, physician.uid]);
+
+  const handleSave = async () => {
+    if (!draft.trim()) return;
+    setSaving(true); setError(null);
+    const result = await addPhysicianNote({
+      patientId:     patient.uid,
+      physicianId:   physician.uid,
+      physicianName: `Dr. ${physician.firstName} ${physician.lastName}`,
+      date,
+      note:          draft.trim(),
+    });
+    setSaving(false);
+    if (result.error) { setError(result.error); return; }
+    setDraft("");
+  };
+
+  const handleDelete = async (noteId: string) => {
+    if (!window.confirm("Delete this note?")) return;
+    setDeleting(noteId);
+    await deletePhysicianNote(noteId);
+    setDeleting(null);
+  };
+
+  return createPortal(
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 1000,
+      background: "rgba(10,15,10,0.5)", backdropFilter: "blur(3px)",
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+    }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{
+        background: "#fff", borderRadius: 20, padding: 28,
+        width: "min(620px, 100%)", maxHeight: "88vh", overflowY: "auto",
+        boxShadow: "0 24px 80px rgba(0,0,0,0.18)", fontFamily: "'Outfit', sans-serif",
+      }} onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 500, color: "#1a1a1a" }}>
+              {patient.firstName} {patient.lastName}
+            </div>
+            <div style={{ fontSize: 12, color: "#9a9590", marginTop: 2 }}>Physician Notes</div>
+          </div>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", border: "1.5px solid #e5e0d8", background: "#fafaf8", cursor: "pointer", fontSize: 14, color: "#9a9590" }}>✕</button>
+        </div>
+
+        {/* Add note form */}
+        <div style={{ background: "#fafaf8", border: "1.5px solid #e5e0d8", borderRadius: 14, padding: 16, marginBottom: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#6d28d9", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Add Note</div>
+          <div style={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#9a9590", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Date</div>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e5e0d8", borderRadius: 9, fontFamily: "'Outfit', sans-serif", fontSize: 13, color: "#1a1a1a", background: "#fff", outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+          </div>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Write your clinical notes, observations, or recommendations…"
+            style={{
+              width: "100%", minHeight: 110, padding: "10px 12px",
+              border: "1.5px solid #e5e0d8", borderRadius: 10,
+              fontFamily: "'Outfit', sans-serif", fontSize: 14, color: "#1a1a1a",
+              lineHeight: 1.65, resize: "vertical", outline: "none",
+              background: "#fff", boxSizing: "border-box", marginBottom: 10,
+            }}
+          />
+          {error && <div style={{ fontSize: 13, color: "#b91c1c", marginBottom: 8 }}>{error}</div>}
+          <button
+            disabled={saving || !draft.trim()}
+            onClick={handleSave}
+            style={{
+              padding: "9px 20px", borderRadius: 10, border: "none",
+              background: saving || !draft.trim() ? "#e5e0d8" : "#6d28d9",
+              color: "#fff", fontFamily: "'Outfit', sans-serif",
+              fontSize: 13.5, fontWeight: 500, cursor: saving || !draft.trim() ? "not-allowed" : "pointer",
+              transition: "background 0.15s",
+            }}
+          >
+            {saving ? "Saving…" : "Save Note"}
+          </button>
+        </div>
+
+        {/* Notes list */}
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "32px 0", color: "#c0bbb4" }}>Loading…</div>
+        ) : notes.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "32px 0", color: "#c0bbb4", fontSize: 14 }}>No notes yet for this patient.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#c0bbb4", marginBottom: 4 }}>Previous Notes</div>
+            {notes.map((n) => (
+              <div key={n.id} style={{ background: "#fafaf8", border: "1px solid #e5e0d8", borderRadius: 12, padding: "14px 16px", position: "relative" }}>
+                <div style={{ position: "absolute", left: 0, top: 14, bottom: 14, width: 3, background: "linear-gradient(180deg,#6d28d9,#a78bfa)", borderRadius: 3 }} />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#6d28d9", background: "#f5f0fb", padding: "2px 9px", borderRadius: 100 }}>{n.date}</span>
+                  <button
+                    disabled={deleting === n.id}
+                    onClick={() => handleDelete(n.id)}
+                    style={{ width: 26, height: 26, borderRadius: 7, border: "1.5px solid #e5e0d8", background: "#fff", cursor: "pointer", color: "#9a9590", fontSize: 11 }}
+                  >
+                    {deleting === n.id ? "…" : "✕"}
+                  </button>
+                </div>
+                <div style={{ fontSize: 14, color: "#1a1a1a", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{n.note}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export default function PhysicianDashboard() {
@@ -103,6 +255,7 @@ export default function PhysicianDashboard() {
   const [loading,   setLoading]     = useState(true);
   const [expanded,  setExpanded]    = useState<string | null>(null);
   const [viewExercises, setViewExercises] = useState<Patient | null>(null);
+  const [viewNotes,     setViewNotes]     = useState<Patient | null>(null);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   useEffect(() => {
@@ -300,9 +453,12 @@ export default function PhysicianDashboard() {
                                   <div className="phd-detail-label">Status</div>
                                   <div className="phd-detail-val">{ss.label}</div>
                                 </div>
-                                <div style={{ gridColumn: "1 / -1" }}>
+                                <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, flexWrap: "wrap" }}>
                                   <button className="phd-ex-btn" onClick={() => setViewExercises(p)}>
                                     <Dumbbell size={12} strokeWidth={2} /> View Exercise Program
+                                  </button>
+                                  <button className="phd-ex-btn" style={{ borderColor: "#c4b5fd", background: "#f5f0fb", color: "#6d28d9" }} onClick={() => setViewNotes(p)}>
+                                    <FileText size={12} strokeWidth={2} /> My Notes
                                   </button>
                                 </div>
                               </div>
@@ -358,6 +514,11 @@ export default function PhysicianDashboard() {
       {/* Exercise panel */}
       {viewExercises && (
         <PatientExercisesPanel patient={viewExercises} onClose={() => setViewExercises(null)} />
+      )}
+
+      {/* Notes panel */}
+      {viewNotes && physician && (
+        <PatientNotesPanel patient={viewNotes} physician={physician} onClose={() => setViewNotes(null)} />
       )}
 
       {/* Sign-out confirm */}
