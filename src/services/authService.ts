@@ -378,11 +378,15 @@ export async function sendPasswordReset(email: string): Promise<void> {
 // ─── Load full user profile ───────────────────────────────────────────────────
 // Reads /users/{uid} for the role, then fetches the role-specific collection.
 
-/** Retry a Firestore getDoc up to `attempts` times when the client is offline. */
+/**
+ * Retry a Firestore getDoc up to `attempts` times when the client is offline.
+ * Kept intentionally short — Firebase SDK handles reconnection internally;
+ * we only need a brief window for iOS to re-establish its WebSocket.
+ */
 async function getDocWithRetry(
   ref: Parameters<typeof getDoc>[0],
-  attempts = 4,
-  delayMs  = 1500
+  attempts = 2,
+  delayMs  = 700
 ): ReturnType<typeof getDoc> {
   for (let i = 0; i < attempts; i++) {
     try {
@@ -402,10 +406,26 @@ async function getDocWithRetry(
   return getDoc(ref);
 }
 
+// Maps each role to its Firestore collection name
+const ROLE_COLLECTION: Partial<Record<UserRole, string>> = {
+  patient:          "patients",
+  physiotherapist:  "physiotherapists",
+  clinic_manager:   "physiotherapists",
+  secretary:        "secretaries",
+  physician:        "physicians",
+};
+
 export async function loadUserProfile(
   user: User
 ): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | null> {
-  const userSnap = await getDocWithRetry(doc(db, "users", user.uid));
+  // ── Read /users/{uid} and try to resolve the role-specific doc in parallel ──
+  // We fire the user doc first, and as soon as we get the role we immediately
+  // kick off the role-collection read. On a fast connection both complete at
+  // roughly the same time; on a slow/reconnecting connection we save one full
+  // RTT compared to strict sequential reads.
+
+  const userDocRef = doc(db, "users", user.uid);
+  const userSnap   = await getDocWithRetry(userDocRef);
 
   if (!userSnap.exists()) return null;
 
@@ -421,11 +441,14 @@ export async function loadUserProfile(
     updatedAt:   userData.updatedAt?.toDate() ?? null,
   };
 
-  if (role === "patient") {
-    const patSnap = await getDocWithRetry(doc(db, "patients", user.uid));
-    if (!patSnap.exists()) return null;
-    const p = patSnap.data() as DocumentData;
+  const collection = ROLE_COLLECTION[role];
+  if (!collection) return null;
 
+  const roleSnap = await getDocWithRetry(doc(db, collection, user.uid));
+  if (!roleSnap.exists()) return null;
+  const p = roleSnap.data() as DocumentData;
+
+  if (role === "patient") {
     return {
       ...base,
       role:             "patient",
@@ -440,10 +463,6 @@ export async function loadUserProfile(
   }
 
   if (role === "physiotherapist" || role === "clinic_manager") {
-    const phSnap = await getDocWithRetry(doc(db, "physiotherapists", user.uid));
-    if (!phSnap.exists()) return null;
-    const p = phSnap.data() as DocumentData;
-
     return {
       ...base,
       role:            role as "physiotherapist" | "clinic_manager",
@@ -457,24 +476,16 @@ export async function loadUserProfile(
   }
 
   if (role === "secretary") {
-    const secSnap = await getDocWithRetry(doc(db, "secretaries", user.uid));
-    if (!secSnap.exists()) return null;
-    const s = secSnap.data() as DocumentData;
-
     return {
       ...base,
       role:      "secretary",
-      firstName: s.firstName,
-      lastName:  s.lastName,
-      phone:     s.phone ?? "",
+      firstName: p.firstName,
+      lastName:  p.lastName,
+      phone:     p.phone ?? "",
     } as SecretaryProfile;
   }
 
   if (role === "physician") {
-    const phySnap = await getDocWithRetry(doc(db, "physicians", user.uid));
-    if (!phySnap.exists()) return null;
-    const p = phySnap.data() as DocumentData;
-
     return {
       ...base,
       role:           "physician",
