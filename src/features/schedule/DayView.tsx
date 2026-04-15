@@ -1,7 +1,6 @@
 // FILE: src/features/schedule/DayView.tsx
 
 import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { ArrowLeft, Plus, Trash2, Check, UserCheck } from "lucide-react";
 import {
   subscribeToAppointmentsByDay,
@@ -104,11 +103,12 @@ export default function DayView({
   // ── Delete flow ───────────────────────────────────────────────────────────
   const handleDeleteConfirmed = async () => {
     if (!deleteTarget) return;
-    setDeletingId(deleteTarget.id);
+    const { id, name } = deleteTarget;
     setDeleteTarget(null);
-    await deleteAppointment(deleteTarget.id);
+    setDeletingId(id);
+    await deleteAppointment(id);
     setDeletingId(null);
-    showToast(`✓ Appointment for ${deleteTarget.name || "Walk-in"} removed`);
+    showToast(`✓ Appointment for ${name || "Walk-in"} removed`);
   };
 
   // ── Core status applier (called after billing is handled) ─────────────────
@@ -778,8 +778,11 @@ export default function DayView({
       )}
 
       {/* ── Delete confirmation modal ── */}
-      {deleteTarget && createPortal(
-        <div className="dv-assign-overlay" onClick={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}>
+      {deleteTarget && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 1001, background: "rgba(10,15,10,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}
+        >
           <div className="dv-assign-modal" style={{ maxWidth: 360 }}>
             <div style={{ fontSize: 32, textAlign: "center", marginBottom: 12 }}>🗑️</div>
             <div className="dv-assign-title" style={{ textAlign: "center" }}>Delete Appointment?</div>
@@ -796,13 +799,12 @@ export default function DayView({
               </button>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
 
       {/* ── Billing popup on session completion ── */}
-      {billingAppt && createPortal(
-        <div className="dv-assign-overlay" onClick={(e) => { if (e.target === e.currentTarget) handleBillingSkip(); }}>
+      {billingAppt && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1001, background: "rgba(10,15,10,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={(e) => { if (e.target === e.currentTarget) handleBillingSkip(); }}>
           <div className="dv-assign-modal" style={{ maxWidth: 460 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
               <div className="dv-assign-title" style={{ marginBottom: 0 }}>Session Billing</div>
@@ -889,13 +891,12 @@ export default function DayView({
               </button>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
 
       {/* Assign-patient modal */}
-      {assignAppt && createPortal(
-        <div className="dv-assign-overlay" onClick={(e) => { if (e.target === e.currentTarget) setAssignAppt(null); }}>
+      {assignAppt && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1001, background: "rgba(10,15,10,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={(e) => { if (e.target === e.currentTarget) setAssignAppt(null); }}>
           <div className="dv-assign-modal">
             <div className="dv-assign-title">Assign to Patient</div>
             <div className="dv-assign-sub">
@@ -926,8 +927,7 @@ export default function DayView({
               </button>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </>
   );
