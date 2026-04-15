@@ -17,7 +17,12 @@ import type { Patient, Physiotherapist } from "../../services/patientService";
 import AppointmentModal from "../../components/AppointmentModal";
 import { getDocs, getDoc, query, collection, where, doc } from "firebase/firestore";
 import { db } from "../../firebase";
-import { updateSessionPackage } from "../../services/priceService";
+import {
+  updateSessionPackage,
+  setSessionPrice,
+  subscribeToPatientPackages,
+  type SessionPackage,
+} from "../../services/priceService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +60,24 @@ export default function DayView({
   const [updatingId,    setUpdatingId]    = useState<string | null>(null);
   const [confirmingId,  setConfirmingId]  = useState<string | null>(null);
   const [toast,         setToast]         = useState<string | null>(null);
+
+  // ── Delete confirmation ────────────────────────────────────────────────────
+  const [deleteTarget,  setDeleteTarget]  = useState<{ id: string; name: string } | null>(null);
+
+  // ── Billing popup on completion ────────────────────────────────────────────
+  const [billingAppt,   setBillingAppt]   = useState<Appointment | null>(null);
+  const [billingMode,   setBillingMode]   = useState<"package" | "custom">("package");
+  const [billingPkgs,   setBillingPkgs]   = useState<SessionPackage[]>([]);
+  const [billingPkgId,  setBillingPkgId]  = useState("");
+  const [customAmount,  setCustomAmount]  = useState("");
+  const [customNotes,   setCustomNotes]   = useState("");
+  const [billingSaving, setBillingSaving] = useState(false);
+  const [billingError,  setBillingError]  = useState<string | null>(null);
+  // pending status update to apply after billing is confirmed
+  const [pendingUpdate, setPendingUpdate] = useState<{
+    apptId: string; status: Appointment["status"]; patientName: string; prevStatus?: Appointment["status"]; patientId?: string;
+  } | null>(null);
+
   // Assign-patient flow
   const [assignAppt,    setAssignAppt]    = useState<Appointment | null>(null);
   const [assignPtId,    setAssignPtId]    = useState("");
@@ -78,14 +101,18 @@ export default function DayView({
     setTimeout(() => setToast(null), 3500);
   };
 
-  const handleDelete = async (apptId: string, patientName: string) => {
-    setDeletingId(apptId);
-    await deleteAppointment(apptId);
+  // ── Delete flow ───────────────────────────────────────────────────────────
+  const handleDeleteConfirmed = async () => {
+    if (!deleteTarget) return;
+    setDeletingId(deleteTarget.id);
+    setDeleteTarget(null);
+    await deleteAppointment(deleteTarget.id);
     setDeletingId(null);
-    showToast(`✓ Appointment for ${patientName || "Walk-in"} removed`);
+    showToast(`✓ Appointment for ${deleteTarget.name || "Walk-in"} removed`);
   };
 
-  const handleStatusUpdate = async (
+  // ── Core status applier (called after billing is handled) ─────────────────
+  const applyStatusUpdate = async (
     apptId: string,
     status: Appointment["status"],
     patientName: string,
@@ -95,38 +122,6 @@ export default function DayView({
     setUpdatingId(apptId);
     await updateAppointmentStatus(apptId, status);
 
-    // Auto-sync package sessionsUsed when marking completed
-    if (status === "completed" && prevStatus !== "completed") {
-      try {
-        // First try: find via session price record linked to a package
-        let packageId: string | undefined;
-        const spSnap = await getDocs(
-          query(collection(db, "patientSessionPrices"), where("appointmentId", "==", apptId))
-        );
-        if (!spSnap.empty) {
-          packageId = spSnap.docs[0].data().packageId as string | undefined;
-        }
-        // Fallback: find the patient's single active package
-        if (!packageId && patientId) {
-          const pkgQ = await getDocs(
-            query(collection(db, "patientPackages"), where("patientId", "==", patientId), where("active", "==", true))
-          );
-          if (pkgQ.size === 1) packageId = pkgQ.docs[0].id;
-        }
-        if (packageId) {
-          const pkgSnap = await getDoc(doc(db, "patientPackages", packageId));
-          if (pkgSnap.exists()) {
-            const pkg = pkgSnap.data();
-            const sessionsUsed = (pkg.sessionsUsed as number) + 1;
-            await updateSessionPackage(packageId, {
-              sessionsUsed,
-              active: sessionsUsed < (pkg.packageSize as number),
-            });
-          }
-        }
-      } catch { /* non-critical */ }
-    }
-
     // Auto-decrement if un-completing a previously completed session
     if (prevStatus === "completed" && status !== "completed") {
       try {
@@ -134,9 +129,7 @@ export default function DayView({
         const spSnap = await getDocs(
           query(collection(db, "patientSessionPrices"), where("appointmentId", "==", apptId))
         );
-        if (!spSnap.empty) {
-          packageId = spSnap.docs[0].data().packageId as string | undefined;
-        }
+        if (!spSnap.empty) packageId = spSnap.docs[0].data().packageId as string | undefined;
         if (!packageId && patientId) {
           const pkgQ = await getDocs(
             query(collection(db, "patientPackages"), where("patientId", "==", patientId), where("active", "==", true))
@@ -163,6 +156,110 @@ export default function DayView({
                 : status === "in_progress" ? "In Progress"
                 : "Scheduled";
     showToast(`✓ ${patientName || "Walk-in"} marked as ${label}`);
+  };
+
+  // ── Status change — intercept "completed" to show billing popup ───────────
+  const handleStatusUpdate = (
+    apptId: string,
+    status: Appointment["status"],
+    patientName: string,
+    prevStatus?: Appointment["status"],
+    patientId?: string
+  ) => {
+    if (status === "completed" && prevStatus !== "completed" && patientId) {
+      // Store what we want to apply, then open billing modal
+      setPendingUpdate({ apptId, status, patientName, prevStatus, patientId });
+      const appt = appointments.find((a) => a.id === apptId) ?? null;
+      setBillingAppt(appt);
+      setBillingMode("package");
+      setBillingPkgId("");
+      setCustomAmount("");
+      setCustomNotes("");
+      setBillingError(null);
+      // Load packages for this patient
+      if (patientId) {
+        subscribeToPatientPackages(patientId, (pkgs) => {
+          const active = pkgs.filter((p) => p.active);
+          setBillingPkgs(active);
+          if (active.length > 0) setBillingPkgId(active[0].id);
+          else setBillingMode("custom");
+        });
+      }
+      return;
+    }
+    void applyStatusUpdate(apptId, status, patientName, prevStatus, patientId);
+  };
+
+  // ── Billing confirm ────────────────────────────────────────────────────────
+  const handleBillingConfirm = async () => {
+    if (!pendingUpdate || !billingAppt) return;
+    setBillingSaving(true);
+    setBillingError(null);
+
+    const appt   = billingAppt;
+    const update = pendingUpdate;
+
+    try {
+      if (billingMode === "package" && billingPkgId) {
+        // Deduct one session from the package
+        const pkgSnap = await getDoc(doc(db, "patientPackages", billingPkgId));
+        if (pkgSnap.exists()) {
+          const pkg = pkgSnap.data();
+          const sessionsUsed = (pkg.sessionsUsed as number) + 1;
+          await updateSessionPackage(billingPkgId, {
+            sessionsUsed,
+            active: sessionsUsed < (pkg.packageSize as number),
+          });
+          // Record in patientSessionPrices with packageId
+          await setSessionPrice({
+            patientId:     update.patientId ?? "",
+            appointmentId: appt.id,
+            date:          appt.date,
+            sessionType:   appt.sessionType ?? "",
+            physioName:    appt.physioName  ?? "",
+            amount:        pkg.pricePerSession as number,
+            paid:          true,
+            paidDate:      appt.date,
+            packageId:     billingPkgId,
+            notes:         `Package session ${sessionsUsed} / ${pkg.packageSize as number}`,
+          });
+        }
+      } else {
+        // Custom cost — write to patientSessionPrices
+        const amount = parseFloat(customAmount) || 0;
+        await setSessionPrice({
+          patientId:     update.patientId ?? "",
+          appointmentId: appt.id,
+          date:          appt.date,
+          sessionType:   appt.sessionType ?? "",
+          physioName:    appt.physioName  ?? "",
+          amount,
+          paid:          false,
+          paidDate:      "",
+          packageId:     "",
+          notes:         customNotes.trim(),
+        });
+      }
+    } catch (err) {
+      const e = err as { message?: string };
+      setBillingError(e.message ?? "Failed to save billing record.");
+      setBillingSaving(false);
+      return;
+    }
+
+    setBillingSaving(false);
+    setBillingAppt(null);
+    setPendingUpdate(null);
+    // Now actually mark the appointment as completed
+    void applyStatusUpdate(update.apptId, update.status, update.patientName, update.prevStatus, update.patientId);
+  };
+
+  const handleBillingSkip = () => {
+    if (!pendingUpdate) return;
+    const u = pendingUpdate;
+    setBillingAppt(null);
+    setPendingUpdate(null);
+    void applyStatusUpdate(u.apptId, u.status, u.patientName, u.prevStatus, u.patientId);
   };
 
   const handleToggleConfirm = async (a: Appointment) => {
@@ -625,7 +722,7 @@ export default function DayView({
                                 {isManager && (
                                   <button
                                     className="dv-appt-del"
-                                    onClick={() => handleDelete(a.id, a.patientName)}
+                                    onClick={() => setDeleteTarget({ id: a.id, name: a.patientName })}
                                     disabled={deletingId === a.id}
                                     title="Remove appointment"
                                   >
@@ -672,6 +769,120 @@ export default function DayView({
           <Check size={14} strokeWidth={2.5} />
           {toast}
         </div>
+      )}
+
+      {/* ── Delete confirmation modal ── */}
+      {deleteTarget && createPortal(
+        <div className="dv-assign-overlay" onClick={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}>
+          <div className="dv-assign-modal" style={{ maxWidth: 360 }}>
+            <div style={{ fontSize: 32, textAlign: "center", marginBottom: 12 }}>🗑️</div>
+            <div className="dv-assign-title" style={{ textAlign: "center" }}>Delete Appointment?</div>
+            <div className="dv-assign-sub" style={{ textAlign: "center" }}>
+              Remove the appointment for <strong>{deleteTarget.name || "Walk-in"}</strong>? This cannot be undone.
+            </div>
+            <div className="dv-assign-actions" style={{ justifyContent: "center" }}>
+              <button className="dv-assign-cancel" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button
+                onClick={handleDeleteConfirmed}
+                style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none", background: "#b91c1c", color: "#fff", fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Billing popup on session completion ── */}
+      {billingAppt && createPortal(
+        <div className="dv-assign-overlay" onClick={(e) => { if (e.target === e.currentTarget) handleBillingSkip(); }}>
+          <div className="dv-assign-modal" style={{ maxWidth: 460 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div className="dv-assign-title" style={{ marginBottom: 0 }}>Session Billing</div>
+              <button onClick={handleBillingSkip} style={{ background: "none", border: "none", fontSize: 18, color: "#9a9590", cursor: "pointer" }}>✕</button>
+            </div>
+            <div className="dv-assign-sub">
+              <strong>{billingAppt.patientName}</strong> · {fmtHour12(billingAppt.hour)} — mark session cost before completing.
+            </div>
+
+            {/* Mode toggle */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+              <button
+                onClick={() => setBillingMode("package")}
+                style={{ flex: 1, padding: "9px 12px", borderRadius: 10, border: `1.5px solid ${billingMode === "package" ? "#2E8BC0" : "#e5e0d8"}`, background: billingMode === "package" ? "#2E8BC0" : "#fafaf8", color: billingMode === "package" ? "#fff" : "#5a5550", fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
+              >
+                📦 Use Package
+              </button>
+              <button
+                onClick={() => setBillingMode("custom")}
+                style={{ flex: 1, padding: "9px 12px", borderRadius: 10, border: `1.5px solid ${billingMode === "custom" ? "#2E8BC0" : "#e5e0d8"}`, background: billingMode === "custom" ? "#2E8BC0" : "#fafaf8", color: billingMode === "custom" ? "#fff" : "#5a5550", fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
+              >
+                💳 Custom Cost
+              </button>
+            </div>
+
+            {billingMode === "package" ? (
+              billingPkgs.length === 0 ? (
+                <div style={{ padding: "16px", background: "#fef3c7", borderRadius: 10, fontSize: 13, color: "#92400e", marginBottom: 16 }}>
+                  No active package found for this patient. Switch to Custom Cost or skip.
+                </div>
+              ) : (
+                <div style={{ marginBottom: 16 }}>
+                  <label className="dv-assign-label">Select Package</label>
+                  <select className="dv-assign-select" value={billingPkgId} onChange={(e) => setBillingPkgId(e.target.value)}>
+                    {billingPkgs.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.packageSize}-session package · {p.sessionsUsed}/{p.packageSize} used · {p.pricePerSession} EGP/session
+                      </option>
+                    ))}
+                  </select>
+                  {billingPkgId && (() => {
+                    const pkg = billingPkgs.find((p) => p.id === billingPkgId);
+                    return pkg ? (
+                      <div style={{ marginTop: 10, padding: "10px 14px", background: "#f0f7fa", borderRadius: 10, fontSize: 13, color: "#0C3C60" }}>
+                        Sessions remaining: <strong>{pkg.packageSize - pkg.sessionsUsed - 1}</strong> after this session
+                        {pkg.sessionsUsed + 1 >= pkg.packageSize && <span style={{ color: "#b91c1c", marginLeft: 8 }}>⚠ Package will be exhausted</span>}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )
+            ) : (
+              <div style={{ marginBottom: 16 }}>
+                <label className="dv-assign-label">Session Cost (EGP)</label>
+                <input
+                  type="number" min="0" placeholder="e.g. 350"
+                  value={customAmount}
+                  onChange={(e) => setCustomAmount(e.target.value)}
+                  className="dv-assign-select"
+                  style={{ marginBottom: 10 }}
+                />
+                <label className="dv-assign-label">Notes (optional)</label>
+                <input
+                  type="text" placeholder="e.g. First assessment session"
+                  value={customNotes}
+                  onChange={(e) => setCustomNotes(e.target.value)}
+                  className="dv-assign-select"
+                />
+              </div>
+            )}
+
+            {billingError && <div className="dv-assign-error">{billingError}</div>}
+
+            <div className="dv-assign-actions">
+              <button className="dv-assign-cancel" onClick={handleBillingSkip}>Skip Billing</button>
+              <button
+                className="dv-assign-save"
+                disabled={billingSaving || (billingMode === "package" && !billingPkgId)}
+                onClick={handleBillingConfirm}
+              >
+                {billingSaving ? "Saving…" : "Confirm & Complete"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* Assign-patient modal */}
