@@ -158,6 +158,9 @@ export default function DayView({
     showToast(`✓ ${patientName || "Walk-in"} marked as ${label}`);
   };
 
+  // Session types that are eligible for package deduction
+  const PACKAGE_ELIGIBLE_TYPES = ["Physiotherapy Session", "Rehabilitation Session"];
+
   // ── Status change — intercept "completed" to show billing popup ───────────
   const handleStatusUpdate = (
     apptId: string,
@@ -170,20 +173,23 @@ export default function DayView({
       // Store what we want to apply, then open billing modal
       setPendingUpdate({ apptId, status, patientName, prevStatus, patientId });
       const appt = appointments.find((a) => a.id === apptId) ?? null;
+      const isPackageEligible = PACKAGE_ELIGIBLE_TYPES.includes(appt?.sessionType ?? "");
       setBillingAppt(appt);
-      setBillingMode("package");
+      setBillingMode(isPackageEligible ? "package" : "custom");
       setBillingPkgId("");
       setCustomAmount("");
       setCustomNotes("");
       setBillingError(null);
-      // Load packages for this patient
-      if (patientId) {
+      // Load packages only for eligible session types
+      if (patientId && isPackageEligible) {
         subscribeToPatientPackages(patientId, (pkgs) => {
           const active = pkgs.filter((p) => p.active);
           setBillingPkgs(active);
           if (active.length > 0) setBillingPkgId(active[0].id);
           else setBillingMode("custom");
         });
+      } else {
+        setBillingPkgs([]);
       }
       return;
     }
@@ -806,21 +812,23 @@ export default function DayView({
               <strong>{billingAppt.patientName}</strong> · {fmtHour12(billingAppt.hour)} — mark session cost before completing.
             </div>
 
-            {/* Mode toggle */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-              <button
-                onClick={() => setBillingMode("package")}
-                style={{ flex: 1, padding: "9px 12px", borderRadius: 10, border: `1.5px solid ${billingMode === "package" ? "#2E8BC0" : "#e5e0d8"}`, background: billingMode === "package" ? "#2E8BC0" : "#fafaf8", color: billingMode === "package" ? "#fff" : "#5a5550", fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
-              >
-                📦 Use Package
-              </button>
-              <button
-                onClick={() => setBillingMode("custom")}
-                style={{ flex: 1, padding: "9px 12px", borderRadius: 10, border: `1.5px solid ${billingMode === "custom" ? "#2E8BC0" : "#e5e0d8"}`, background: billingMode === "custom" ? "#2E8BC0" : "#fafaf8", color: billingMode === "custom" ? "#fff" : "#5a5550", fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
-              >
-                💳 Custom Cost
-              </button>
-            </div>
+            {/* Mode toggle — package option only for Physiotherapy / Rehabilitation sessions */}
+            {PACKAGE_ELIGIBLE_TYPES.includes(billingAppt.sessionType ?? "") && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+                <button
+                  onClick={() => setBillingMode("package")}
+                  style={{ flex: 1, padding: "9px 12px", borderRadius: 10, border: `1.5px solid ${billingMode === "package" ? "#2E8BC0" : "#e5e0d8"}`, background: billingMode === "package" ? "#2E8BC0" : "#fafaf8", color: billingMode === "package" ? "#fff" : "#5a5550", fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
+                >
+                  📦 Use Package
+                </button>
+                <button
+                  onClick={() => setBillingMode("custom")}
+                  style={{ flex: 1, padding: "9px 12px", borderRadius: 10, border: `1.5px solid ${billingMode === "custom" ? "#2E8BC0" : "#e5e0d8"}`, background: billingMode === "custom" ? "#2E8BC0" : "#fafaf8", color: billingMode === "custom" ? "#fff" : "#5a5550", fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
+                >
+                  💳 Custom Cost
+                </button>
+              </div>
+            )}
 
             {billingMode === "package" ? (
               billingPkgs.length === 0 ? (
