@@ -207,28 +207,29 @@ export default function DayView({
 
     try {
       if (billingMode === "package" && billingPkgId) {
-        // Deduct one session from the package
-        const pkgSnap = await getDoc(doc(db, "patientPackages", billingPkgId));
-        if (pkgSnap.exists()) {
-          const pkg = pkgSnap.data();
-          const sessionsUsed = (pkg.sessionsUsed as number) + 1;
-          await updateSessionPackage(billingPkgId, {
-            sessionsUsed,
-            active: sessionsUsed < (pkg.packageSize as number),
-          });
-          // Record in patientSessionPrices with packageId
-          await setSessionPrice({
-            patientId:     update.patientId ?? "",
-            appointmentId: appt.id,
-            date:          appt.date,
-            sessionType:   appt.sessionType ?? "",
-            physioName:    appt.physioName  ?? "",
-            amount:        pkg.pricePerSession as number,
-            paid:          true,
-            paidDate:      appt.date,
-            packageId:     billingPkgId,
-            notes:         `Package session ${sessionsUsed} / ${pkg.packageSize as number}`,
-          });
+        // Use already-loaded package data — no extra getDoc needed
+        const pkg = billingPkgs.find((p) => p.id === billingPkgId);
+        if (pkg) {
+          const sessionsUsed = pkg.sessionsUsed + 1;
+          // Run package update and price record in parallel
+          await Promise.all([
+            updateSessionPackage(billingPkgId, {
+              sessionsUsed,
+              active: sessionsUsed < pkg.packageSize,
+            }),
+            setSessionPrice({
+              patientId:     update.patientId ?? "",
+              appointmentId: appt.id,
+              date:          appt.date,
+              sessionType:   appt.sessionType ?? "",
+              physioName:    appt.physioName  ?? "",
+              amount:        pkg.pricePerSession,
+              paid:          true,
+              paidDate:      appt.date,
+              packageId:     billingPkgId,
+              notes:         `Package session ${sessionsUsed} / ${pkg.packageSize}`,
+            }),
+          ]);
         }
       } else {
         // Custom cost — write to patientSessionPrices
