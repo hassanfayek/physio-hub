@@ -61,6 +61,7 @@ function LibraryPicker({ patientId, viewerUid, onClose, onAdded }: LibraryPicker
   const [exercises,    setExercises]    = useState<LibraryExercise[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [search,       setSearch]       = useState("");
+  const [bodyPart,     setBodyPart]     = useState("");
   const [adding,       setAdding]       = useState<string | null>(null);
   const [addedIds,     setAddedIds]     = useState<Set<string>>(new Set());
   const [error,        setError]        = useState<string | null>(null);
@@ -80,10 +81,14 @@ function LibraryPicker({ patientId, viewerUid, onClose, onAdded }: LibraryPicker
     return () => document.removeEventListener("keydown", h);
   }, [onClose]);
 
-  const filtered = exercises.filter((ex) =>
-    ex.name.toLowerCase().includes(search.toLowerCase()) ||
-    ex.category.toLowerCase().includes(search.toLowerCase())
-  );
+  const categories = [...new Set(exercises.map((ex) => ex.category).filter(Boolean))].sort();
+
+  const filtered = exercises.filter((ex) => {
+    const q = search.toLowerCase();
+    const matchesSearch = !q || ex.name.toLowerCase().includes(q) || ex.category.toLowerCase().includes(q);
+    const matchesPart   = !bodyPart || ex.category === bodyPart;
+    return matchesSearch && matchesPart;
+  });
 
   const handleAdd = async (ex: LibraryExercise) => {
     setAdding(ex.id);
@@ -150,6 +155,26 @@ function LibraryPicker({ patientId, viewerUid, onClose, onAdded }: LibraryPicker
             autoFocus
           />
         </div>
+
+        {!loading && categories.length > 0 && (
+          <div className="ep-body-filter-wrap">
+            <button
+              className={`ep-body-chip${bodyPart === "" ? " active" : ""}`}
+              onClick={() => setBodyPart("")}
+            >
+              All
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                className={`ep-body-chip${bodyPart === cat ? " active" : ""}`}
+                onClick={() => setBodyPart(bodyPart === cat ? "" : cat)}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        )}
 
         {error && <div className="ep-error-box" style={{ margin: "0 20px" }}>{error}</div>}
 
@@ -766,6 +791,21 @@ export default function ExerciseProgram({
         }
         .ep-picker-search:focus { border-color: #2E8BC0; background: #fff; box-shadow: 0 0 0 3px rgba(46,139,192,0.08); }
 
+        .ep-body-filter-wrap {
+          display: flex; flex-wrap: nowrap; gap: 6px;
+          padding: 0 20px 10px; overflow-x: auto; flex-shrink: 0;
+          scrollbar-width: none;
+        }
+        .ep-body-filter-wrap::-webkit-scrollbar { display: none; }
+        .ep-body-chip {
+          padding: 4px 12px; border-radius: 100px; white-space: nowrap; flex-shrink: 0;
+          border: 1.5px solid #e5e0d8; background: #fafaf8;
+          font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500;
+          color: #5a5550; cursor: pointer; transition: all 0.15s;
+        }
+        .ep-body-chip:hover { border-color: #B3DEF0; color: #2E8BC0; background: #EAF5FC; }
+        .ep-body-chip.active { background: #2E8BC0; border-color: #2E8BC0; color: #fff; }
+
         .ep-picker-list {
           flex: 1; overflow-y: auto; padding: 6px 20px;
           display: flex; flex-direction: column; gap: 6px;
@@ -862,6 +902,7 @@ export default function ExerciseProgram({
           .ep-picker-hd { padding: 16px 16px 0; }
           .ep-prog-toggle-wrap { padding: 10px 16px 0; }
           .ep-picker-search-wrap { padding: 10px 16px 8px; }
+          .ep-body-filter-wrap { padding: 0 16px 10px; }
           .ep-picker-list { padding: 6px 16px; }
           .ep-picker-ft { padding: 12px 16px 20px; }
           .ep-picker-search { font-size: 15px; }
