@@ -122,7 +122,7 @@ export default function AddPatientModal({
           width: 100%; max-width: 460px;
           box-shadow: 0 24px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.04);
           animation: apmModalIn 0.25s cubic-bezier(0.16,1,0.3,1) both;
-          overflow: hidden; font-family: 'Outfit', sans-serif;
+          font-family: 'Outfit', sans-serif;
         }
         @keyframes apmModalIn {
           from { opacity:0; transform: scale(0.94) translateY(16px); }
@@ -240,7 +240,7 @@ export default function AddPatientModal({
 
         @media (max-width: 520px) {
           .apm-overlay { padding: 0; align-items: flex-start; }
-          .apm-modal { border-radius: 0 0 22px 22px; max-width: 100%; }
+          .apm-modal { border-radius: 0 0 22px 22px; max-width: 100%; max-height: 92vh; overflow-y: auto; }
           .apm-grid2 { grid-template-columns: 1fr; }
         }
       `}</style>

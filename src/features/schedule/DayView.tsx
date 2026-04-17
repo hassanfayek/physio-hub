@@ -503,7 +503,7 @@ export default function DayView({
         }
         .dv-assign-btn:hover { background: #fef3c7; }
 
-        /* Assign modal */
+        /* Assign / billing modals */
         .dv-assign-overlay {
           position: fixed; inset: 0; z-index: 1001;
           background: rgba(10,15,10,0.45); backdrop-filter: blur(3px);
@@ -521,6 +521,13 @@ export default function DayView({
         @keyframes dvModalIn {
           from { opacity:0; transform: scale(0.95) translateY(10px); }
           to   { opacity:1; transform: scale(1) translateY(0); }
+        }
+        @media (max-width: 520px) {
+          .dv-modal-overlay { padding: 0 !important; align-items: flex-start !important; }
+          .dv-modal-sheet {
+            border-radius: 0 0 20px 20px !important; max-width: 100% !important;
+            width: 100% !important; max-height: 92vh; overflow-y: auto;
+          }
         }
         .dv-assign-title { font-size: 18px; font-weight: 600; color: #1a1a1a; margin-bottom: 5px; }
         .dv-assign-sub   { font-size: 13px; color: #9a9590; margin-bottom: 20px; }
@@ -781,10 +788,11 @@ export default function DayView({
       {/* ── Delete confirmation modal ── */}
       {deleteTarget && (
         <div
+          className="dv-modal-overlay"
           style={{ position: "fixed", inset: 0, zIndex: 1001, background: "rgba(10,15,10,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
           onClick={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}
         >
-          <div className="dv-assign-modal" style={{ maxWidth: 360 }}>
+          <div className="dv-assign-modal dv-modal-sheet" style={{ maxWidth: 360 }}>
             <div style={{ fontSize: 32, textAlign: "center", marginBottom: 12 }}>🗑️</div>
             <div className="dv-assign-title" style={{ textAlign: "center" }}>Delete Appointment?</div>
             <div className="dv-assign-sub" style={{ textAlign: "center" }}>
@@ -805,8 +813,8 @@ export default function DayView({
 
       {/* ── Billing popup on session completion ── */}
       {billingAppt && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1001, background: "rgba(10,15,10,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={(e) => { if (e.target === e.currentTarget) handleBillingSkip(); }}>
-          <div className="dv-assign-modal" style={{ maxWidth: 460 }}>
+        <div className="dv-modal-overlay" style={{ position: "fixed", inset: 0, zIndex: 1001, background: "rgba(10,15,10,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={(e) => { if (e.target === e.currentTarget) handleBillingSkip(); }}>
+          <div className="dv-assign-modal dv-modal-sheet" style={{ maxWidth: 460 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
               <div className="dv-assign-title" style={{ marginBottom: 0 }}>Session Billing</div>
               <button onClick={handleBillingSkip} style={{ background: "none", border: "none", fontSize: 18, color: "#9a9590", cursor: "pointer" }}>✕</button>
@@ -897,8 +905,8 @@ export default function DayView({
 
       {/* Assign-patient modal */}
       {assignAppt && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1001, background: "rgba(10,15,10,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={(e) => { if (e.target === e.currentTarget) setAssignAppt(null); }}>
-          <div className="dv-assign-modal">
+        <div className="dv-modal-overlay" style={{ position: "fixed", inset: 0, zIndex: 1001, background: "rgba(10,15,10,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={(e) => { if (e.target === e.currentTarget) setAssignAppt(null); }}>
+          <div className="dv-assign-modal dv-modal-sheet">
             <div className="dv-assign-title">Assign to Patient</div>
             <div className="dv-assign-sub">
               Link this appointment ({assignAppt.patientName || "Walk-in"} · {fmtHour12(assignAppt.hour)}) to a registered patient profile.
