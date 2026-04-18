@@ -4,18 +4,19 @@
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "patientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "date",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "date",      "order": "ASCENDING" },
+        { "fieldPath": "__name__",  "order": "ASCENDING" }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "date",      "order": "DESCENDING" },
+        { "fieldPath": "__name__",  "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },

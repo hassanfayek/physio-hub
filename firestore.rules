@@ -116,7 +116,8 @@ service cloud.firestore {
     match /appointments/{appointmentId} {
       allow read:          if isStaff() || isPatient();
       allow create:        if isStaff() || (isPatient() && request.resource.data.patientId == request.auth.uid);
-      allow update, delete: if isStaff();
+      allow update:        if isStaff();
+      allow delete:        if isStaff() || (isPatient() && resource.data.patientId == request.auth.uid);
     }
 
     // ── Exercise Library ─────────────────────────────────────────────────────
