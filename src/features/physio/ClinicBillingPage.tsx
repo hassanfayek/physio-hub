@@ -148,13 +148,17 @@ export default function ClinicBillingPage() {
   const filteredPackages = useMemo(() => packages.filter((p) => inPeriod(p.startDate)),   [packages,       period, selectedDay, selectedWeek, selectedMonth, customFrom, customTo]);
 
   // ── Aggregates ────────────────────────────────────────────────────────────
-  const sessionTotal  = filteredSessions.reduce((s, e) => s + e.amount, 0);
-  const sessionPaid   = filteredSessions.filter((e) => e.paid).reduce((s, e) => s + e.amount, 0);
-  const pkgTotal      = filteredPackages.reduce((s, p) => s + p.totalAmount, 0);
-  const pkgPaid       = filteredPackages.reduce((s, p) => s + p.paidAmount, 0);
-  const grandTotal    = sessionTotal + pkgTotal;
-  const grandPaid     = sessionPaid  + pkgPaid;
-  const grandBalance  = grandTotal - grandPaid;
+  // Sessions linked to a package already have their cost baked into the
+  // package's totalAmount, so exclude them from session revenue to avoid
+  // counting the same money twice.
+  const nonPkgSessions = filteredSessions.filter((s) => !s.packageId);
+  const sessionTotal   = nonPkgSessions.reduce((s, e) => s + e.amount, 0);
+  const sessionPaid    = nonPkgSessions.filter((e) => e.paid).reduce((s, e) => s + e.amount, 0);
+  const pkgTotal       = filteredPackages.reduce((s, p) => s + p.totalAmount, 0);
+  const pkgPaid        = filteredPackages.reduce((s, p) => s + p.paidAmount, 0);
+  const grandTotal     = sessionTotal + pkgTotal;
+  const grandPaid      = sessionPaid  + pkgPaid;
+  const grandBalance   = grandTotal - grandPaid;
 
   // ── Weekly/Monthly trend for chart-like rows ──────────────────────────────
   // Group all-time session prices by month for a mini trend
@@ -425,12 +429,12 @@ export default function ClinicBillingPage() {
               <div className="cb-kpi balance">
                 <div className="cb-kpi-label">Outstanding</div>
                 <div className="cb-kpi-value" style={{ color: grandBalance > 0 ? "#b91c1c" : "#1b4332" }}>{fmt(grandBalance)}</div>
-                <div className="cb-kpi-sub">{filteredSessions.filter((s) => !s.paid).length} unpaid items</div>
+                <div className="cb-kpi-sub">{nonPkgSessions.filter((s) => !s.paid).length} unpaid session{nonPkgSessions.filter((s) => !s.paid).length !== 1 ? "s" : ""}</div>
               </div>
               <div className="cb-kpi sessions">
                 <div className="cb-kpi-label">Sessions Done</div>
                 <div className="cb-kpi-value">{filteredSessions.length}</div>
-                <div className="cb-kpi-sub">{fmt(sessionTotal)} billed · {fmt(sessionPaid)} paid</div>
+                <div className="cb-kpi-sub">{nonPkgSessions.length} direct · {filteredSessions.length - nonPkgSessions.length} via package</div>
               </div>
             </div>
 
@@ -507,7 +511,7 @@ export default function ClinicBillingPage() {
                 {/* Top unpaid entries */}
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#9a9590", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Unpaid This Period</div>
-                  {filteredSessions.filter((s) => !s.paid).length === 0 ? (
+                  {nonPkgSessions.filter((s) => !s.paid).length === 0 ? (
                     <div className="cb-empty" style={{ padding: "24px 20px" }}>✓ All charges collected for this period</div>
                   ) : (
                     <div className="cb-table-wrap">
@@ -516,7 +520,7 @@ export default function ClinicBillingPage() {
                           <tr><th>Date</th><th>Patient</th><th>Type</th><th>Description</th><th>Amount</th><th>Status</th></tr>
                         </thead>
                         <tbody>
-                          {filteredSessions.filter((s) => !s.paid).map((s) => (
+                          {nonPkgSessions.filter((s) => !s.paid).map((s) => (
                             <tr key={s.id}>
                               <td style={{ color: "#5a5550", whiteSpace: "nowrap" }}>{s.date}</td>
                               <td style={{ fontWeight: 500 }}>{patientMap.get(s.patientId) ?? "—"}</td>
