@@ -37,6 +37,11 @@ import { db, storage } from "../../firebase";
 import {
   ref, uploadBytesResumable, getDownloadURL, deleteObject,
 } from "firebase/storage";
+import {
+  subscribeToTemplates,
+  applyTemplateToPatient,
+  type DiagnosisTemplate,
+} from "../../services/diagnosisTemplateService";
 
 // ─── Static mock data (unchanged from original) ───────────────────────────────
 
@@ -736,6 +741,34 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     setPnDeleting(noteId);
     await deletePhysicianNote(noteId);
     setPnDeleting(null);
+  };
+
+  // ── Diagnosis template picker state ──────────────────────────────────────
+  const [templates,       setTemplates]       = useState<DiagnosisTemplate[]>([]);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [tplSearch,       setTplSearch]       = useState("");
+  const [tplBodyFilter,   setTplBodyFilter]   = useState("");
+  const [tplApplying,     setTplApplying]     = useState<string | null>(null);
+  const [tplResult,       setTplResult]       = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isManager) return;
+    return subscribeToTemplates(setTemplates, () => {});
+  }, [isManager]);
+
+  const handleApplyTemplate = async (tpl: DiagnosisTemplate) => {
+    if (!patientId) return;
+    setTplApplying(tpl.id);
+    const result = await applyTemplateToPatient(tpl.id, patientId, (user as PhysioProfile)?.uid ?? "");
+    setTplApplying(null);
+    if (result.error) { setTplResult(`Error: ${result.error}`); return; }
+    const parts: string[] = [];
+    if (result.exercisesAdded) parts.push(`${result.exercisesAdded} exercise${result.exercisesAdded !== 1 ? "s" : ""} added`);
+    if (result.diagnosisSet)   parts.push("diagnosis set");
+    if (result.treatmentAdded) parts.push("treatment plan added");
+    setTplResult(parts.length ? `✓ ${parts.join(", ")}` : "✓ Template applied");
+    setShowTemplatePicker(false);
+    setTimeout(() => setTplResult(null), 4000);
   };
 
   // ── Diagnosis state (editable by canEdit) ─────────────────────────────────
@@ -1853,6 +1886,38 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
           physicians={physicians}
           assignedPhysicianId={patient?.referredByPhysicianId ?? null}
         />
+      )}
+
+      {/* ── Apply Diagnosis Template ── */}
+      {isManager && templates.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <button
+            onClick={() => { setShowTemplatePicker(true); setTplSearch(""); setTplBodyFilter(""); }}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 7,
+              padding: "9px 16px", borderRadius: 10, border: "1.5px solid #e5e0d8",
+              background: "#fff", fontFamily: "'Outfit', sans-serif", fontSize: 13,
+              fontWeight: 600, color: "#2E8BC0", cursor: "pointer", transition: "all 0.15s",
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+            Apply Diagnosis Template
+          </button>
+        </div>
+      )}
+
+      {tplResult && (
+        <div style={{
+          marginBottom: 14, padding: "10px 14px", borderRadius: 10,
+          background: tplResult.startsWith("Error") ? "#fff5f3" : "#d8f3dc",
+          border: `1px solid ${tplResult.startsWith("Error") ? "#fecaca" : "#6ee7b7"}`,
+          fontSize: 13, color: tplResult.startsWith("Error") ? "#b91c1c" : "#065f46",
+          fontFamily: "'Outfit', sans-serif",
+        }}>
+          {tplResult}
+        </div>
       )}
 
       {/* ── Read-only banner for non-editors ── */}
@@ -3265,6 +3330,89 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       )}
     </>
       )}
+
+      {/* ── Diagnosis Template Picker modal ── */}
+      {showTemplatePicker && (() => {
+        const bodyParts = [...new Set(templates.map((t) => t.bodyPart).filter(Boolean))].sort();
+        const visible   = templates.filter((t) => {
+          const q = tplSearch.toLowerCase();
+          return (!tplBodyFilter || t.bodyPart === tplBodyFilter)
+            && (!q || t.name.toLowerCase().includes(q) || t.bodyPart.toLowerCase().includes(q));
+        });
+        return (
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(10,15,10,0.5)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowTemplatePicker(false); }}
+          >
+            <div style={{ background: "#fff", borderRadius: 22, width: "min(500px,100%)", maxHeight: "88vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,0,0,0.18)", fontFamily: "'Outfit',sans-serif", overflow: "hidden" }}>
+              {/* Header */}
+              <div style={{ padding: "20px 20px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexShrink: 0 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "#2E8BC0", marginBottom: 3 }}>Auto-fill</div>
+                  <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, color: "#1a1a1a" }}>Apply Diagnosis Template</div>
+                </div>
+                <button onClick={() => setShowTemplatePicker(false)} style={{ background: "none", border: "none", fontSize: 20, color: "#9a9590", cursor: "pointer", lineHeight: 1 }}>✕</button>
+              </div>
+              {/* Search */}
+              <div style={{ padding: "12px 20px 8px", flexShrink: 0 }}>
+                <input
+                  style={{ width: "100%", padding: "9px 13px", borderRadius: 10, border: "1.5px solid #e5e0d8", fontFamily: "'Outfit',sans-serif", fontSize: 14, outline: "none", boxSizing: "border-box" }}
+                  placeholder="Search templates…"
+                  value={tplSearch}
+                  onChange={(e) => setTplSearch(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              {/* Body part chips */}
+              {bodyParts.length > 0 && (
+                <div style={{ display: "flex", gap: 6, padding: "0 20px 10px", overflowX: "auto", flexShrink: 0, scrollbarWidth: "none" }}>
+                  {(["", ...bodyParts] as string[]).map((b) => (
+                    <button key={b || "__all__"} onClick={() => setTplBodyFilter(b)}
+                      style={{ padding: "4px 12px", borderRadius: 100, whiteSpace: "nowrap", flexShrink: 0, border: `1.5px solid ${tplBodyFilter === b ? "#2E8BC0" : "#e5e0d8"}`, background: tplBodyFilter === b ? "#2E8BC0" : "#fafaf8", color: tplBodyFilter === b ? "#fff" : "#5a5550", fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+                      {b || "All"}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* List */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "4px 20px" }}>
+                {visible.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "28px 0", fontSize: 13, color: "#9a9590" }}>No templates match your search.</div>
+                )}
+                {visible.map((t) => (
+                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, border: "1.5px solid #e5e0d8", marginBottom: 8, transition: "border-color 0.12s", background: "#fff" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {t.bodyPart && <div style={{ display: "inline-block", background: "#D6EEF8", color: "#0C3C60", padding: "1px 8px", borderRadius: 100, fontSize: 11, fontWeight: 600, marginBottom: 4 }}>{t.bodyPart}</div>}
+                      <div style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>{t.name}</div>
+                      <div style={{ fontSize: 12, color: "#9a9590", marginTop: 2 }}>
+                        {[
+                          t.exercises.length ? `${t.exercises.length} exercises` : "",
+                          t.treatmentNotes ? "treatment plan" : "",
+                          t.primaryDiagnosis ? "diagnosis" : "",
+                        ].filter(Boolean).join(" · ") || "Template"}
+                      </div>
+                    </div>
+                    <button
+                      disabled={!!tplApplying}
+                      onClick={() => handleApplyTemplate(t)}
+                      style={{ padding: "7px 14px", borderRadius: 9, border: "none", background: tplApplying === t.id ? "#e5e0d8" : "#2E8BC0", color: "#fff", fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, cursor: tplApplying ? "not-allowed" : "pointer", flexShrink: 0, minWidth: 70, transition: "background 0.15s" }}
+                    >
+                      {tplApplying === t.id ? "…" : "Apply"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {/* Footer */}
+              <div style={{ padding: "12px 20px 18px", borderTop: "1px solid #f0ede8", flexShrink: 0 }}>
+                <button onClick={() => setShowTemplatePicker(false)}
+                  style={{ width: "100%", padding: 11, borderRadius: 10, border: "1.5px solid #e5e0d8", background: "#fff", fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 500, color: "#5a5550", cursor: "pointer" }}>
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }

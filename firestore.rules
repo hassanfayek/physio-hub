@@ -132,6 +132,13 @@ service cloud.firestore {
       allow write: if isManager();
     }
 
+    // ── Diagnosis Templates ───────────────────────────────────────────────────
+    // All physio staff can read; manager and senior physios can write.
+    match /diagnosisTemplates/{templateId} {
+      allow read:  if isManager();
+      allow write: if isManager();
+    }
+
     // ── Patient Protocol Assignments ──────────────────────────────────────────
     // All physios and manager can assign; all staff can read.
     match /patientProtocols/{docId} {

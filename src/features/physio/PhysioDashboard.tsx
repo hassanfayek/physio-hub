@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Calendar, Dumbbell, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen, Wifi } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, Dumbbell, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen, Wifi, Stethoscope } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
 import { doc, getDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -28,12 +28,13 @@ import AddPhysioModal from "../../components/AddPhysioModal";
 import { createPortal } from "react-dom";
 import ClinicBillingPage from "./ClinicBillingPage";
 import TreatmentProtocolsPage from "../protocols/TreatmentProtocolsPage";
+import DiagnosisTemplatesPage from "../diagnoses/DiagnosisTemplatesPage";
 import OnlineRehabPage from "../rehab/OnlineRehabPage";
 
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
-type Tab = "overview" | "patients" | "people" | "schedule" | "exercises" | "billing" | "protocols" | "rehab";
+type Tab = "overview" | "patients" | "people" | "schedule" | "exercises" | "billing" | "protocols" | "rehab" | "diagnoses";
 
 interface TabDef {
   id:    Tab;
@@ -48,7 +49,8 @@ function IconSchedule()  { return <Calendar size={18} strokeWidth={1.8} color="c
 function IconExercises() { return <Dumbbell size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconBilling()   { return <Receipt size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconProtocols() { return <BookOpen size={18} strokeWidth={1.8} color="currentColor" />; }
-function IconRehab()     { return <Wifi size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconRehab()      { return <Wifi         size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconDiagnoses() { return <Stethoscope  size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconAdd()       { return <Plus size={14} strokeWidth={2.5} color="currentColor" />; }
 
 // ─── Team tab (manager only) ─────────────────────────────────────────────────
@@ -1008,6 +1010,7 @@ export default function PhysioDashboard() {
     ...(!isSecretary ? [{ id: "exercises" as Tab, label: t("nav.exercises.lib"), icon: <IconExercises /> }] : []),
     ...(isManager    ? [{ id: "billing"   as Tab, label: "Billing",              icon: <IconBilling /> }]   : []),
     ...(!isSecretary ? [{ id: "protocols" as Tab, label: "Protocols",            icon: <IconProtocols /> }] : []),
+    ...(isManager    ? [{ id: "diagnoses" as Tab, label: "Diagnoses",            icon: <IconDiagnoses /> }] : []),
     ...((isManager || isSenior) ? [{ id: "rehab" as Tab, label: "Online Rehab", icon: <IconRehab /> }] : []),
   ];
 
@@ -1455,6 +1458,9 @@ export default function PhysioDashboard() {
                 {activeTab === "billing"   && isManager   && <ClinicBillingPage />}
                 {activeTab === "protocols" && !isSecretary && (
                   <TreatmentProtocolsPage physioId={physio.uid} isManager={isManager} />
+                )}
+                {activeTab === "diagnoses" && !isSecretary && (
+                  <DiagnosisTemplatesPage physioId={physio.uid} isManager={isManager} />
                 )}
                 {activeTab === "rehab" && (isManager || isSenior) && (
                   <OnlineRehabPage
