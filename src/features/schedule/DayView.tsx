@@ -1,6 +1,7 @@
 // FILE: src/features/schedule/DayView.tsx
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, Plus, Trash2, Check, UserCheck } from "lucide-react";
 import {
   subscribeToAppointmentsByDay,
@@ -786,7 +787,7 @@ export default function DayView({
       )}
 
       {/* ── Delete confirmation modal ── */}
-      {deleteTarget && (
+      {deleteTarget && createPortal(
         <div
           className="dv-modal-overlay"
           style={{ position: "fixed", inset: 0, zIndex: 1001, background: "rgba(10,15,10,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
@@ -808,11 +809,12 @@ export default function DayView({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Billing popup on session completion ── */}
-      {billingAppt && (
+      {billingAppt && createPortal(
         <div className="dv-modal-overlay" style={{ position: "fixed", inset: 0, zIndex: 1001, background: "rgba(10,15,10,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={(e) => { if (e.target === e.currentTarget) handleBillingSkip(); }}>
           <div className="dv-assign-modal dv-modal-sheet" style={{ maxWidth: 460 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
@@ -900,11 +902,12 @@ export default function DayView({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Assign-patient modal */}
-      {assignAppt && (
+      {assignAppt && createPortal(
         <div className="dv-modal-overlay" style={{ position: "fixed", inset: 0, zIndex: 1001, background: "rgba(10,15,10,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={(e) => { if (e.target === e.currentTarget) setAssignAppt(null); }}>
           <div className="dv-assign-modal dv-modal-sheet">
             <div className="dv-assign-title">Assign to Patient</div>
@@ -936,7 +939,8 @@ export default function DayView({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

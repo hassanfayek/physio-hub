@@ -2157,14 +2157,12 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                     onChange={(e) => setExtDraft({ ...extDraft, referredBy: e.target.value })}
                     placeholder="e.g. Dr. Ahmed, Google, Word of mouth…" />
                 </div>
-                {isManager && (
-                  <div className="ps-field-group">
-                    <label className="ps-field-label">Phone</label>
-                    <input className="ps-field-input" value={extDraft.phone}
-                      onChange={(e) => setExtDraft({ ...extDraft, phone: e.target.value })}
-                      placeholder="+20 100 000 0000" />
-                  </div>
-                )}
+                <div className="ps-field-group">
+                  <label className="ps-field-label">Phone</label>
+                  <input className="ps-field-input" value={extDraft.phone}
+                    onChange={(e) => setExtDraft({ ...extDraft, phone: e.target.value })}
+                    placeholder="+20 100 000 0000" />
+                </div>
               </div>
               <div className="ps-field-row-2">
                 <div className="ps-field-group" style={{ gridColumn: "1 / -1" }}>
