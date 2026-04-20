@@ -576,7 +576,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
               <tr>
                 <th>Patient</th>
                 <th>Phone</th>
-                <th>Status</th>
+                <th>Referred By</th>
                 <th>Team</th>
                 {(isManager || isSecretary) && <th>Assign Staff</th>}
                 {isManager && <th></th>}
@@ -614,7 +614,6 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
                       const fullName   = `${patient.firstName} ${patient.lastName}`;
                       const initials   = `${patient.firstName[0] ?? ""}${patient.lastName[0] ?? ""}`.toUpperCase();
                       const hue        = fullName.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
-                      const sm         = STATUS_META[patient.status] ?? STATUS_META.active;
 
                       return (
                         <tr key={patient.uid}>
@@ -634,9 +633,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
                             </div>
                           </td>
                           <td className="pt-cell-cond">{patient.phone || "—"}</td>
-                          <td>
-                            <span className="pt-status-chip" style={{ background: sm.bg, color: sm.text }}>{sm.label}</span>
-                          </td>
+                          <td className="pt-cell-cond">{patient.referredBy || "—"}</td>
                           <td>
                             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                               {patient.seniorEditorName && (

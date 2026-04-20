@@ -60,7 +60,7 @@ export default function AddPatientModal({
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  const isValid = firstName.trim() && lastName.trim();
+  const isValid = firstName.trim() && lastName.trim() && age.trim() && phone.trim() && occupation.trim() && referredBy.trim();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -301,13 +301,13 @@ export default function AddPatientModal({
 
                 <div className="apm-grid2">
                   <div className="apm-field">
-                    <label className="apm-label">First Name</label>
+                    <label className="apm-label">First Name <span style={{ color: "#e07a5f" }}>*</span></label>
                     <input className="apm-input" placeholder="Alex" value={firstName}
                       onChange={(e: ChangeEvent<HTMLInputElement>) => { setFirstName(e.target.value); setError(null); }}
                       required autoFocus />
                   </div>
                   <div className="apm-field">
-                    <label className="apm-label">Last Name</label>
+                    <label className="apm-label">Last Name <span style={{ color: "#e07a5f" }}>*</span></label>
                     <input className="apm-input" placeholder="Johnson" value={lastName}
                       onChange={(e: ChangeEvent<HTMLInputElement>) => { setLastName(e.target.value); setError(null); }}
                       required />
@@ -316,27 +316,27 @@ export default function AddPatientModal({
 
                 <div className="apm-grid2">
                   <div className="apm-field">
-                    <label className="apm-label">Age</label>
+                    <label className="apm-label">Age <span style={{ color: "#e07a5f" }}>*</span></label>
                     <input className="apm-input" type="number" min="0" max="120" placeholder="e.g. 35" value={age}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setAge(e.target.value)} />
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setAge(e.target.value)} required />
                   </div>
                   <div className="apm-field">
-                    <label className="apm-label">Phone</label>
+                    <label className="apm-label">Phone <span style={{ color: "#e07a5f" }}>*</span></label>
                     <input className="apm-input" type="tel" placeholder="+20 100 000 0000" value={phone}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setPhone(e.target.value)} />
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setPhone(e.target.value)} required />
                   </div>
                 </div>
 
                 <div className="apm-field">
-                  <label className="apm-label">Occupation</label>
+                  <label className="apm-label">Occupation <span style={{ color: "#e07a5f" }}>*</span></label>
                   <input className="apm-input" placeholder="e.g. Teacher, Engineer…" value={occupation}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setOccupation(e.target.value)} />
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setOccupation(e.target.value)} required />
                 </div>
 
                 <div className="apm-field">
-                  <label className="apm-label">Referred By</label>
+                  <label className="apm-label">Referred By <span style={{ color: "#e07a5f" }}>*</span></label>
                   <input className="apm-input" placeholder="e.g. Dr. Ahmed, Google, Word of mouth…" value={referredBy}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setReferredBy(e.target.value)} />
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setReferredBy(e.target.value)} required />
                 </div>
 
                 {physicians.length > 0 && (
