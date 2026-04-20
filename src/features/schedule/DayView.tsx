@@ -84,6 +84,13 @@ export default function DayView({
   const [assignSaving,  setAssignSaving]  = useState(false);
   const [assignError,   setAssignError]   = useState<string | null>(null);
 
+  // Lock body scroll when any modal is open
+  useEffect(() => {
+    const isOpen = !!(billingAppt || deleteTarget || assignAppt);
+    document.body.style.overflow = isOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [billingAppt, deleteTarget, assignAppt]);
+
   // Realtime subscription for this day
   useEffect(() => {
     setLoading(true);
@@ -520,13 +527,14 @@ export default function DayView({
           font-family: 'Outfit', sans-serif;
         }
         @keyframes dvModalIn {
-          from { opacity:0; transform: scale(0.95) translateY(10px); }
-          to   { opacity:1; transform: scale(1) translateY(0); }
+          from { opacity:0; transform: translateY(20px); }
+          to   { opacity:1; transform: none; }
         }
+        .dv-assign-modal { max-height: 90vh; overflow-y: auto; }
         @media (max-width: 520px) {
-          .dv-modal-overlay { padding: 0 !important; align-items: flex-start !important; }
+          .dv-modal-overlay { padding: 0 !important; align-items: flex-end !important; }
           .dv-modal-sheet {
-            border-radius: 0 0 20px 20px !important; max-width: 100% !important;
+            border-radius: 20px 20px 0 0 !important; max-width: 100% !important;
             width: 100% !important; max-height: 92vh; overflow-y: auto;
           }
         }

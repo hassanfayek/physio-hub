@@ -332,7 +332,7 @@ export default function SchedulePage({
 
         /* Content wrapper */
         .sc-content { animation: scFadeIn 0.2s ease both; }
-        @keyframes scFadeIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: translateY(0); } }
+        @keyframes scFadeIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: none; } }
 
         @media (max-width: 640px) {
           .sc-title { font-size: 18px; }
