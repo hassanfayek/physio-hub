@@ -211,11 +211,6 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
     setTimeout(() => setToastMsg(null), 4000);
   };
 
-  const STATUS_META: Record<string, { label: string; bg: string; text: string }> = {
-    active:     { label: "Active",     bg: "#d8f3dc", text: "#1b4332" },
-    discharged: { label: "Discharged", bg: "#f3f4f6", text: "#374151" },
-    on_hold:    { label: "On Hold",    bg: "#fef3c7", text: "#92400e" },
-  };
 
   return (
     <>
