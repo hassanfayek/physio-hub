@@ -559,8 +559,9 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       }),
       // Keep phone in the main patients document so patient lists stay in sync
       updateDoc(doc(db, "patients", patientId), {
-        phone: extDraft.phone,
-        updatedAt: serverTimestamp(),
+        phone:      extDraft.phone,
+        referredBy: extDraft.referredBy,
+        updatedAt:  serverTimestamp(),
       }),
     ]);
     setExtProfile(extDraft);
