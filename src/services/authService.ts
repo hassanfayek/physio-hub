@@ -385,8 +385,8 @@ export async function sendPasswordReset(email: string): Promise<void> {
  */
 async function getDocWithRetry(
   ref: Parameters<typeof getDoc>[0],
-  attempts = 4,
-  delayMs  = 1500
+  attempts = 6,
+  delayMs  = 2000
 ): ReturnType<typeof getDoc> {
   for (let i = 0; i < attempts; i++) {
     try {
@@ -396,13 +396,12 @@ async function getDocWithRetry(
       const isOffline = code === "unavailable" || code === "failed-precondition" ||
         (err instanceof Error && err.message.toLowerCase().includes("offline"));
       if (isOffline && i < attempts - 1) {
-        await new Promise((r) => setTimeout(r, delayMs));
+        await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
       } else {
         throw err;
       }
     }
   }
-  // unreachable but satisfies TypeScript
   return getDoc(ref);
 }
 
