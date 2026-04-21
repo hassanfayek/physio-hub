@@ -966,9 +966,9 @@ export default function PhysioDashboard() {
   const [viewingPatientSection, setViewingPatientSection] = useState<string | undefined>(undefined);
 
   // ── Resolve role flags ───────────────────────────────────────────────────
-  const [isManager,   setIsManager]   = useState(false);
+  const [isManager,   setIsManager]   = useState(() => user?.role === "clinic_manager");
   const [isSenior,    setIsSenior]    = useState(false);
-  const [isSecretary, setIsSecretary] = useState(false);
+  const [isSecretary, setIsSecretary] = useState(() => user?.role === "secretary");
   const [roleLoading, setRoleLoading] = useState(true);
 
   useEffect(() => {
