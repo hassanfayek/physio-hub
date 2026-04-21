@@ -25,11 +25,13 @@ import { subscribeToSecretaries, deleteSecretary, type Secretary } from "../../s
 import { subscribeToPhysicians, deletePhysician, type Physician } from "../../services/physicianService";
 import { registerPhysician, type RegisterPhysicianData } from "../../services/authService";
 import AddPhysioModal from "../../components/AddPhysioModal";
+import NotificationPanel from "../../components/NotificationPanel";
 import { createPortal } from "react-dom";
 import ClinicBillingPage from "./ClinicBillingPage";
 import TreatmentProtocolsPage from "../protocols/TreatmentProtocolsPage";
 import DiagnosisTemplatesPage from "../diagnoses/DiagnosisTemplatesPage";
 import OnlineRehabPage from "../rehab/OnlineRehabPage";
+import { runBackgroundScan } from "../../services/notificationService";
 
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
@@ -997,6 +999,12 @@ export default function PhysioDashboard() {
     Promise.all([userPromise, physioPromise]).finally(() => setRoleLoading(false));
   }, [user?.uid, user?.role]);
 
+  // Background notification scan — runs once per calendar day
+  useEffect(() => {
+    if (!user?.uid) return;
+    runBackgroundScan(user.uid);
+  }, [user?.uid]);
+
   const physio = user as unknown as PhysioProfile | null;
   if (!physio) return null;
 
@@ -1320,8 +1328,15 @@ export default function PhysioDashboard() {
             <img src={logo} alt="Physio+ Hub" style={{ height: 40, width: "auto", objectFit: "contain", display: "block" }} />
           </div>
 
-          {/* Right: language + sign out */}
+          {/* Right: notifications + language + sign out */}
           <div className="phd-topbar-right">
+            <NotificationPanel
+              userId={user.uid}
+              onNavigateToPatient={(patientId) => {
+                setViewingPatientId(patientId);
+                setActiveTab(isManager ? "people" : "patients");
+              }}
+            />
             <button className="lang-toggle" onClick={toggleLang} title="Switch language">
               {lang === "en" ? "🌐 العربية" : "🌐 English"}
             </button>

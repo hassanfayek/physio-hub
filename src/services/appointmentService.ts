@@ -17,6 +17,7 @@ import {
   type Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { notifyStaff } from "./notificationService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -152,6 +153,14 @@ export async function createAppointment(
       ...payload,
       createdAt: serverTimestamp(),
     });
+    // Fire-and-forget notification
+    notifyStaff({
+      type:      "appointment_booked",
+      title:     "New appointment booked",
+      body:      `${payload.patientName} → ${payload.physioName} on ${payload.date} at ${fmtHour12(payload.hour)}`,
+      sourceId:  `appt_booked_${ref.id}`,
+      patientId: payload.patientId,
+    }, { physioId: payload.physioId });
     return { id: ref.id };
   } catch (err) {
     return { error: parseError(err) };
@@ -164,7 +173,19 @@ export async function deleteAppointment(
   appointmentId: string
 ): Promise<{ error?: string }> {
   try {
+    // Read before delete so notification has full context
+    const snap = await getDoc(doc(db, "appointments", appointmentId));
     await deleteDoc(doc(db, "appointments", appointmentId));
+    if (snap.exists()) {
+      const a = docToAppointment(snap.id, snap.data() as Record<string, unknown>);
+      notifyStaff({
+        type:      "appointment_cancelled",
+        title:     "Appointment cancelled",
+        body:      `${a.patientName} → ${a.physioName} on ${a.date} at ${fmtHour12(a.hour)}`,
+        sourceId:  `appt_cancelled_${appointmentId}`,
+        patientId: a.patientId,
+      }, { physioId: a.physioId });
+    }
     return {};
   } catch (err) {
     return { error: parseError(err) };
@@ -469,6 +490,19 @@ export async function updateAppointmentConfirmation(
     await updateDoc(doc(db, "appointments", appointmentId), {
       confirmedByPatient: confirmed,
     });
+    if (confirmed) {
+      const snap = await getDoc(doc(db, "appointments", appointmentId));
+      if (snap.exists()) {
+        const a = docToAppointment(snap.id, snap.data() as Record<string, unknown>);
+        notifyStaff({
+          type:      "patient_confirmed",
+          title:     "Patient confirmed appointment",
+          body:      `${a.patientName} confirmed their session on ${a.date} at ${fmtHour12(a.hour)}`,
+          sourceId:  `appt_confirmed_${appointmentId}`,
+          patientId: a.patientId,
+        }, { physioId: a.physioId });
+      }
+    }
     return {};
   } catch (err) {
     return { error: parseError(err) };

@@ -1,6 +1,7 @@
 // FILE: src/services/patientService.ts
 
 import { normalizePhone } from "../utils/phone";
+import { notifyStaff } from "./notificationService";
 import {
   collection,
   doc,
@@ -197,6 +198,15 @@ export async function createPatient(
       referredByPhysicianId: payload.referredByPhysicianId ?? "",
       createdAt:             serverTimestamp(),
     });
+
+    // Fire-and-forget notification
+    notifyStaff({
+      type:      "new_patient",
+      title:     "New patient registered",
+      body:      `${payload.firstName} ${payload.lastName} has been added to the system.`,
+      sourceId:  `new_patient_${uid}`,
+      patientId: uid,
+    }, { physioId: payload.physioId });
 
     return {
       patient: {
