@@ -7,7 +7,7 @@
 
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth }                                        from "firebase/auth";
-import { initializeFirestore, memoryLocalCache }           from "firebase/firestore";
+import { initializeFirestore, getFirestore, memoryLocalCache } from "firebase/firestore";
 import { getStorage }                                     from "firebase/storage";
 
 const firebaseConfig = {
@@ -21,12 +21,13 @@ const firebaseConfig = {
 };
 
 // Prevent duplicate initialisation during hot-module reloads (Vite dev server)
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+const isNewApp = getApps().length === 0;
+const app      = isNewApp ? initializeApp(firebaseConfig) : getApp();
 
-export const auth    = getAuth(app);
-export const db      = initializeFirestore(app, {
-  localCache: memoryLocalCache(),
-});
+export const auth = getAuth(app);
+export const db   = isNewApp
+  ? initializeFirestore(app, { localCache: memoryLocalCache() })
+  : getFirestore(app);
 export const storage = getStorage(app);
 export default app;
 

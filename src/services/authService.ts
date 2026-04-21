@@ -385,8 +385,8 @@ export async function sendPasswordReset(email: string): Promise<void> {
  */
 async function getDocWithRetry(
   ref: Parameters<typeof getDoc>[0],
-  attempts = 2,
-  delayMs  = 700
+  attempts = 4,
+  delayMs  = 1500
 ): ReturnType<typeof getDoc> {
   for (let i = 0; i < attempts; i++) {
     try {
