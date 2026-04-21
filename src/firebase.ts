@@ -20,6 +20,16 @@ const firebaseConfig = {
   measurementId: "G-SS4JKGE150"
 };
 
+// Wipe stale Firestore IndexedDB left by previous persistentLocalCache sessions.
+// Runs once before Firebase initialises so the SDK starts clean.
+if (typeof window !== "undefined" && window.indexedDB?.databases) {
+  window.indexedDB.databases().then((dbs) => {
+    dbs
+      .filter((d) => d.name?.startsWith("firestore/"))
+      .forEach((d) => { if (d.name) window.indexedDB.deleteDatabase(d.name); });
+  }).catch(() => {});
+}
+
 // Prevent duplicate initialisation during hot-module reloads (Vite dev server)
 const isNewApp = getApps().length === 0;
 const app      = isNewApp ? initializeApp(firebaseConfig) : getApp();
