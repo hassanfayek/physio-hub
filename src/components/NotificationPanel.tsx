@@ -1,6 +1,7 @@
 // FILE: src/components/NotificationPanel.tsx
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Bell,
   Calendar,
@@ -25,20 +26,20 @@ import {
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface NotificationPanelProps {
-  userId:                string;
-  onNavigateToPatient?:  (patientId: string) => void;
+  userId:               string;
+  onNavigateToPatient?: (patientId: string) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function typeIcon(type: NotifType) {
   switch (type) {
-    case "appointment_booked":    return <Calendar     size={14} strokeWidth={2} />;
-    case "appointment_cancelled": return <CalendarX    size={14} strokeWidth={2} />;
-    case "patient_confirmed":     return <CheckCircle  size={14} strokeWidth={2} />;
-    case "new_patient":           return <UserPlus     size={14} strokeWidth={2} />;
+    case "appointment_booked":    return <Calendar      size={14} strokeWidth={2} />;
+    case "appointment_cancelled": return <CalendarX     size={14} strokeWidth={2} />;
+    case "patient_confirmed":     return <CheckCircle   size={14} strokeWidth={2} />;
+    case "new_patient":           return <UserPlus      size={14} strokeWidth={2} />;
     case "package_expiring":      return <AlertTriangle size={14} strokeWidth={2} />;
-    case "unpaid_balance":        return <CreditCard   size={14} strokeWidth={2} />;
+    case "unpaid_balance":        return <CreditCard    size={14} strokeWidth={2} />;
   }
 }
 
@@ -68,28 +69,44 @@ function relativeTime(ts: AppNotification["createdAt"]): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function NotificationPanel({ userId, onNavigateToPatient }: NotificationPanelProps) {
-  const [notifs,  setNotifs]  = useState<AppNotification[]>([]);
-  const [open,    setOpen]    = useState(false);
+  const [notifs,   setNotifs]   = useState<AppNotification[]>([]);
+  const [open,     setOpen]     = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [panelPos, setPanelPos] = useState({ top: 0, right: 0 });
+
+  const bellRef  = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    return subscribeToNotifications(userId, setNotifs);
-  }, [userId]);
+  useEffect(() => subscribeToNotifications(userId, setNotifs), [userId]);
 
-  // Close on outside click
+  // Close on outside click (bell and portal panel are separate DOM trees)
   useEffect(() => {
     if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+    function onDown(e: MouseEvent) {
+      const target = e.target as Node;
+      const inBell  = bellRef.current?.contains(target);
+      const inPanel = panelRef.current?.contains(target);
+      if (!inBell && !inPanel) setOpen(false);
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
   const unread = notifs.filter((n) => !n.read).length;
+
+  const handleToggle = () => {
+    if (!open && bellRef.current) {
+      const rect   = bellRef.current.getBoundingClientRect();
+      const panelW = Math.min(360, window.innerWidth - 32);
+      // Anchor right edge of panel to right edge of bell, clamped inside viewport
+      const right  = Math.max(16, window.innerWidth - rect.right);
+      setPanelPos({ top: rect.bottom + 10, right });
+      // Ensure panel doesn't overflow left
+      const leftEdge = window.innerWidth - right - panelW;
+      if (leftEdge < 16) setPanelPos({ top: rect.bottom + 10, right: window.innerWidth - panelW - 16 });
+    }
+    setOpen((o) => !o);
+  };
 
   const handleClickNotif = async (n: AppNotification) => {
     if (!n.read) await markNotifRead(userId, n.id);
@@ -99,9 +116,7 @@ export default function NotificationPanel({ userId, onNavigateToPatient }: Notif
     }
   };
 
-  const handleMarkAllRead = async () => {
-    await markAllNotifsRead(userId);
-  };
+  const handleMarkAllRead = () => markAllNotifsRead(userId);
 
   const handleClearAll = async () => {
     setClearing(true);
@@ -109,11 +124,11 @@ export default function NotificationPanel({ userId, onNavigateToPatient }: Notif
     setClearing(false);
   };
 
+  const panelW = Math.min(360, window.innerWidth - 32);
+
   return (
     <>
       <style>{`
-        .np-wrap { position: relative; }
-
         .np-bell {
           position: relative;
           display: flex; align-items: center; justify-content: center;
@@ -136,8 +151,8 @@ export default function NotificationPanel({ userId, onNavigateToPatient }: Notif
         @keyframes npBadgePop { from { transform: scale(0); } to { transform: scale(1); } }
 
         .np-panel {
-          position: absolute; top: calc(100% + 10px); right: 0;
-          width: 360px; max-height: 500px;
+          position: fixed;
+          max-height: min(500px, calc(100vh - 80px));
           background: #fff; border-radius: 16px;
           border: 1px solid #e8e4de;
           box-shadow: 0 16px 64px rgba(0,0,0,0.14);
@@ -145,166 +160,152 @@ export default function NotificationPanel({ userId, onNavigateToPatient }: Notif
           overflow: hidden; z-index: 9999;
           animation: npSlideIn 0.18s cubic-bezier(0.16,1,0.3,1) both;
         }
-        @keyframes npSlideIn { from { opacity:0; transform:translateY(-8px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
+        @keyframes npSlideIn {
+          from { opacity:0; transform:translateY(-6px) scale(0.97); }
+          to   { opacity:1; transform:translateY(0)    scale(1);    }
+        }
 
         .np-head {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 14px 16px 10px; border-bottom: 1px solid #f0ede8;
-          flex-shrink: 0;
+          padding: 14px 16px 10px; border-bottom: 1px solid #f0ede8; flex-shrink: 0;
         }
-        .np-head-title {
-          font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 600; color: #1a1a1a;
-        }
-        .np-head-actions { display: flex; align-items: center; gap: 6px; }
-        .np-action-btn {
-          display: flex; align-items: center; gap: 4px;
-          padding: 4px 8px; border-radius: 6px; border: 1px solid #e5e0d8;
-          background: #fff; cursor: pointer;
-          font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 500; color: #5a5550;
-          transition: all 0.12s;
-        }
-        .np-action-btn:hover { background: #f5f3ef; }
-        .np-action-btn.danger:hover { background: #fff5f5; color: #b91c1c; border-color: #fca5a5; }
+        .np-head-title { font-family:'Outfit',sans-serif; font-size:15px; font-weight:600; color:#1a1a1a; }
+        .np-head-actions { display:flex; align-items:center; gap:6px; }
 
-        .np-list { overflow-y: auto; flex: 1; }
-        .np-list::-webkit-scrollbar { width: 4px; }
-        .np-list::-webkit-scrollbar-track { background: transparent; }
-        .np-list::-webkit-scrollbar-thumb { background: #e5e0d8; border-radius: 4px; }
+        .np-action-btn {
+          display:flex; align-items:center; gap:4px;
+          padding:4px 8px; border-radius:6px; border:1px solid #e5e0d8;
+          background:#fff; cursor:pointer;
+          font-family:'Outfit',sans-serif; font-size:11px; font-weight:500; color:#5a5550;
+          transition:all 0.12s;
+        }
+        .np-action-btn:hover { background:#f5f3ef; }
+        .np-action-btn.danger:hover { background:#fff5f5; color:#b91c1c; border-color:#fca5a5; }
+
+        .np-list { overflow-y:auto; flex:1; }
+        .np-list::-webkit-scrollbar { width:4px; }
+        .np-list::-webkit-scrollbar-track { background:transparent; }
+        .np-list::-webkit-scrollbar-thumb { background:#e5e0d8; border-radius:4px; }
 
         .np-empty {
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          padding: 48px 24px; gap: 10px; color: #b0a89e;
-          font-family: 'Outfit', sans-serif; font-size: 13.5px;
+          display:flex; flex-direction:column; align-items:center; justify-content:center;
+          padding:48px 24px; gap:10px; color:#b0a89e;
+          font-family:'Outfit',sans-serif; font-size:13.5px;
         }
-        .np-empty-icon { opacity: 0.35; }
+        .np-empty-icon { opacity:0.35; }
 
         .np-item {
-          display: flex; align-items: flex-start; gap: 10px;
-          padding: 12px 16px; cursor: pointer;
-          border-bottom: 1px solid #f5f3ef;
-          transition: background 0.12s;
+          display:flex; align-items:flex-start; gap:10px;
+          padding:12px 16px; cursor:pointer;
+          border-bottom:1px solid #f5f3ef; transition:background 0.12s;
         }
-        .np-item:last-child { border-bottom: none; }
-        .np-item:hover { background: #faf8f5; }
-        .np-item.unread { background: #f0f7ff; }
-        .np-item.unread:hover { background: #e6f0fb; }
+        .np-item:last-child { border-bottom:none; }
+        .np-item:hover { background:#faf8f5; }
+        .np-item.unread { background:#f0f7ff; }
+        .np-item.unread:hover { background:#e6f0fb; }
 
         .np-icon {
-          flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px;
-          display: flex; align-items: center; justify-content: center;
-          margin-top: 1px;
+          flex-shrink:0; width:30px; height:30px; border-radius:8px;
+          display:flex; align-items:center; justify-content:center; margin-top:1px;
         }
-
-        .np-content { flex: 1; min-width: 0; }
+        .np-content { flex:1; min-width:0; }
         .np-item-title {
-          font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600;
-          color: #1a1a1a; margin-bottom: 2px;
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          font-family:'Outfit',sans-serif; font-size:13px; font-weight:600; color:#1a1a1a;
+          margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
         }
         .np-item-body {
-          font-family: 'Outfit', sans-serif; font-size: 12px; color: #5a5550;
-          line-height: 1.45; display: -webkit-box;
-          -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+          font-family:'Outfit',sans-serif; font-size:12px; color:#5a5550;
+          line-height:1.45; display:-webkit-box;
+          -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
         }
-        .np-item-time {
-          font-family: 'Outfit', sans-serif; font-size: 10.5px; color: #b0a89e;
-          margin-top: 3px; flex-shrink: 0;
-        }
+        .np-item-time { font-family:'Outfit',sans-serif; font-size:10.5px; color:#b0a89e; margin-top:3px; }
 
         .np-unread-dot {
-          width: 7px; height: 7px; border-radius: 50%;
-          background: #2E8BC0; flex-shrink: 0; margin-top: 7px;
-        }
-
-        @media (max-width: 480px) {
-          .np-panel { width: calc(100vw - 32px); right: -100px; }
+          width:7px; height:7px; border-radius:50%;
+          background:#2E8BC0; flex-shrink:0; margin-top:7px;
         }
       `}</style>
 
-      <div className="np-wrap" ref={panelRef}>
-        {/* Bell button */}
-        <button
-          className={`np-bell${unread > 0 ? " has-unread" : ""}`}
-          onClick={() => setOpen((o) => !o)}
-          title="Notifications"
-          type="button"
+      {/* Bell button */}
+      <button
+        ref={bellRef}
+        className={`np-bell${unread > 0 ? " has-unread" : ""}`}
+        onClick={handleToggle}
+        title="Notifications"
+        type="button"
+      >
+        <Bell size={17} strokeWidth={2} />
+        {unread > 0 && (
+          <span className="np-badge">{unread > 99 ? "99+" : unread}</span>
+        )}
+      </button>
+
+      {/* Panel — rendered in a portal so it's never clipped by ancestors */}
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          className="np-panel"
+          style={{ top: panelPos.top, right: panelPos.right, width: panelW }}
         >
-          <Bell size={17} strokeWidth={2} />
-          {unread > 0 && (
-            <span className="np-badge">{unread > 99 ? "99+" : unread}</span>
-          )}
-        </button>
-
-        {/* Panel */}
-        {open && (
-          <div className="np-panel">
-            {/* Header */}
-            <div className="np-head">
-              <div className="np-head-title">
-                Notifications{unread > 0 ? ` (${unread})` : ""}
-              </div>
-              <div className="np-head-actions">
-                {unread > 0 && (
-                  <button className="np-action-btn" onClick={handleMarkAllRead} type="button">
-                    <CheckCheck size={11} strokeWidth={2.5} />
-                    Mark all read
-                  </button>
-                )}
-                {notifs.length > 0 && (
-                  <button
-                    className="np-action-btn danger"
-                    onClick={handleClearAll}
-                    disabled={clearing}
-                    type="button"
-                  >
-                    <Trash2 size={11} strokeWidth={2.5} />
-                    {clearing ? "Clearing…" : "Clear all"}
-                  </button>
-                )}
-                <button className="np-action-btn" onClick={() => setOpen(false)} type="button">
-                  <X size={11} strokeWidth={2.5} />
-                </button>
-              </div>
+          <div className="np-head">
+            <div className="np-head-title">
+              Notifications{unread > 0 ? ` (${unread})` : ""}
             </div>
-
-            {/* List */}
-            <div className="np-list">
-              {notifs.length === 0 ? (
-                <div className="np-empty">
-                  <Bell size={32} strokeWidth={1.5} className="np-empty-icon" />
-                  <span>You're all caught up</span>
-                </div>
-              ) : (
-                notifs.map((n) => (
-                  <div
-                    key={n.id}
-                    className={`np-item${!n.read ? " unread" : ""}`}
-                    onClick={() => handleClickNotif(n)}
-                  >
-                    {/* Type icon */}
-                    <div
-                      className="np-icon"
-                      style={{ background: typeColor(n.type) + "1a", color: typeColor(n.type) }}
-                    >
-                      {typeIcon(n.type)}
-                    </div>
-
-                    {/* Content */}
-                    <div className="np-content">
-                      <div className="np-item-title">{n.title}</div>
-                      <div className="np-item-body">{n.body}</div>
-                      <div className="np-item-time">{relativeTime(n.createdAt)}</div>
-                    </div>
-
-                    {/* Unread dot */}
-                    {!n.read && <div className="np-unread-dot" />}
-                  </div>
-                ))
+            <div className="np-head-actions">
+              {unread > 0 && (
+                <button className="np-action-btn" onClick={handleMarkAllRead} type="button">
+                  <CheckCheck size={11} strokeWidth={2.5} /> Mark all read
+                </button>
               )}
+              {notifs.length > 0 && (
+                <button
+                  className="np-action-btn danger"
+                  onClick={handleClearAll}
+                  disabled={clearing}
+                  type="button"
+                >
+                  <Trash2 size={11} strokeWidth={2.5} />
+                  {clearing ? "Clearing…" : "Clear all"}
+                </button>
+              )}
+              <button className="np-action-btn" onClick={() => setOpen(false)} type="button">
+                <X size={11} strokeWidth={2.5} />
+              </button>
             </div>
           </div>
-        )}
-      </div>
+
+          <div className="np-list">
+            {notifs.length === 0 ? (
+              <div className="np-empty">
+                <Bell size={32} strokeWidth={1.5} className="np-empty-icon" />
+                <span>You're all caught up</span>
+              </div>
+            ) : (
+              notifs.map((n) => (
+                <div
+                  key={n.id}
+                  className={`np-item${!n.read ? " unread" : ""}`}
+                  onClick={() => handleClickNotif(n)}
+                >
+                  <div
+                    className="np-icon"
+                    style={{ background: typeColor(n.type) + "1a", color: typeColor(n.type) }}
+                  >
+                    {typeIcon(n.type)}
+                  </div>
+                  <div className="np-content">
+                    <div className="np-item-title">{n.title}</div>
+                    <div className="np-item-body">{n.body}</div>
+                    <div className="np-item-time">{relativeTime(n.createdAt)}</div>
+                  </div>
+                  {!n.read && <div className="np-unread-dot" />}
+                </div>
+              ))
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }
