@@ -1331,7 +1331,7 @@ export default function PhysioDashboard() {
           {/* Right: notifications + language + sign out */}
           <div className="phd-topbar-right">
             <NotificationPanel
-              userId={user.uid}
+              userId={user!.uid}
               onNavigateToPatient={(patientId) => {
                 setViewingPatientId(patientId);
                 setActiveTab(isManager ? "people" : "patients");

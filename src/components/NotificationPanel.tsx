@@ -1,6 +1,6 @@
 // FILE: src/components/NotificationPanel.tsx
 
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Bell,
   Calendar,
