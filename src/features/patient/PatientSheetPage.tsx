@@ -3292,6 +3292,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
           isManager={role === "clinic_manager"}
           isSecretary={role === "secretary"}
           patientName={patient ? `${patient.firstName} ${patient.lastName}` : "Patient"}
+          patientPhone={patient?.phone ?? ""}
         />
       )}
       {/* ── BODY PROFILE ── */}

@@ -3,7 +3,8 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Trash2, Check, X, Eye, EyeOff, Package, ClipboardList } from "lucide-react";
+import { Plus, Trash2, Check, X, Eye, EyeOff, Package, ClipboardList, MessageCircle } from "lucide-react";
+import { phoneForLink } from "../../utils/phone";
 import {
   subscribeToBillingSettings,
   saveBillingSettings,
@@ -26,10 +27,11 @@ import {
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface PatientPricingSectionProps {
-  patientId:   string;
-  isManager:   boolean;
-  isSecretary: boolean;
-  patientName: string;
+  patientId:    string;
+  isManager:    boolean;
+  isSecretary:  boolean;
+  patientName:  string;
+  patientPhone?: string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -48,6 +50,7 @@ export default function PatientPricingSection({
   isManager,
   isSecretary,
   patientName,
+  patientPhone = "",
 }: PatientPricingSectionProps) {
 
 // ── Session prices ──────────────────────────────────────────────────────────
@@ -81,6 +84,13 @@ export default function PatientPricingSection({
   const [pkgError,      setPkgError]      = useState<string | null>(null);
   const [deletingPkgId, setDeletingPkgId] = useState<string | null>(null);
   const [deletingPkg,   setDeletingPkg]   = useState(false);
+
+  // ── WhatsApp reminder editor ─────────────────────────────────────────────────
+  const [editingMsgPkgId, setEditingMsgPkgId] = useState<string | null>(null);
+  const [editingMsg,      setEditingMsg]      = useState("");
+
+  const defaultMsg = (name: string) =>
+    `Hi ${name}, this is a reminder that you have 1 session remaining in your current package. Please contact us to renew and continue your treatment. Thank you! 🙏`;
 
   // ── Toast ────────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<string | null>(null);
@@ -382,6 +392,37 @@ export default function PatientPricingSection({
         .pps-pkg-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #c0bbb4; font-weight: 700; margin-bottom: 2px; }
         .pps-pkg-stat-value { font-family: 'Playfair Display', serif; font-size: 16px; color: #1a1a1a; }
         .pps-pkg-notes { font-size: 12px; color: #9a9590; margin-bottom: 12px; }
+        .pps-wa-reminder {
+          background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 8px;
+          padding: 10px 12px; margin-bottom: 10px;
+          display: flex; flex-direction: column; gap: 8px;
+        }
+        .pps-wa-reminder-top {
+          display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        }
+        .pps-wa-reminder-text { font-size: 11.5px; font-weight: 600; color: #b91c1c; }
+        .pps-wa-edit-btn {
+          font-size: 11px; font-weight: 500; color: #2E8BC0;
+          background: none; border: none; cursor: pointer; padding: 0;
+          text-decoration: underline; text-underline-offset: 2px; white-space: nowrap;
+        }
+        .pps-wa-msg-editor {
+          width: 100%; border: 1.5px solid #fecaca; border-radius: 6px;
+          padding: 8px 10px; font-family: 'Outfit', sans-serif; font-size: 12.5px;
+          color: #1a1a1a; background: #fff; resize: vertical; line-height: 1.5;
+          outline: none;
+        }
+        .pps-wa-msg-editor:focus { border-color: #f87171; }
+        .pps-wa-remind-btn {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 6px 14px; border-radius: 6px;
+          background: #25D366; border: none;
+          font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700;
+          color: #fff; cursor: pointer; text-decoration: none; white-space: nowrap;
+          transition: background 0.15s; align-self: flex-start;
+        }
+        .pps-wa-remind-btn:hover { background: #128C7E; }
+        .pps-wa-no-phone { font-size: 11px; color: #c0bbb4; }
         .pps-pkg-actions { display: flex; gap: 6px; }
         .pps-pkg-use-btn {
           flex: 1; padding: 7px 10px; border-radius: 8px; border: none;
@@ -542,9 +583,58 @@ export default function PatientPricingSection({
                       {pkg.active ? <span className="pps-pkg-active-badge">Active</span> : <span className="pps-pkg-inactive-badge">Completed</span>}
                     </div>
                     <div className="pps-pkg-progress-wrap">
-                      <div className="pps-pkg-progress-label"><span>{pkg.sessionsUsed} used</span><span>{remaining} left</span></div>
-                      <div className="pps-pkg-progress-track"><div className="pps-pkg-progress-fill" style={{ width: `${pct}%` }} /></div>
+                      <div className="pps-pkg-progress-label"><span>{pkg.sessionsUsed} used</span><span style={{ color: remaining === 1 ? "#b91c1c" : undefined, fontWeight: remaining === 1 ? 700 : undefined }}>{remaining} left</span></div>
+                      <div className="pps-pkg-progress-track"><div className="pps-pkg-progress-fill" style={{ width: `${pct}%`, background: remaining === 1 ? "#f87171" : undefined }} /></div>
                     </div>
+                    {remaining === 1 && pkg.active && (() => {
+                      const ph = phoneForLink(patientPhone);
+                      const isEditing = editingMsgPkgId === pkg.id;
+                      const currentMsg = isEditing ? editingMsg : defaultMsg(patientName);
+                      return (
+                        <div className="pps-wa-reminder">
+                          <div className="pps-wa-reminder-top">
+                            <span className="pps-wa-reminder-text">⚠️ Last session remaining</span>
+                            {ph ? (
+                              <button
+                                className="pps-wa-edit-btn"
+                                onClick={() => {
+                                  if (isEditing) {
+                                    setEditingMsgPkgId(null);
+                                  } else {
+                                    setEditingMsgPkgId(pkg.id);
+                                    setEditingMsg(defaultMsg(patientName));
+                                  }
+                                }}
+                              >
+                                {isEditing ? "Cancel" : "Edit message"}
+                              </button>
+                            ) : null}
+                          </div>
+                          {ph ? (
+                            <>
+                              {isEditing && (
+                                <textarea
+                                  className="pps-wa-msg-editor"
+                                  value={editingMsg}
+                                  onChange={(e) => setEditingMsg(e.target.value)}
+                                  rows={4}
+                                />
+                              )}
+                              <a
+                                className="pps-wa-remind-btn"
+                                href={`https://wa.me/${ph}?text=${encodeURIComponent(currentMsg)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                <MessageCircle size={12} strokeWidth={2.5} /> Send on WhatsApp
+                              </a>
+                            </>
+                          ) : (
+                            <span className="pps-wa-no-phone">No phone on file — add it in the patient profile to enable this.</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <div className="pps-pkg-stats">
                       <div className="pps-pkg-stat"><div className="pps-pkg-stat-label">Per Session</div><div className="pps-pkg-stat-value">{fmt(pkg.pricePerSession)}</div></div>
                       <div className="pps-pkg-stat"><div className="pps-pkg-stat-label">Total</div><div className="pps-pkg-stat-value">{fmt(pkg.totalAmount)}</div></div>
