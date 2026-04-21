@@ -1,6 +1,7 @@
 // FILE: src/features/patient/PatientSheetPage.tsx
 
 import { useState, useEffect } from "react";
+import { normalizePhone } from "../../utils/phone";
 import { useAuth } from "../../hooks/useAuth";
 import {
   subscribeToPatient,
@@ -559,7 +560,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       }),
       // Keep phone in the main patients document so patient lists stay in sync
       updateDoc(doc(db, "patients", patientId), {
-        phone:      extDraft.phone,
+        phone:      normalizePhone(extDraft.phone),
         referredBy: extDraft.referredBy,
         updatedAt:  serverTimestamp(),
       }),

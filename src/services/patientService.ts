@@ -1,5 +1,6 @@
 // FILE: src/services/patientService.ts
 
+import { normalizePhone } from "../utils/phone";
 import {
   collection,
   doc,
@@ -189,7 +190,7 @@ export async function createPatient(
       occupation:   payload.occupation,
       physioId:     payload.physioId,
       age:          payload.age ?? "",
-      phone:        payload.phone ?? "",
+      phone:        normalizePhone(payload.phone ?? ""),
       accessCode:            code,
       status:                "active",
       referredBy:            payload.referredBy ?? "",

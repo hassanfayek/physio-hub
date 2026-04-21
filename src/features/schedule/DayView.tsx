@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Plus, Trash2, Check, UserCheck } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Check, UserCheck, Phone, MessageCircle, MoreHorizontal } from "lucide-react";
+import { formatPhoneDisplay, phoneForLink } from "../../utils/phone";
 import {
   subscribeToAppointmentsByDay,
   deleteAppointment,
@@ -60,6 +61,7 @@ export default function DayView({
   const [updatingId,    setUpdatingId]    = useState<string | null>(null);
   const [confirmingId,  setConfirmingId]  = useState<string | null>(null);
   const [toast,         setToast]         = useState<string | null>(null);
+  const [openContactId, setOpenContactId] = useState<string | null>(null);
 
   // ── Delete confirmation ────────────────────────────────────────────────────
   const [deleteTarget,  setDeleteTarget]  = useState<{ id: string; name: string } | null>(null);
@@ -424,6 +426,35 @@ export default function DayView({
         .dv-price-btn:hover { border-color: #2E8BC0; color: #2E8BC0; background: #EAF5FC; }
         .dv-appt-physio  { font-size: 12px; color: #9a9590; }
         .dv-appt-session { font-size: 11px; color: #5BC0BE; font-weight: 500; margin-top: 1px; }
+        .dv-contact-btn {
+          display: inline-flex; align-items: center; gap: 3px;
+          padding: 2px 7px; border-radius: 6px; border: 1.5px solid #e5e0d8;
+          background: #fafaf8; font-family: 'Outfit', sans-serif;
+          font-size: 11px; font-weight: 500; color: #5a5550;
+          cursor: pointer; transition: all 0.15s; white-space: nowrap; margin-top: 3px;
+        }
+        .dv-contact-btn:hover { border-color: #9a9590; background: #f0ede8; }
+        .dv-contact-actions {
+          display: flex; gap: 5px; margin-top: 4px; flex-wrap: wrap;
+        }
+        .dv-wa-btn {
+          display: inline-flex; align-items: center; gap: 4px;
+          padding: 3px 10px; border-radius: 6px;
+          background: #d8f3dc; border: 1.5px solid #b7e4c7;
+          font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600;
+          color: #1b4332; cursor: pointer; transition: all 0.15s;
+          text-decoration: none; white-space: nowrap;
+        }
+        .dv-wa-btn:hover { background: #b7e4c7; border-color: #74c69d; }
+        .dv-call-btn {
+          display: inline-flex; align-items: center; gap: 4px;
+          padding: 3px 10px; border-radius: 6px;
+          background: #D6EEF8; border: 1.5px solid #a8d8ea;
+          font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600;
+          color: #0C3C60; cursor: pointer; transition: all 0.15s;
+          text-decoration: none; white-space: nowrap;
+        }
+        .dv-call-btn:hover { background: #a8d8ea; border-color: #2E8BC0; }
         .dv-appt-del {
           height: 28px; border-radius: 8px; padding: 0 10px;
           border: 1.5px solid #e5e0d8; background: #fafaf8;
@@ -682,9 +713,43 @@ export default function DayView({
                                     Price Sheet
                                   </button>
                                 )}
-                                  {a.patientPhone && (
-                                    <div className="dv-appt-physio" style={{ color: "#5BC0BE" }}>{a.patientPhone}</div>
-                                  )}
+                                  {a.patientPhone && (() => {
+                                    const ph = phoneForLink(a.patientPhone);
+                                    const isOpen = openContactId === a.id;
+                                    return (
+                                      <>
+                                        <button
+                                          className="dv-contact-btn"
+                                          onClick={() => setOpenContactId(isOpen ? null : a.id)}
+                                          type="button"
+                                          title={formatPhoneDisplay(a.patientPhone)}
+                                        >
+                                          <MoreHorizontal size={10} strokeWidth={2.5} />
+                                          {formatPhoneDisplay(a.patientPhone)}
+                                        </button>
+                                        {isOpen && (
+                                          <div className="dv-contact-actions">
+                                            <a
+                                              className="dv-wa-btn"
+                                              href={`https://wa.me/${ph}`}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                            >
+                                              <MessageCircle size={11} strokeWidth={2.5} />
+                                              WhatsApp
+                                            </a>
+                                            <a
+                                              className="dv-call-btn"
+                                              href={`tel:+${ph}`}
+                                            >
+                                              <Phone size={11} strokeWidth={2.5} />
+                                              Call
+                                            </a>
+                                          </div>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                                   <div className="dv-appt-physio">{a.physioName}</div>
                                   {a.sessionType && (
                                     <div className="dv-appt-session">{a.sessionType}</div>

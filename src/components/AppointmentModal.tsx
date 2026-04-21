@@ -1,6 +1,7 @@
 // FILE: src/components/AppointmentModal.tsx
 
 import { useState, useEffect, type FormEvent } from "react";
+import { normalizePhone } from "../utils/phone";
 import { createPortal } from "react-dom";
 import {
   createAppointment,
@@ -97,9 +98,7 @@ export default function AppointmentModal({
         : selectedPatient
           ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
           : "",
-      patientPhone: walkIn
-        ? walkInPhone.trim()
-        : selectedPatient?.phone ?? "",
+      patientPhone: normalizePhone(walkIn ? walkInPhone.trim() : (selectedPatient?.phone ?? "")),
       physioId,
       physioName: `Dr. ${physioForName.firstName} ${physioForName.lastName}`,
       date,
