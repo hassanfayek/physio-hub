@@ -25,7 +25,9 @@ export type NotifType =
   | "patient_confirmed"
   | "new_patient"
   | "package_expiring"
-  | "unpaid_balance";
+  | "unpaid_balance"
+  | "exercise_assigned"
+  | "protocol_assigned";
 
 export interface AppNotification {
   id:         string;

@@ -18,6 +18,7 @@ import {
   type Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { sendNotification } from "./notificationService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -210,6 +211,12 @@ export async function assignExerciseToPatient(
       completed:    false,
       completedAt:  null,
       createdAt:    serverTimestamp(),
+    });
+    sendNotification(payload.patientId, {
+      type:     "exercise_assigned",
+      title:    "New exercise added",
+      body:     `"${payload.exerciseName}" has been added to your program.`,
+      sourceId: `ex_assigned_${ref.id}`,
     });
     return { id: ref.id };
   } catch (err) {

@@ -10,6 +10,8 @@ import {
   UserPlus,
   AlertTriangle,
   CreditCard,
+  Dumbbell,
+  ClipboardList,
   X,
   CheckCheck,
   Trash2,
@@ -28,6 +30,7 @@ import {
 interface NotificationPanelProps {
   userId:               string;
   onNavigateToPatient?: (patientId: string) => void;
+  onNotifClick?:        (notif: AppNotification) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -40,6 +43,8 @@ function typeIcon(type: NotifType) {
     case "new_patient":           return <UserPlus      size={14} strokeWidth={2} />;
     case "package_expiring":      return <AlertTriangle size={14} strokeWidth={2} />;
     case "unpaid_balance":        return <CreditCard    size={14} strokeWidth={2} />;
+    case "exercise_assigned":     return <Dumbbell      size={14} strokeWidth={2} />;
+    case "protocol_assigned":     return <ClipboardList size={14} strokeWidth={2} />;
   }
 }
 
@@ -51,6 +56,8 @@ function typeColor(type: NotifType): string {
     case "new_patient":           return "#7c3aed";
     case "package_expiring":      return "#d97706";
     case "unpaid_balance":        return "#dc2626";
+    case "exercise_assigned":     return "#0891b2";
+    case "protocol_assigned":     return "#7c3aed";
   }
 }
 
@@ -68,7 +75,7 @@ function relativeTime(ts: AppNotification["createdAt"]): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function NotificationPanel({ userId, onNavigateToPatient }: NotificationPanelProps) {
+export default function NotificationPanel({ userId, onNavigateToPatient, onNotifClick }: NotificationPanelProps) {
   const [notifs,   setNotifs]   = useState<AppNotification[]>([]);
   const [open,     setOpen]     = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -110,7 +117,10 @@ export default function NotificationPanel({ userId, onNavigateToPatient }: Notif
 
   const handleClickNotif = async (n: AppNotification) => {
     if (!n.read) await markNotifRead(userId, n.id);
-    if (n.patientId && onNavigateToPatient) {
+    if (onNotifClick) {
+      onNotifClick(n);
+      setOpen(false);
+    } else if (n.patientId && onNavigateToPatient) {
       onNavigateToPatient(n.patientId);
       setOpen(false);
     }

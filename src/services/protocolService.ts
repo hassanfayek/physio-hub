@@ -6,6 +6,7 @@ import {
   query, onSnapshot, orderBy, serverTimestamp, type Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { sendNotification } from "./notificationService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -156,6 +157,12 @@ export async function assignProtocolToPatient(payload: {
       ...payload,
       status:     "active",
       assignedAt: serverTimestamp(),
+    });
+    sendNotification(payload.patientId, {
+      type:     "protocol_assigned",
+      title:    "Treatment program updated",
+      body:     `"${payload.protocolTitle}" has been assigned to your treatment plan.`,
+      sourceId: `proto_assigned_${ref.id}`,
     });
     return { id: ref.id };
   } catch (err) {

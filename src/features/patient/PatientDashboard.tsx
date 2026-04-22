@@ -10,6 +10,8 @@ import PatientSheetPage from "./PatientSheetPage";
 import FeedbackPage from "./FeedbackPage";
 import logo from "../../assets/physio-logo.svg";
 import { Home, Dumbbell, CalendarDays, FileText, MessageSquare, ChevronRight, LogOut, ChevronLeft, History } from "lucide-react";
+import NotificationPanel from "../../components/NotificationPanel";
+import type { AppNotification } from "../../services/notificationService";
 import { useLang } from "../../contexts/LanguageContext";
 
 type Tab = "home" | "exercises" | "appointments" | "sheet" | "feedback";
@@ -374,8 +376,17 @@ export default function PatientDashboard() {
             <img src={logo} alt="Physio+ Hub" style={{ height: 40, width: "auto", objectFit: "contain", display: "block" }} />
           </div>
 
-          {/* Right: language + sign out */}
+          {/* Right: notifications + language + sign out */}
           <div className="pd2-topbar-right">
+            {authPatient?.uid && (
+              <NotificationPanel
+                userId={authPatient.uid}
+                onNotifClick={(n: AppNotification) => {
+                  if (n.type === "exercise_assigned") setActiveTab("exercises");
+                  else if (n.type === "protocol_assigned") setActiveTab("sheet");
+                }}
+              />
+            )}
             <button className="lang-toggle" onClick={toggleLang} title="Switch language">
               {lang === "en" ? "🌐 العربية" : "🌐 English"}
             </button>

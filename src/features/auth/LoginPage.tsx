@@ -29,7 +29,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       if (role === "patient") {
-        await loginWithCode(code);
+        await loginWithCode("PH-" + code);
         navigate("/patient");
       } else {
         const profile = await login(email, password);
@@ -403,6 +403,60 @@ export default function LoginPage() {
         .lp-input::placeholder { color: #cdc7be; }
         .lp-input.has-suffix { padding-right: 48px; }
 
+        /* ── Code split field ── */
+        .lp-code-wrap {
+          display: flex;
+          align-items: center;
+          border-radius: 12px;
+          border: 1.5px solid #ebe7e1;
+          background: #fafaf9;
+          transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+          overflow: hidden;
+        }
+        .lp-code-wrap:focus-within {
+          border-color: #2E8BC0;
+          background: #fff;
+          box-shadow: 0 0 0 4px rgba(46,139,192,0.1);
+        }
+        .lp-code-prefix {
+          padding: 13px 0 13px 16px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 18px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          color: #2E8BC0;
+          user-select: none;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+        .lp-code-sep {
+          width: 1.5px;
+          height: 22px;
+          background: #d0e8f4;
+          margin: 0 10px;
+          border-radius: 2px;
+          flex-shrink: 0;
+        }
+        .lp-code-input {
+          flex: 1;
+          min-width: 0;
+          padding: 13px 12px 13px 0;
+          border: none;
+          background: transparent;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 18px;
+          font-weight: 700;
+          letter-spacing: 0.18em;
+          color: #0d1f33;
+          outline: none;
+          -webkit-appearance: none;
+        }
+        .lp-code-input::placeholder {
+          color: #cdc7be;
+          font-weight: 500;
+          letter-spacing: 0.12em;
+        }
+
         .lp-input-suffix {
           position: absolute;
           right: 13px;
@@ -768,26 +822,35 @@ export default function LoginPage() {
                   /* ── Patient: code only ── */
                   <div className="lp-field">
                     <label className="lp-label">{lang === "ar" ? "رمز الدخول" : "Patient Access Code"}</label>
-                    <div className="lp-input-wrap">
+                    <div className="lp-code-wrap">
+                      <span className="lp-code-prefix">PH-</span>
+                      <span className="lp-code-sep" />
                       <input
-                        className="lp-input has-suffix"
+                        className="lp-code-input"
                         type="text"
-                        placeholder="PH-XXXXXX"
+                        placeholder="XXXXXX"
                         value={code}
-                        onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(null); }}
+                        onChange={(e) => {
+                          // Strip any accidental "PH-" prefix if pasted in full
+                          let val = e.target.value.toUpperCase().replace(/^PH-?/i, "");
+                          // Only allow valid code characters, max 6
+                          val = val.replace(/[^A-Z0-9]/g, "").slice(0, 6);
+                          setCode(val);
+                          setError(null);
+                        }}
                         required
                         autoComplete="off"
-                        style={{ letterSpacing: "0.12em", fontWeight: 600, fontSize: 18 }}
                         autoFocus
+                        maxLength={6}
                       />
-                      <span className="lp-input-suffix" style={{ pointerEvents: "none", color: "#2E8BC0" }}>
+                      <span style={{ paddingRight: 14, color: "#2E8BC0", display: "flex", alignItems: "center" }}>
                         <KeyRound size={15} strokeWidth={2} />
                       </span>
                     </div>
                     <div style={{ fontSize: 12, color: "#9a9590", marginTop: 6 }}>
                       {lang === "ar"
-                        ? "رمزك يبدأ بـ PH- ويتكون من 8 أحرف — يُرسَل إليك من قِبَل العيادة"
-                        : "Your code starts with PH- and is 8 characters — provided by the clinic"
+                        ? "أدخل الـ 6 أحرف بعد PH- — يُرسَل إليك من قِبَل العيادة"
+                        : "Enter the 6 characters after PH- — provided by your clinic"
                       }
                     </div>
                   </div>
@@ -834,7 +897,7 @@ export default function LoginPage() {
                 <button
                   className="lp-submit"
                   type="submit"
-                  disabled={loading || (role === "patient" ? !code : !email || !password)}
+                  disabled={loading || (role === "patient" ? code.length < 6 : !email || !password)}
                 >
                   {loading
                     ? <><div className="lp-spinner" />{t("auth.signingIn")}</>
