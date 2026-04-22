@@ -684,8 +684,9 @@ export default function DayView({
                     {appts.length > 0 && (
                       <div className="dv-appts">
                         {appts.map((a) => {
-                          const initials = a.patientName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-                          const hue      = a.patientName.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
+                          const initials     = a.patientName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+                          const hue          = a.patientName.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
+                          const patientPhone = a.patientPhone || patients.find((p) => p.uid === a.patientId)?.phone || "";
                           return (
                             <div key={a.id} className="dv-appt-card">
                               <div className="dv-appt-left">
@@ -713,8 +714,8 @@ export default function DayView({
                                     Price Sheet
                                   </button>
                                 )}
-                                  {a.patientPhone && (() => {
-                                    const ph = phoneForLink(a.patientPhone);
+                                  {patientPhone && (() => {
+                                    const ph = phoneForLink(patientPhone);
                                     const isOpen = openContactId === a.id;
                                     return (
                                       <>
@@ -722,10 +723,10 @@ export default function DayView({
                                           className="dv-contact-btn"
                                           onClick={() => setOpenContactId(isOpen ? null : a.id)}
                                           type="button"
-                                          title={formatPhoneDisplay(a.patientPhone)}
+                                          title={formatPhoneDisplay(patientPhone)}
                                         >
                                           <MoreHorizontal size={10} strokeWidth={2.5} />
-                                          {formatPhoneDisplay(a.patientPhone)}
+                                          {formatPhoneDisplay(patientPhone)}
                                         </button>
                                         {isOpen && (
                                           <div className="dv-contact-actions">
