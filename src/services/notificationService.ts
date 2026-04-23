@@ -4,6 +4,7 @@ import {
   collection,
   doc,
   addDoc,
+  setDoc,
   updateDoc,
   getDoc,
   getDocs,
@@ -63,18 +64,26 @@ export function subscribeToNotifications(
 }
 
 // ─── Send a single notification (deduplicates via sourceId) ──────────────────
+// When sourceId is provided, it is used as the Firestore document ID so that
+// dedup is a single getDoc read rather than a collection query — simpler and
+// works even when the subcollection index is not yet warmed up.
 
 export async function sendNotification(
   userId: string,
   notif:  Omit<AppNotification, "id" | "createdAt" | "read">
 ): Promise<void> {
-  if (notif.sourceId) {
-    const existing = await getDocs(
-      query(itemsCol(userId), where("sourceId", "==", notif.sourceId))
-    );
-    if (!existing.empty) return;
+  try {
+    if (notif.sourceId) {
+      const docRef = doc(db, "notifications", userId, "items", notif.sourceId);
+      const existing = await getDoc(docRef);
+      if (existing.exists()) return;
+      await setDoc(docRef, { ...notif, read: false, createdAt: serverTimestamp() });
+    } else {
+      await addDoc(itemsCol(userId), { ...notif, read: false, createdAt: serverTimestamp() });
+    }
+  } catch (e) {
+    console.error("[sendNotification]", userId, notif.sourceId, e);
   }
-  await addDoc(itemsCol(userId), { ...notif, read: false, createdAt: serverTimestamp() });
 }
 
 // ─── Staff UID cache (lazy-loaded once per session) ───────────────────────────
@@ -156,30 +165,34 @@ export function subscribeToPackageAlerts(userId: string): () => void {
   return onSnapshot(
     query(collection(db, "patientPackages"), where("active", "==", true)),
     async (snap) => {
-      for (const d of snap.docs) {
-        const pkg = d.data();
-        const rem = (pkg.packageSize as number) - (pkg.sessionsUsed as number);
-        if (rem !== 1) continue;
+      try {
+        for (const d of snap.docs) {
+          const pkg = d.data();
+          const rem = (pkg.packageSize as number) - (pkg.sessionsUsed as number);
+          if (rem !== 1) continue;
 
-        let patientName = "A patient";
-        try {
-          const pd = await getDoc(doc(db, "patients", pkg.patientId as string));
-          if (pd.exists()) {
-            const data = pd.data();
-            patientName = `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim() || patientName;
-          }
-        } catch { /* ignore */ }
+          let patientName = "A patient";
+          try {
+            const pd = await getDoc(doc(db, "patients", pkg.patientId as string));
+            if (pd.exists()) {
+              const data = pd.data();
+              patientName = `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim() || patientName;
+            }
+          } catch { /* ignore — name is cosmetic */ }
 
-        await sendNotification(userId, {
-          type:      "package_expiring",
-          title:     "Package almost finished",
-          body:      `${patientName} has only 1 session left in their active package.`,
-          sourceId:  `pkg_exp_${d.id}`,
-          patientId: pkg.patientId as string,
-        });
+          await sendNotification(userId, {
+            type:      "package_expiring",
+            title:     "Package almost finished",
+            body:      `${patientName} has only 1 session left in their active package.`,
+            sourceId:  `pkg_exp_${d.id}`,
+            patientId: pkg.patientId as string,
+          });
+        }
+      } catch (e) {
+        console.error("[subscribeToPackageAlerts]", e);
       }
     },
-    () => {}
+    (e) => console.error("[subscribeToPackageAlerts query]", e)
   );
 }
 
