@@ -90,7 +90,7 @@ export default function PatientPricingSection({
   const [editingMsg,      setEditingMsg]      = useState("");
 
   const defaultMsg = (name: string) =>
-    `Hi ${name}, this is a reminder that you have 1 session remaining in your current package. Please contact us to renew and continue your treatment. Thank you! 🙏`;
+    `مرحباً ${name}، نود تذكيركم بأن لديكم جلسة واحدة متبقية في باقتكم الحالية. يُرجى التواصل معنا لتجديد الباقة ومواصلة العلاج. شكراً لكم! 🙏\n\n_هذه رسالة تلقائية من نظام العيادة._`;
 
   // ── Toast ────────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<string | null>(null);
