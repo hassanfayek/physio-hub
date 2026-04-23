@@ -39,6 +39,7 @@ export interface Patient {
   juniorName:       string | null;
   traineeId:        string | null;
   traineeName:      string | null;
+  age?:                      string;
   hideBodyProfile?:          boolean;
   referredBy?:               string;
   referredByPhysicianId?:    string;
@@ -113,6 +114,7 @@ function docToPatient(id: string, data: Record<string, unknown>): Patient {
     juniorName:       (data.juniorName       as string | null) ?? null,
     traineeId:        (data.traineeId        as string | null) ?? null,
     traineeName:      (data.traineeName      as string | null) ?? null,
+    age:                      (data.age                      as string | undefined)  ?? "",
     hideBodyProfile:          (data.hideBodyProfile          as boolean | undefined) ?? true,
     referredBy:               (data.referredBy               as string | undefined)  ?? "",
     referredByPhysicianId:    (data.referredByPhysicianId    as string | undefined)  ?? "",
@@ -197,6 +199,21 @@ export async function createPatient(
       referredBy:            payload.referredBy ?? "",
       referredByPhysicianId: payload.referredByPhysicianId ?? "",
       createdAt:             serverTimestamp(),
+    });
+
+    // Seed the extended profile so PatientSheetPage always has a doc to read
+    await setDoc(doc(db, "patientProfiles", uid), {
+      age:              payload.age ?? "",
+      phone:            normalizePhone(payload.phone ?? ""),
+      occupation:       payload.occupation,
+      referredBy:       payload.referredBy ?? "",
+      gender:           "",
+      address:          "",
+      nationality:      "",
+      emergencyContact: "",
+      emergencyPhone:   "",
+      notes:            "",
+      createdAt:        serverTimestamp(),
     });
 
     // Fire-and-forget notification

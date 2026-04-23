@@ -533,22 +533,38 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     const unsub = onSnapshot(
       doc(db, "patientProfiles", patientId),
       (snap) => {
-        if (snap.exists()) {
-          const d = snap.data() as Partial<PatientExtProfile>;
-          // Seed referredBy from the patients doc if not yet saved in the profile
-          const filled: PatientExtProfile = {
-            ...EMPTY_EXT,
-            ...d,
-            referredBy: d.referredBy ?? (patient?.referredBy ?? ""),
-          };
-          setExtProfile(filled);
-          setExtDraft(filled);
-        }
+        const d = (snap.exists() ? snap.data() : {}) as Partial<PatientExtProfile>;
+        const filled: PatientExtProfile = {
+          ...EMPTY_EXT,
+          ...d,
+          referredBy: d.referredBy ?? (patient?.referredBy ?? ""),
+        };
+        setExtProfile(filled);
+        setExtDraft(filled);
       },
       () => {}
     );
     return unsub;
   }, [patientId]);
+
+  // Back-fill profile fields from the patients doc for patients created before the profile seed
+  useEffect(() => {
+    if (!patient) return;
+    setExtProfile((prev) => ({
+      ...prev,
+      age:        prev.age        || patient.age        || "",
+      phone:      prev.phone      || patient.phone      || "",
+      occupation: prev.occupation || patient.occupation || "",
+      referredBy: prev.referredBy || patient.referredBy || "",
+    }));
+    setExtDraft((prev) => ({
+      ...prev,
+      age:        prev.age        || patient.age        || "",
+      phone:      prev.phone      || patient.phone      || "",
+      occupation: prev.occupation || patient.occupation || "",
+      referredBy: prev.referredBy || patient.referredBy || "",
+    }));
+  }, [patient]);
 
   const handleSaveExtProfile = async () => {
     if (!patientId) return;
@@ -558,9 +574,11 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         ...extDraft,
         updatedAt: serverTimestamp(),
       }),
-      // Keep phone in the main patients document so patient lists stay in sync
+      // Keep core fields in the main patients document so patient lists stay in sync
       updateDoc(doc(db, "patients", patientId), {
         phone:      normalizePhone(extDraft.phone),
+        occupation: extDraft.occupation,
+        age:        extDraft.age,
         referredBy: extDraft.referredBy,
         updatedAt:  serverTimestamp(),
       }),
