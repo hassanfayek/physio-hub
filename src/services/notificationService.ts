@@ -5,6 +5,7 @@ import {
   doc,
   addDoc,
   updateDoc,
+  getDoc,
   getDocs,
   query,
   where,
@@ -145,9 +146,45 @@ export async function clearAllNotifs(userId: string): Promise<void> {
   } catch { /* ignore */ }
 }
 
-// ─── Background scan ─────────────────────────────────────────────────────────
-// Runs once per calendar day per browser session.
-// Checks: (1) active packages with 1 session remaining, (2) unpaid session balances.
+// ─── Live package-expiry alerts ───────────────────────────────────────────────
+// Subscribes to all active packages in real time. Whenever any package has
+// exactly 1 session remaining, a notification is sent immediately.
+// sourceId = pkg_exp_<docId> (no date) — fires once per package doc, so
+// renewing a package (new doc) produces a fresh notification when it runs low.
+
+export function subscribeToPackageAlerts(userId: string): () => void {
+  return onSnapshot(
+    query(collection(db, "patientPackages"), where("active", "==", true)),
+    async (snap) => {
+      for (const d of snap.docs) {
+        const pkg = d.data();
+        const rem = (pkg.packageSize as number) - (pkg.sessionsUsed as number);
+        if (rem !== 1) continue;
+
+        let patientName = "A patient";
+        try {
+          const pd = await getDoc(doc(db, "patients", pkg.patientId as string));
+          if (pd.exists()) {
+            const data = pd.data();
+            patientName = `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim() || patientName;
+          }
+        } catch { /* ignore */ }
+
+        await sendNotification(userId, {
+          type:      "package_expiring",
+          title:     "Package almost finished",
+          body:      `${patientName} has only 1 session left in their active package.`,
+          sourceId:  `pkg_exp_${d.id}`,
+          patientId: pkg.patientId as string,
+        });
+      }
+    },
+    () => {}
+  );
+}
+
+// ─── Background scan (unpaid balances only) ───────────────────────────────────
+// Runs once per calendar day per browser session to flag unpaid session fees.
 
 const SCAN_KEY = "phd_notif_scan";
 
@@ -157,24 +194,6 @@ export async function runBackgroundScan(userId: string): Promise<void> {
   sessionStorage.setItem(SCAN_KEY, today);
 
   try {
-    // ── Packages with exactly 1 session remaining ───────────────────────────
-    const pkgSnap = await getDocs(
-      query(collection(db, "patientPackages"), where("active", "==", true))
-    );
-    for (const d of pkgSnap.docs) {
-      const pkg = d.data();
-      const rem = (pkg.packageSize as number) - (pkg.sessionsUsed as number);
-      if (rem !== 1) continue;
-      await sendNotification(userId, {
-        type:      "package_expiring",
-        title:     "Package almost finished",
-        body:      "A patient has only 1 session left in their active package.",
-        sourceId:  `pkg_exp_${d.id}_${today}`,
-        patientId: pkg.patientId as string,
-      });
-    }
-
-    // ── Unpaid session balances (grouped by patient) ─────────────────────────
     const priceSnap = await getDocs(
       query(collection(db, "patientSessionPrices"), where("paid", "==", false))
     );

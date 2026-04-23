@@ -31,7 +31,7 @@ import ClinicBillingPage from "./ClinicBillingPage";
 import TreatmentProtocolsPage from "../protocols/TreatmentProtocolsPage";
 import DiagnosisTemplatesPage from "../diagnoses/DiagnosisTemplatesPage";
 import OnlineRehabPage from "../rehab/OnlineRehabPage";
-import { runBackgroundScan } from "../../services/notificationService";
+import { runBackgroundScan, subscribeToPackageAlerts } from "../../services/notificationService";
 
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
@@ -999,10 +999,11 @@ export default function PhysioDashboard() {
     Promise.all([userPromise, physioPromise]).finally(() => setRoleLoading(false));
   }, [user?.uid, user?.role]);
 
-  // Background notification scan — runs once per calendar day
+  // Live package-expiry alerts + daily unpaid-balance scan
   useEffect(() => {
     if (!user?.uid) return;
     runBackgroundScan(user.uid);
+    return subscribeToPackageAlerts(user.uid);
   }, [user?.uid]);
 
   const physio = user as unknown as PhysioProfile | null;
