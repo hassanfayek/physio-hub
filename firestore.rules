@@ -204,11 +204,12 @@ service cloud.firestore {
 
     // ── Notifications ─────────────────────────────────────────────────────────
     // Per-user subcollection: notifications/{userId}/items/{notifId}
-    // Each staff member can read/write their own notifications.
-    // Any authenticated staff can create notifications for any user (fanout).
+    // Any authenticated user can read/update/delete their own notifications.
+    // Any authenticated user can CREATE a notification in any user's subcollection
+    // (needed for staff → patient fanout and manager self-notifications).
     match /notifications/{userId}/items/{notifId} {
       allow read, update, delete: if isAuth() && request.auth.uid == userId;
-      allow create:               if isStaff();
+      allow create:               if isAuth();
     }
 
     // ── WhatsApp Sessions ─────────────────────────────────────────────────────
