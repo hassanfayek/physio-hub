@@ -809,6 +809,26 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
   const [extSaving,     setExtSaving]    = useState(false);
   const [extSaved,      setExtSaved]     = useState(false);
 
+  // ── Name editing state ────────────────────────────────────────────────────
+  const [nameEditing,   setNameEditing]  = useState(false);
+  const [nameDraft,     setNameDraft]    = useState({ firstName: "", lastName: "" });
+  const [nameSaving,    setNameSaving]   = useState(false);
+
+  const handleSaveName = async () => {
+    if (!patientId) return;
+    const first = nameDraft.firstName.trim();
+    const last  = nameDraft.lastName.trim();
+    if (!first) return;
+    setNameSaving(true);
+    await updateDoc(doc(db, "patients", patientId), {
+      firstName: first,
+      lastName:  last,
+      updatedAt: serverTimestamp(),
+    });
+    setNameSaving(false);
+    setNameEditing(false);
+  };
+
   // ── Local UI state (unchanged) ─────────────────────────────────────────────
   const defaultSection = initialSection ?? (user?.role === "secretary" ? "profile" : "diagnosis");
   const [activeSection, setActiveSection] = useState<string>(defaultSection);
@@ -1866,16 +1886,79 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
 
       {/* ── Part 2: Patient profile header ── */}
       {(() => {
-        const firstName = patient?.firstName ?? "";
-        const lastName  = patient?.lastName  ?? "";
-        const initials  = `${firstName[0] ?? ""}${lastName[0] ?? ""}` || "P";
-        const fullName  = firstName ? `${firstName} ${lastName}`.trim() : "Patient";
+        const firstName  = patient?.firstName ?? "";
+        const lastName   = patient?.lastName  ?? "";
+        const initials   = `${firstName[0] ?? ""}${lastName[0] ?? ""}` || "P";
+        const fullName   = firstName ? `${firstName} ${lastName}`.trim() : "Patient";
         const occupation = patient?.occupation ?? "";
         return (
           <div className="ps-patient-header">
             <div className="ps-patient-avatar">{initials}</div>
             <div className="ps-patient-info">
-              <div className="ps-patient-name">{fullName}</div>
+              {nameEditing ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <input
+                    autoFocus
+                    value={nameDraft.firstName}
+                    onChange={(e) => setNameDraft((d) => ({ ...d, firstName: e.target.value }))}
+                    placeholder="First name"
+                    style={{
+                      fontSize: 16, fontWeight: 700, border: "1.5px solid #b8c4d0",
+                      borderRadius: 7, padding: "4px 10px", width: 130, outline: "none",
+                      fontFamily: "'Outfit', sans-serif",
+                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveName(); if (e.key === "Escape") setNameEditing(false); }}
+                  />
+                  <input
+                    value={nameDraft.lastName}
+                    onChange={(e) => setNameDraft((d) => ({ ...d, lastName: e.target.value }))}
+                    placeholder="Last name"
+                    style={{
+                      fontSize: 16, fontWeight: 700, border: "1.5px solid #b8c4d0",
+                      borderRadius: 7, padding: "4px 10px", width: 130, outline: "none",
+                      fontFamily: "'Outfit', sans-serif",
+                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveName(); if (e.key === "Escape") setNameEditing(false); }}
+                  />
+                  <button
+                    onClick={handleSaveName}
+                    disabled={nameSaving || !nameDraft.firstName.trim()}
+                    style={{
+                      padding: "4px 14px", borderRadius: 7, border: "none",
+                      background: "#2563eb", color: "#fff", fontWeight: 600,
+                      fontSize: 13, cursor: "pointer", opacity: nameSaving ? 0.6 : 1,
+                      fontFamily: "'Outfit', sans-serif",
+                    }}
+                  >{nameSaving ? "Saving…" : "Save"}</button>
+                  <button
+                    onClick={() => setNameEditing(false)}
+                    style={{
+                      padding: "4px 10px", borderRadius: 7, border: "1.5px solid #e5e0d8",
+                      background: "#fff", fontSize: 13, cursor: "pointer",
+                      fontFamily: "'Outfit', sans-serif",
+                    }}
+                  >Cancel</button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div className="ps-patient-name">{fullName}</div>
+                  {canEditProfile && (
+                    <button
+                      title="Edit name"
+                      onClick={() => { setNameDraft({ firstName, lastName }); setNameEditing(true); }}
+                      style={{
+                        background: "none", border: "none", cursor: "pointer", padding: 2,
+                        color: "#94a3b8", display: "flex", alignItems: "center",
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              )}
               {occupation && <div className="ps-patient-condition">{occupation}</div>}
               <div className="ps-patient-physio">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
