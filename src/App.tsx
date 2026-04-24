@@ -126,7 +126,7 @@ function ProtectedRoute({
   requiredRole,
 }: {
   children:      ReactNode;
-  requiredRole?: "patient" | "physiotherapist" | "physician";
+  requiredRole?: "patient" | "physiotherapist" | "physician" | "partner";
 }) {
   const { user, loading } = useAuth();
 

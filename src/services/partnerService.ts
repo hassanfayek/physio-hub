@@ -196,7 +196,7 @@ export function subscribeToPartnerPatients(
 }
 
 export function subscribeToPartnerPackages(
-  partnerId: string,
+  _partnerId: string,
   patientIds: string[],
   onData:    (packages: Array<{
     id: string; patientId: string; packageSize: number;
