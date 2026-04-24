@@ -56,7 +56,7 @@ import { getFirestore } from "firebase/firestore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type UserRole = "patient" | "physiotherapist" | "clinic_manager" | "secretary" | "physician";
+export type UserRole = "patient" | "physiotherapist" | "clinic_manager" | "secretary" | "physician" | "partner";
 
 export interface UserProfile {
   uid:         string;
@@ -412,6 +412,7 @@ const ROLE_COLLECTION: Partial<Record<UserRole, string>> = {
   clinic_manager:   "physiotherapists",
   secretary:        "secretaries",
   physician:        "physicians",
+  partner:          "partners",
 };
 
 export async function loadUserProfile(
@@ -494,6 +495,17 @@ export async function loadUserProfile(
       specialization: p.specialization ?? "",
       clinicName:     p.clinicName ?? "",
     } as PhysicianProfile;
+  }
+
+  if (role === "partner") {
+    return {
+      ...base,
+      role:             "partner",
+      name:             p.name             ?? "",
+      organizationName: p.organizationName ?? "",
+      phone:            p.phone            ?? "",
+      sharePercent:     p.sharePercent     ?? 40,
+    } as unknown as PhysicianProfile; // partner reuses the generic UserProfile shape
   }
 
   return null;
