@@ -44,6 +44,7 @@ export interface Patient {
   referredBy?:               string;
   referredByPhysicianId?:    string;
   referredByPhysicianName?:  string;
+  referredByPartnerId?:      string;
 }
 
 export type PhysioRank = "manager" | "senior" | "junior" | "trainee";
@@ -119,6 +120,7 @@ function docToPatient(id: string, data: Record<string, unknown>): Patient {
     referredBy:               (data.referredBy               as string | undefined)  ?? "",
     referredByPhysicianId:    (data.referredByPhysicianId    as string | undefined)  ?? "",
     referredByPhysicianName:  (data.referredByPhysicianName  as string | undefined)  ?? "",
+    referredByPartnerId:      (data.referredByPartnerId      as string | undefined)  ?? "",
   };
 }
 

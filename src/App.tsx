@@ -24,6 +24,7 @@ import logo from "./assets/physio-logo.svg";
 const PatientDashboard   = lazy(() => import("./features/patient/PatientDashboard"));
 const PhysioDashboard    = lazy(() => import("./features/physio/PhysioDashboard"));
 const PhysicianDashboard = lazy(() => import("./features/physician/PhysicianDashboard"));
+const PartnerDashboard   = lazy(() => import("./features/partner/PartnerDashboard"));
 
 // ─── Loading screen (shown while Firebase resolves auth state) ────────────────
 
@@ -117,6 +118,8 @@ function LoadingScreen() {
 const PHYSIO_PORTAL_ROLES = new Set(["physiotherapist", "clinic_manager", "secretary"]);
 // Roles that can access the /physician portal
 const PHYSICIAN_PORTAL_ROLES = new Set(["physician"]);
+// Roles that can access the /partner portal
+const PARTNER_PORTAL_ROLES = new Set(["partner"]);
 
 function ProtectedRoute({
   children,
@@ -138,12 +141,15 @@ function ProtectedRoute({
         ? PHYSIO_PORTAL_ROLES.has(userRole)
         : requiredRole === "physician"
         ? PHYSICIAN_PORTAL_ROLES.has(userRole)
+        : requiredRole === "partner"
+        ? PARTNER_PORTAL_ROLES.has(userRole)
         : userRole === requiredRole;
 
     if (!allowed) {
       const role = user.role as string;
-      const dest = role === "patient" ? "/patient"
+      const dest = role === "patient"   ? "/patient"
                  : role === "physician" ? "/physician"
+                 : role === "partner"   ? "/partner"
                  : "/physio";
       return <Navigate to={dest} replace />;
     }
@@ -162,8 +168,9 @@ function PublicRoute({ children }: { children: ReactNode }) {
 
   if (user) {
     const role = user.role as string;
-    const dest = role === "patient" ? "/patient"
+    const dest = role === "patient"   ? "/patient"
                : role === "physician" ? "/physician"
+               : role === "partner"   ? "/partner"
                : "/physio";
     return <Navigate to={dest} replace />;
   }
@@ -204,6 +211,12 @@ function AppRoutes() {
         <Route path="/physician" element={
           <ProtectedRoute requiredRole="physician">
             <PhysicianDashboard />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/partner" element={
+          <ProtectedRoute requiredRole="partner">
+            <PartnerDashboard />
           </ProtectedRoute>
         } />
 

@@ -12,6 +12,11 @@ import {
   type Physiotherapist,
 } from "../../services/patientService";
 import {
+  subscribeToPartners,
+  assignPartnerToPatient,
+  type Partner,
+} from "../../services/partnerService";
+import {
   subscribeToPhysicians,
   subscribeToPhysicianNotes,
   deletePhysicianNote,
@@ -281,6 +286,66 @@ function PhysicianAssignPanel({ patientId, physicians, assignedPhysicianId }: Ph
   );
 }
 
+// ─── Partner assign panel (manager only) ─────────────────────────────────────
+
+interface PartnerAssignPanelProps {
+  patientId:         string;
+  partners:          Partner[];
+  assignedPartnerId: string | null;
+}
+
+function PartnerAssignPanel({ patientId, partners, assignedPartnerId }: PartnerAssignPanelProps) {
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+  const [error,  setError]  = useState<string | null>(null);
+
+  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selected = e.target.value;
+    setSaving(true); setError(null); setSaved(false);
+    const result = await assignPartnerToPatient(patientId, selected || null);
+    setSaving(false);
+    if (result.error) { setError(result.error); return; }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  return (
+    <div className="ps-senior-panel" style={{ background: "#f0fdf4", borderColor: "#86efac" }}>
+      <div className="ps-senior-label" style={{ color: "#059669" }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        Referral Partner
+      </div>
+      <div className="ps-senior-row">
+        <select
+          className="ps-senior-select"
+          style={{ borderColor: "#86efac" }}
+          value={assignedPartnerId ?? ""}
+          onChange={handleChange}
+          disabled={saving}
+        >
+          <option value="">— No partner —</option>
+          {partners.map((p) => (
+            <option key={p.uid} value={p.uid}>
+              {p.organizationName} · {p.sharePercent}% share
+            </option>
+          ))}
+        </select>
+        {saving && <span className="ps-senior-spinner" />}
+        {saved && !saving && (
+          <span className="ps-senior-saved" style={{ color: "#059669" }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Saved
+          </span>
+        )}
+      </div>
+      {error && <div className="ps-senior-error">{error}</div>}
+    </div>
+  );
+}
+
 // ─── Read-only banner ─────────────────────────────────────────────────────────
 
 function ReadOnlyBanner({ role }: { role: string }) {
@@ -472,6 +537,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
   const [patient,    setPatient]    = useState<Patient | null>(null);
   const [physios,    setPhysios]    = useState<Physiotherapist[]>([]);
   const [physicians, setPhysicians] = useState<Physician[]>([]);
+  const [partners,   setPartners]   = useState<Partner[]>([]);
 
   useEffect(() => {
     if (!patientId) return;
@@ -697,9 +763,10 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
   // Load physio + physician rosters only when the current user is a manager (for assignment dropdowns)
   useEffect(() => {
     if (user?.role !== "clinic_manager") return;
-    const unsubPhysios = subscribeToPhysiotherapists(setPhysios);
+    const unsubPhysios    = subscribeToPhysiotherapists(setPhysios);
     const unsubPhysicians = subscribeToPhysicians(setPhysicians);
-    return () => { unsubPhysios(); unsubPhysicians(); };
+    const unsubPartners   = subscribeToPartners(setPartners);
+    return () => { unsubPhysios(); unsubPhysicians(); unsubPartners(); };
   }, [user?.role]);
 
   // ── Billing visibility for secretary ──────────────────────────────────────
@@ -1988,6 +2055,15 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
           patientId={patientId}
           physicians={physicians}
           assignedPhysicianId={patient?.referredByPhysicianId ?? null}
+        />
+      )}
+
+      {/* ── Manager assigns referral partner ── */}
+      {isManager && partners.length > 0 && (
+        <PartnerAssignPanel
+          patientId={patientId}
+          partners={partners}
+          assignedPartnerId={(patient?.referredByPartnerId as string) || null}
         />
       )}
 

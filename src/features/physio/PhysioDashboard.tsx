@@ -24,6 +24,7 @@ import { registerSecretary } from "../../services/authService";
 import { subscribeToSecretaries, deleteSecretary, type Secretary } from "../../services/secretaryService";
 import { subscribeToPhysicians, deletePhysician, type Physician } from "../../services/physicianService";
 import { registerPhysician, type RegisterPhysicianData } from "../../services/authService";
+import { subscribeToPartners, registerPartner, deletePartner, type Partner } from "../../services/partnerService";
 import AddPhysioModal from "../../components/AddPhysioModal";
 import NotificationPanel from "../../components/NotificationPanel";
 import { createPortal } from "react-dom";
@@ -87,6 +88,14 @@ function TeamTab() {
   const [physicianError,    setPhysicianError]    = React.useState<string | null>(null);
   const [deletingPhyUid,    setDeletingPhyUid]    = React.useState<string | null>(null);
 
+  // ── Partner state ─────────────────────────────────────────────────────────
+  const [partners,          setPartners]          = React.useState<Partner[]>([]);
+  const [showAddPartner,    setShowAddPartner]    = React.useState(false);
+  const [partnerForm,       setPartnerForm]       = React.useState({ name: "", organizationName: "", email: "", password: "", phone: "", sharePercent: "40" });
+  const [partnerSaving,     setPartnerSaving]     = React.useState(false);
+  const [partnerError,      setPartnerError]      = React.useState<string | null>(null);
+  const [deletingPartnerUid, setDeletingPartnerUid] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     return subscribeToPhysiotherapists(setPhysios, () => {});
   }, []);
@@ -97,6 +106,10 @@ function TeamTab() {
 
   React.useEffect(() => {
     return subscribeToPhysicians(setPhysicians, () => {});
+  }, []);
+
+  React.useEffect(() => {
+    return subscribeToPartners(setPartners, () => {});
   }, []);
 
   const handleAddPhysician = async () => {
@@ -127,6 +140,33 @@ function TeamTab() {
     const { error } = await deletePhysician(uid);
     if (error) alert(error);
     setDeletingPhyUid(null);
+  };
+
+  const handleAddPartner = async () => {
+    if (!partnerForm.name || !partnerForm.organizationName || !partnerForm.email || !partnerForm.password) {
+      setPartnerError("Name, organization, email and password are required."); return;
+    }
+    setPartnerSaving(true); setPartnerError(null);
+    try {
+      const pct = parseInt(partnerForm.sharePercent, 10);
+      await registerPartner({ ...partnerForm, sharePercent: isNaN(pct) ? 40 : pct });
+      setSaveSuccess(`${partnerForm.organizationName} partner account created.`);
+      setPartnerForm({ name: "", organizationName: "", email: "", password: "", phone: "", sharePercent: "40" });
+      setShowAddPartner(false);
+      setTimeout(() => setSaveSuccess(null), 4000);
+    } catch (err: unknown) {
+      const msg = (err as { message?: string }).message ?? "";
+      setPartnerError(msg.includes("email-already-in-use") ? "This email is already registered." : msg || "Failed to create partner account.");
+    }
+    setPartnerSaving(false);
+  };
+
+  const handleDeletePartner = async (uid: string, orgName: string) => {
+    if (!window.confirm(`Remove ${orgName}? This will permanently delete their account.`)) return;
+    setDeletingPartnerUid(uid);
+    const { error } = await deletePartner(uid);
+    if (error) alert(error);
+    setDeletingPartnerUid(null);
   };
 
   const handleDeletePhysio = async (uid: string, name: string) => {
@@ -559,6 +599,86 @@ function TeamTab() {
               <button className="tm-modal-cancel" onClick={() => setShowAddPhysician(false)}>Cancel</button>
               <button className="tm-modal-save" disabled={physicianSaving} onClick={handleAddPhysician}>
                 {physicianSaving ? "Creating account…" : "Create Account"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Partners section ─────────────────────────────────────────────── */}
+      <div style={{ marginTop: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a1a" }}>Referral Partners</div>
+            <div style={{ fontSize: 12, color: "#9a9590", marginTop: 2 }}>Gyms or clinics with a revenue-share agreement</div>
+          </div>
+          <button
+            onClick={() => setShowAddPartner(true)}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: "1.5px solid #2563eb", background: "#eff6ff", color: "#2563eb", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            <IconAdd /> Add Partner
+          </button>
+        </div>
+
+        {partners.length === 0 ? (
+          <div style={{ padding: "20px", background: "#fafaf8", borderRadius: 12, border: "1px dashed #e5e0d8", textAlign: "center", color: "#9a9590", fontSize: 13 }}>
+            No partner accounts yet.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {partners.map((p) => (
+              <div key={p.uid} style={{ background: "#fff", border: "1px solid #e8e4de", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "#eff6ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🤝</div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#1a1a1a" }}>{p.organizationName}</div>
+                    <div style={{ fontSize: 12, color: "#6b7280" }}>Contact: {p.name} · {p.email}</div>
+                    {p.phone && <div style={{ fontSize: 12, color: "#9a9590" }}>{p.phone}</div>}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 100, padding: "3px 12px", fontSize: 12, fontWeight: 700, color: "#059669" }}>
+                    {p.sharePercent}% share
+                  </div>
+                  <button
+                    disabled={deletingPartnerUid === p.uid}
+                    onClick={() => handleDeletePartner(p.uid, p.organizationName)}
+                    style={{ width: 28, height: 28, borderRadius: 7, border: "none", background: "#fee2e2", color: "#b91c1c", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    {deletingPartnerUid === p.uid ? "…" : "✕"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Add Partner Modal */}
+      {showAddPartner && createPortal(
+        <div className="tm-modal-overlay" onClick={() => !partnerSaving && setShowAddPartner(false)}>
+          <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="tm-modal-title">Add Referral Partner</div>
+            <div className="tm-modal-sub">Create a read-only account for a gym or clinic partner. They can view their referred patients and earnings.</div>
+            <div className="tm-field-row">
+              <div className="tm-field"><label className="tm-label">Contact Person Name</label><input className="tm-input" value={partnerForm.name} onChange={(e) => setPartnerForm({ ...partnerForm, name: e.target.value })} placeholder="Ahmed Khalil" /></div>
+              <div className="tm-field"><label className="tm-label">Organization Name</label><input className="tm-input" value={partnerForm.organizationName} onChange={(e) => setPartnerForm({ ...partnerForm, organizationName: e.target.value })} placeholder="FitZone Gym" /></div>
+            </div>
+            <div className="tm-field"><label className="tm-label">Email Address</label><input className="tm-input" type="email" value={partnerForm.email} onChange={(e) => setPartnerForm({ ...partnerForm, email: e.target.value })} placeholder="partner@fitzone.com" /></div>
+            <div className="tm-field"><label className="tm-label">Password</label><input className="tm-input" type="password" value={partnerForm.password} onChange={(e) => setPartnerForm({ ...partnerForm, password: e.target.value })} placeholder="Min. 6 characters" /></div>
+            <div className="tm-field-row">
+              <div className="tm-field"><label className="tm-label">Phone (optional)</label><input className="tm-input" value={partnerForm.phone} onChange={(e) => setPartnerForm({ ...partnerForm, phone: e.target.value })} placeholder="+20 100 000 0000" /></div>
+              <div className="tm-field">
+                <label className="tm-label">Partner's Revenue Share %</label>
+                <input className="tm-input" type="number" min="1" max="99" value={partnerForm.sharePercent} onChange={(e) => setPartnerForm({ ...partnerForm, sharePercent: e.target.value })} placeholder="40" />
+              </div>
+            </div>
+            {partnerError && <div className="tm-modal-error">{partnerError}</div>}
+            <div className="tm-modal-actions">
+              <button className="tm-modal-cancel" onClick={() => setShowAddPartner(false)}>Cancel</button>
+              <button className="tm-modal-save" disabled={partnerSaving} onClick={handleAddPartner}>
+                {partnerSaving ? "Creating account…" : "Create Account"}
               </button>
             </div>
           </div>
