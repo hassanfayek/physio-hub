@@ -8,6 +8,7 @@ import {
   subscribeToPhysiotherapists,
   assignSeniorEditor,
   assignPhysician,
+  assignBodyProfileEditor,
   type Patient,
   type Physiotherapist,
 } from "../../services/patientService";
@@ -341,6 +342,72 @@ function PartnerAssignPanel({ patientId, partners, assignedPartnerId }: PartnerA
           </span>
         )}
       </div>
+      {error && <div className="ps-senior-error">{error}</div>}
+    </div>
+  );
+}
+
+// ─── Body-profile editor panel (manager only) ────────────────────────────────
+
+interface BodyProfileEditorPanelProps {
+  patientId:           string;
+  physios:             Physiotherapist[];
+  bodyProfileEditorId: string | null;
+}
+
+function BodyProfileEditorPanel({ patientId, physios, bodyProfileEditorId }: BodyProfileEditorPanelProps) {
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+  const [error,  setError]  = useState<string | null>(null);
+
+  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selected = e.target.value;
+    setSaving(true); setError(null); setSaved(false);
+    const result = await assignBodyProfileEditor(patientId, selected || null);
+    setSaving(false);
+    if (result.error) { setError(result.error); return; }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  const juniors = physios.filter((p) => p.rank === "junior" || p.rank === "trainee");
+
+  return (
+    <div className="ps-senior-panel" style={{ background: "#fffbeb", borderColor: "#fcd34d" }}>
+      <div className="ps-senior-label" style={{ color: "#b45309" }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+        </svg>
+        Body Profile Edit Access
+      </div>
+      <div className="ps-senior-row">
+        <select
+          className="ps-senior-select"
+          style={{ borderColor: "#fcd34d" }}
+          value={bodyProfileEditorId ?? ""}
+          onChange={handleChange}
+          disabled={saving}
+        >
+          <option value="">— No override —</option>
+          {juniors.map((p) => (
+            <option key={p.uid} value={p.uid}>
+              Dr. {p.firstName} {p.lastName} · {p.rank}
+            </option>
+          ))}
+        </select>
+        {saving && <span className="ps-senior-spinner" />}
+        {saved && !saving && (
+          <span className="ps-senior-saved" style={{ color: "#b45309" }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Saved
+          </span>
+        )}
+      </div>
+      {bodyProfileEditorId && !saving && (
+        <div className="ps-senior-current" style={{ color: "#92400e" }}>
+          Body profile editing granted to selected junior
+        </div>
+      )}
       {error && <div className="ps-senior-error">{error}</div>}
     </div>
   );
@@ -793,6 +860,13 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     (role === "physiotherapist" &&
       !!patient?.seniorEditorId &&
       (user as PhysioProfile).uid === patient.seniorEditorId);
+
+  // canEditBodyProfile: canEdit users PLUS any junior explicitly granted access
+  const canEditBodyProfile: boolean =
+    canEdit ||
+    (role === "physiotherapist" &&
+      !!patient?.bodyProfileEditorId &&
+      (user as PhysioProfile).uid === patient.bodyProfileEditorId);
 
   // canWriteSessionNotes: all physios (junior, senior, manager) can add session notes
   const canWriteSessionNotes: boolean = role === "clinic_manager" || role === "physiotherapist";
@@ -2064,6 +2138,15 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
           patientId={patientId}
           partners={partners}
           assignedPartnerId={(patient?.referredByPartnerId as string) || null}
+        />
+      )}
+
+      {/* ── Manager grants body-profile edit access to a junior ── */}
+      {isManager && (
+        <BodyProfileEditorPanel
+          patientId={patientId}
+          physios={physios}
+          bodyProfileEditorId={(patient?.bodyProfileEditorId as string) || null}
         />
       )}
 
@@ -3502,7 +3585,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
           <JointAssessmentSheet
             patientId={patientId}
             patientName={patient ? `${patient.firstName} ${patient.lastName}` : ""}
-            canEdit={canEdit}
+            canEdit={canEditBodyProfile}
           />
         </>
       )}

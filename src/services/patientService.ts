@@ -41,6 +41,7 @@ export interface Patient {
   traineeName:      string | null;
   age?:                      string;
   hideBodyProfile?:          boolean;
+  bodyProfileEditorId?:      string;
   referredBy?:               string;
   referredByPhysicianId?:    string;
   referredByPhysicianName?:  string;
@@ -117,6 +118,7 @@ function docToPatient(id: string, data: Record<string, unknown>): Patient {
     traineeName:      (data.traineeName      as string | null) ?? null,
     age:                      (data.age                      as string | undefined)  ?? "",
     hideBodyProfile:          (data.hideBodyProfile          as boolean | undefined) ?? true,
+    bodyProfileEditorId:      (data.bodyProfileEditorId      as string | undefined)  ?? "",
     referredBy:               (data.referredBy               as string | undefined)  ?? "",
     referredByPhysicianId:    (data.referredByPhysicianId    as string | undefined)  ?? "",
     referredByPhysicianName:  (data.referredByPhysicianName  as string | undefined)  ?? "",
@@ -275,6 +277,23 @@ export async function deletePatient(
       // Auth deletion is best-effort — Firestore docs are already deleted
     }
 
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+// ─── Assign body-profile editor (junior physio override) ─────────────────────
+
+export async function assignBodyProfileEditor(
+  patientId: string,
+  editorId:  string | null,
+): Promise<{ error?: string }> {
+  try {
+    await updateDoc(doc(db, "patients", patientId), {
+      bodyProfileEditorId: editorId ?? "",
+      updatedAt: serverTimestamp(),
+    });
     return {};
   } catch (err) {
     return { error: parseError(err) };
