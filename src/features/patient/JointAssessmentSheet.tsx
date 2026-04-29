@@ -2,7 +2,7 @@
 // Sports & Athletic Joint Assessment — printable A4 sheet
 
 import { useState, useEffect, useCallback } from "react";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
 import { Printer, Save, ChevronDown, ChevronUp } from "lucide-react";
 
@@ -703,6 +703,115 @@ function BalanceTable({
   );
 }
 
+// ─── Chart Helpers ────────────────────────────────────────────────────────────
+
+const CHART_COLORS = [
+  "#2E8BC0","#ef4444","#22c55e","#f97316","#8b5cf6",
+  "#ec4899","#14b8a6","#f59e0b","#6366f1","#84cc16",
+];
+
+interface ChartSeries { label: string; values: (number | null)[]; }
+
+function parseRomVal(s: string): number | null {
+  if (!s) return null;
+  const m = s.match(/(\d+(?:\.\d+)?)/);
+  return m ? (isNaN(parseFloat(m[1])) ? null : parseFloat(m[1])) : null;
+}
+
+function parseGrade(s: string): number | null {
+  if (!s) return null;
+  const m = s.match(/^(\d)/);
+  if (!m) return null;
+  const v = parseInt(m[1], 10);
+  return isNaN(v) ? null : Math.min(5, Math.max(0, v));
+}
+
+function buildLineChart(
+  title: string,
+  dates: string[],
+  series: ChartSeries[],
+  yMin: number,
+  yMax: number,
+): string {
+  const W = 560, H = 200;
+  const pad = { l: 48, r: 14, t: 24, b: 72 };
+  const cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
+  const n = dates.length;
+  const xPos = (i: number) => pad.l + (n <= 1 ? cW / 2 : (i / (n - 1)) * cW);
+  const yRange = yMax - yMin || 1;
+  const yPos  = (v: number) => pad.t + (1 - (v - yMin) / yRange) * cH;
+  const yTicks: number[] = [];
+  for (let i = 0; i <= 5; i++) yTicks.push(parseFloat((yMin + yRange * i / 5).toFixed(1)));
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;font-family:Arial,sans-serif;">`;
+  svg += `<rect width="${W}" height="${H}" fill="#fafaf8" rx="8" stroke="#e5e0d8" stroke-width="1"/>`;
+  svg += `<text x="${pad.l}" y="16" font-size="10" font-weight="700" fill="#0C3C60">${title}</text>`;
+
+  yTicks.forEach((v) => {
+    const y = yPos(v).toFixed(1);
+    svg += `<line x1="${pad.l}" y1="${y}" x2="${pad.l + cW}" y2="${y}" stroke="#e5e0d8" stroke-width="1"/>`;
+    svg += `<text x="${pad.l - 4}" y="${(yPos(v) + 3.5).toFixed(1)}" font-size="8" fill="#9a9590" text-anchor="end">${v}</text>`;
+  });
+  dates.forEach((d, i) => {
+    const x = xPos(i).toFixed(1);
+    const lbl = d.length === 10 ? `${d.slice(5, 7)}/${d.slice(8, 10)}` : d;
+    svg += `<text x="${x}" y="${(pad.t + cH + 14).toFixed(1)}" font-size="8" fill="#9a9590" text-anchor="middle">${lbl}</text>`;
+  });
+  svg += `<rect x="${pad.l}" y="${pad.t}" width="${cW}" height="${cH}" fill="none" stroke="#d0d4dc" stroke-width="1"/>`;
+
+  series.forEach(({ values }, si) => {
+    const color = CHART_COLORS[si % CHART_COLORS.length];
+    let pathD = "";
+    values.forEach((v, i) => {
+      if (v === null) return;
+      const x = xPos(i).toFixed(1), y = yPos(v).toFixed(1);
+      pathD += pathD ? ` L${x},${y}` : `M${x},${y}`;
+    });
+    if (!pathD) return;
+    svg += `<path d="${pathD}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    values.forEach((v, i) => {
+      if (v === null) return;
+      const x = xPos(i), y = yPos(v);
+      svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="${color}" stroke="#fff" stroke-width="1.5"/>`;
+      svg += `<text x="${x.toFixed(1)}" y="${(y - 7).toFixed(1)}" font-size="7.5" fill="${color}" text-anchor="middle" font-weight="700">${v}</text>`;
+    });
+  });
+
+  const legY = pad.t + cH + 28;
+  series.forEach(({ label }, si) => {
+    const color = CHART_COLORS[si % CHART_COLORS.length];
+    const col = si % 5, row = Math.floor(si / 5);
+    const lx = pad.l + col * 100, ly = legY + row * 15;
+    svg += `<rect x="${lx}" y="${ly - 7}" width="12" height="8" rx="2" fill="${color}"/>`;
+    svg += `<text x="${lx + 16}" y="${ly}" font-size="7.5" fill="#5a5550">${label.length > 13 ? label.slice(0, 12) + "…" : label}</text>`;
+  });
+
+  svg += `</svg>`;
+  return svg;
+}
+
+function getJointCharts(
+  jointKey: string, jointId: string,
+  historyItems: Array<{date: string; snap: AssessmentDoc}>,
+): { dates: string[]; romSeries: ChartSeries[]; muscleSeries: ChartSeries[]; } | null {
+  const relevant = historyItems.filter((h) => !!h.snap.joints?.[jointKey]);
+  if (relevant.length < 2) return null;
+  const dates = relevant.map((h) => h.date);
+  const jDef  = JOINTS[jointId];
+  const romSeries: ChartSeries[] = jDef.motions.map((m) => ({
+    label: m.label,
+    values: relevant.map((h) => {
+      const r = h.snap.joints?.[jointKey]?.rom?.[m.id];
+      return parseRomVal(r?.active || r?.passive || "");
+    }),
+  })).filter(({ values }) => values.some((v) => v !== null));
+  const muscleSeries: ChartSeries[] = jDef.muscles.map((m) => ({
+    label: m.label,
+    values: relevant.map((h) => parseGrade(h.snap.joints?.[jointKey]?.muscles?.[m.id]?.grade || "")),
+  })).filter(({ values }) => values.some((v) => v !== null));
+  return { dates, romSeries, muscleSeries };
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function JointAssessmentSheet({ patientId, patientName = "Patient", canEdit }: Props) {
@@ -714,6 +823,8 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
   const [saveError, setSaveError] = useState<string | null>(null);
   const [loading,   setLoading]  = useState(true);
   const [expanded,  setExpanded] = useState<Record<string, boolean>>({});
+  const [history,   setHistory]  = useState<Array<{date: string; snap: AssessmentDoc}>>([]);
+  const [showTrends, setShowTrends] = useState(false);
 
   // Load from Firestore
   useEffect(() => {
@@ -729,6 +840,19 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
     }).catch(() => setLoading(false));
   }, [patientId]);
 
+  // Load snapshot history for progress charts
+  useEffect(() => {
+    if (!patientId) return;
+    getDocs(collection(db, "jointAssessmentHistory", patientId, "snapshots"))
+      .then((snap) => {
+        const items = snap.docs
+          .map((d) => ({ date: d.id, snap: d.data() as AssessmentDoc }))
+          .sort((a, b) => a.date.localeCompare(b.date));
+        setHistory(items);
+      })
+      .catch(() => {});
+  }, [patientId]);
+
   const handleSave = async () => {
     setSaving(true);
     setSaveError(null);
@@ -737,6 +861,24 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
         ...draft,
         updatedAt: serverTimestamp(),
       });
+      // Write a dated snapshot so progress charts can track changes over time
+      if (draft.date) {
+        await setDoc(
+          doc(db, "jointAssessmentHistory", patientId, "snapshots", draft.date),
+          { ...draft, savedAt: serverTimestamp() },
+        );
+        // Refresh history state
+        setHistory((prev) => {
+          const entry = { date: draft.date, snap: { ...draft } };
+          const idx = prev.findIndex((h) => h.date === draft.date);
+          if (idx >= 0) {
+            const copy = [...prev];
+            copy[idx] = entry;
+            return copy;
+          }
+          return [...prev, entry].sort((a, b) => a.date.localeCompare(b.date));
+        });
+      }
       setDocData(draft);
       setEditing(false);
       setSaved(true);
@@ -1123,6 +1265,35 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
     <div class="impression-title">Clinical Impression &amp; Recommendations</div>
     <div class="impression-text">${data.impression}</div>
   </div>` : ""}
+
+  <!-- Progress Trends (only when >= 2 dated snapshots exist) -->
+  ${(() => {
+    if (history.length < 2) return "";
+    const keys = expandedJointKeys();
+    const jointsHtmlTrends = keys
+      .filter(({ key }) => data.selectedJoints.includes(key))
+      .map(({ key, label, jointId }) => {
+        const charts = getJointCharts(key, jointId, history);
+        if (!charts || (charts.romSeries.length === 0 && charts.muscleSeries.length === 0)) return "";
+        const romSvg    = charts.romSeries.length > 0
+          ? `<div>${buildLineChart("Range of Motion — Active (°)", charts.dates, charts.romSeries, 0, 180)}</div>`
+          : "";
+        const muscleSvg = charts.muscleSeries.length > 0
+          ? `<div>${buildLineChart("Muscle Power — Oxford Grade (0–5)", charts.dates, charts.muscleSeries, 0, 5)}</div>`
+          : "";
+        return `<div style="margin-bottom:18px;break-inside:avoid;">
+          <div style="font-size:11pt;font-weight:700;color:#0C3C60;margin-bottom:10px;padding-bottom:5px;border-bottom:1.5px solid #d0d4dc;">${label}</div>
+          <div style="display:grid;grid-template-columns:${romSvg && muscleSvg ? "1fr 1fr" : "1fr"};gap:12px;">${romSvg}${muscleSvg}</div>
+        </div>`;
+      }).join("");
+    if (!jointsHtmlTrends.trim()) return "";
+    return `
+    <div style="background:#fff;border:1.5px solid #d0d4dc;border-radius:12px;padding:14px 16px;margin-bottom:14px;break-before:page;">
+      <div style="font-family:Georgia,serif;font-size:13pt;font-weight:600;color:#0C3C60;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #2E8BC0;">Progress Trends</div>
+      <div style="font-size:8pt;color:#9a9590;margin-bottom:10px;">Based on ${history.length} saved assessments · ROM values in degrees · Oxford scale 0–5</div>
+      ${jointsHtmlTrends}
+    </div>`;
+  })()}
 
   <!-- Signatures -->
   <div class="sig-row">
@@ -1940,6 +2111,58 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
               </div>
             );
           })}
+
+        {/* ── Progress Trends ── */}
+        {history.length >= 2 && doc_data.selectedJoints.length > 0 && (
+          <div className="jas-no-print" style={{ marginBottom: 14 }}>
+            <div
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "14px 18px", cursor: "pointer", background: "#fff",
+                border: "1px solid #e5e0d8",
+                borderRadius: showTrends ? "16px 16px 0 0" : 16,
+                transition: "border-radius 0.15s",
+              }}
+              onClick={() => setShowTrends((v) => !v)}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#0C3C60,#2E8BC0)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📈</div>
+                <div>
+                  <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, fontWeight: 500, color: "#1a1a1a" }}>Progress Trends</div>
+                  <div style={{ fontSize: 12, color: "#9a9590", marginTop: 2 }}>
+                    {history.length} saved assessments · ROM & Muscle Power over time
+                  </div>
+                </div>
+              </div>
+              {showTrends
+                ? <ChevronUp size={16} strokeWidth={2} color="#9a9590" />
+                : <ChevronDown size={16} strokeWidth={2} color="#9a9590" />}
+            </div>
+            {showTrends && (
+              <div style={{ border: "1px solid #e5e0d8", borderTop: "none", borderRadius: "0 0 16px 16px", padding: "18px 18px 20px", background: "#fff" }}>
+                {allKeys.filter(({ key }) => doc_data.selectedJoints.includes(key)).map(({ key, label, jointId }) => {
+                  const charts = getJointCharts(key, jointId, history);
+                  if (!charts || (charts.romSeries.length === 0 && charts.muscleSeries.length === 0)) return null;
+                  return (
+                    <div key={key} style={{ marginBottom: 24 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#0C3C60", marginBottom: 12, paddingBottom: 6, borderBottom: "1.5px solid #e5e0d8" }}>
+                        {label}
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: charts.romSeries.length > 0 && charts.muscleSeries.length > 0 ? "1fr 1fr" : "1fr", gap: 14 }}>
+                        {charts.romSeries.length > 0 && (
+                          <div dangerouslySetInnerHTML={{ __html: buildLineChart("Range of Motion — Active (°)", charts.dates, charts.romSeries, 0, 180) }} />
+                        )}
+                        {charts.muscleSeries.length > 0 && (
+                          <div dangerouslySetInnerHTML={{ __html: buildLineChart("Muscle Power — Oxford Grade (0–5)", charts.dates, charts.muscleSeries, 0, 5) }} />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Clinical Impression ── */}
         {d.selectedJoints.length > 0 && (

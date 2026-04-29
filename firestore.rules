@@ -120,6 +120,12 @@ service cloud.firestore {
       allow write: if isManager() || isPhysio();
     }
 
+    // Snapshot history for progress trend charts — one doc per assessment date
+    match /jointAssessmentHistory/{patientId}/snapshots/{snapId} {
+      allow read:  if isStaff();
+      allow write: if isManager() || isPhysio();
+    }
+
     // ── Appointments ─────────────────────────────────────────────────────────
     match /appointments/{appointmentId} {
       allow read:          if isStaff() || isPatient();
