@@ -196,6 +196,50 @@ export function subscribeToPackageAlerts(userId: string): () => void {
   );
 }
 
+// ─── Live new-patient alerts ─────────────────────────────────────────────────
+// Runs in the manager's session. Detects patients added by anyone (secretary,
+// manager, etc.) without querying the users collection — no permission issues.
+// On the initial snapshot all existing docs arrive; the 48-hour window filter
+// + sourceId dedup ensure we only surface truly recent additions once.
+
+export function subscribeToNewPatientAlerts(userId: string): () => void {
+  const cutoff = Date.now() - 48 * 60 * 60 * 1000; // 48 h ago
+  let initialLoadDone = false;
+
+  return onSnapshot(
+    query(collection(db, "patients"), orderBy("createdAt", "desc"), limit(100)),
+    async (snap) => {
+      try {
+        const changes = initialLoadDone
+          ? snap.docChanges().filter((c) => c.type === "added")
+          : snap.docs.map((d) => ({ doc: d }));
+
+        initialLoadDone = true;
+
+        for (const change of changes) {
+          const d = "doc" in change ? change.doc : change.doc;
+          const data = d.data();
+          const createdMs = (data.createdAt as Timestamp | null)?.toMillis?.() ?? 0;
+          if (createdMs < cutoff) continue; // older than 48 h — skip
+
+          const firstName = (data.firstName as string) ?? "";
+          const lastName  = (data.lastName  as string) ?? "";
+          await sendNotification(userId, {
+            type:      "new_patient",
+            title:     "New patient registered",
+            body:      `${firstName} ${lastName} has been added to the system.`,
+            sourceId:  `new_patient_${d.id}`,
+            patientId: d.id,
+          });
+        }
+      } catch (e) {
+        console.error("[subscribeToNewPatientAlerts]", e);
+      }
+    },
+    (e) => console.error("[subscribeToNewPatientAlerts query]", e)
+  );
+}
+
 // ─── Background scan (unpaid balances only) ───────────────────────────────────
 // Runs once per calendar day per browser session to flag unpaid session fees.
 

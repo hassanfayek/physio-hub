@@ -32,7 +32,7 @@ import ClinicBillingPage from "./ClinicBillingPage";
 import TreatmentProtocolsPage from "../protocols/TreatmentProtocolsPage";
 import DiagnosisTemplatesPage from "../diagnoses/DiagnosisTemplatesPage";
 import OnlineRehabPage from "../rehab/OnlineRehabPage";
-import { runBackgroundScan, subscribeToPackageAlerts } from "../../services/notificationService";
+import { runBackgroundScan, subscribeToPackageAlerts, subscribeToNewPatientAlerts } from "../../services/notificationService";
 
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
@@ -1119,11 +1119,13 @@ export default function PhysioDashboard() {
     Promise.all([userPromise, physioPromise]).finally(() => setRoleLoading(false));
   }, [user?.uid, user?.role]);
 
-  // Live package-expiry alerts + daily unpaid-balance scan
+  // Live package-expiry alerts + new-patient alerts + daily unpaid-balance scan
   useEffect(() => {
     if (!user?.uid) return;
     runBackgroundScan(user.uid);
-    return subscribeToPackageAlerts(user.uid);
+    const unsubPackages = subscribeToPackageAlerts(user.uid);
+    const unsubPatients = subscribeToNewPatientAlerts(user.uid);
+    return () => { unsubPackages(); unsubPatients(); };
   }, [user?.uid]);
 
   const physio = user as unknown as PhysioProfile | null;
