@@ -1226,8 +1226,12 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     if (!editingEntry) return;
     setEditSaving(true); setEditError(null);
     try {
+      // Strip undefined values — Firestore rejects them (e.g. numSessions on a session-mode entry)
+      const payload = Object.fromEntries(
+        Object.entries(editDraft).filter(([, v]) => v !== undefined)
+      );
       await updateDoc(doc(db, "patientSessions", editingEntry.id), {
-        ...editDraft,
+        ...payload,
         updatedAt: serverTimestamp(),
       });
       setEditingEntry(null);
