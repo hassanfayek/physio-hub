@@ -204,23 +204,18 @@ export function subscribeToPackageAlerts(userId: string): () => void {
 
 export function subscribeToNewPatientAlerts(userId: string): () => void {
   const cutoff = Date.now() - 48 * 60 * 60 * 1000; // 48 h ago
-  let initialLoadDone = false;
 
   return onSnapshot(
     query(collection(db, "patients"), orderBy("createdAt", "desc"), limit(100)),
     async (snap) => {
       try {
-        const changes = initialLoadDone
-          ? snap.docChanges().filter((c) => c.type === "added")
-          : snap.docs.map((d) => ({ doc: d }));
-
-        initialLoadDone = true;
-
-        for (const change of changes) {
-          const d = "doc" in change ? change.doc : change.doc;
-          const data = d.data();
+        // docChanges() returns all docs as "added" on the first snapshot, then only
+        // real additions afterwards — so this handles both initial load and live updates.
+        for (const change of snap.docChanges()) {
+          if (change.type !== "added") continue;
+          const data = change.doc.data();
           const createdMs = (data.createdAt as Timestamp | null)?.toMillis?.() ?? 0;
-          if (createdMs < cutoff) continue; // older than 48 h — skip
+          if (createdMs < cutoff) continue; // older than 48 h — skip on initial load
 
           const firstName = (data.firstName as string) ?? "";
           const lastName  = (data.lastName  as string) ?? "";
@@ -228,8 +223,8 @@ export function subscribeToNewPatientAlerts(userId: string): () => void {
             type:      "new_patient",
             title:     "New patient registered",
             body:      `${firstName} ${lastName} has been added to the system.`,
-            sourceId:  `new_patient_${d.id}`,
-            patientId: d.id,
+            sourceId:  `new_patient_${change.doc.id}`,
+            patientId: change.doc.id,
           });
         }
       } catch (e) {
