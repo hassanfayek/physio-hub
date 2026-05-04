@@ -238,7 +238,7 @@ export default function ClinicRegistrationPage() {
           {step !== "done" && (
             <div className="cr-steps">
               <div className={`cr-step ${step === "clinic" ? "active" : "done"}`} />
-              <div className={`cr-step ${step === "account" ? "active" : step === "done" ? "done" : ""}`} />
+              <div className={`cr-step ${step === "account" ? "active" : ""}`} />
             </div>
           )}
 

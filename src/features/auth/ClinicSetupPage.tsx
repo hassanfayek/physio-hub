@@ -3,7 +3,6 @@
 // Shown when a clinic_manager logs in and has no clinicId in their user doc.
 
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAuth } from "../../hooks/useAuth";
@@ -15,7 +14,6 @@ import {
 } from "../../services/clinicService";
 
 export default function ClinicSetupPage() {
-  const navigate  = useNavigate();
   const { user }  = useAuth();
 
   const [clinicName, setClinicName] = useState("");

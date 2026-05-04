@@ -193,6 +193,8 @@ export async function loginWithCode(code: string): Promise<PatientProfile> {
     email:            userData.email ?? email,
     role:             "patient",
     displayName:      userData.displayName ?? "",
+    clinicId:         userData.clinicId   ?? "",
+    clinicSlug:       userData.clinicSlug ?? "",
     firstName:        patData.firstName ?? "",
     lastName:         patData.lastName  ?? "",
     dateOfBirth:      patData.dateOfBirth ?? "",
@@ -283,6 +285,8 @@ export async function registerPatient(
     email:            data.email,
     role:             "patient",
     displayName,
+    clinicId:         "",
+    clinicSlug:       "",
     firstName:        data.firstName,
     lastName:         data.lastName,
     dateOfBirth:      data.dateOfBirth,
@@ -342,6 +346,8 @@ export async function registerPhysio(
     email:           data.email,
     role:            "physiotherapist",
     displayName,
+    clinicId:        "",
+    clinicSlug:      "",
     firstName:       data.firstName,
     lastName:        data.lastName,
     licenseNumber:   data.licenseNumber,
@@ -358,7 +364,7 @@ export async function registerPhysio(
 export async function login(
   email: string,
   password: string
-): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile> {
+): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | SuperAdminProfile> {
   const credential = await signInWithEmailAndPassword(auth, email, password);
   const profile    = await loadUserProfile(credential.user);
 
@@ -565,6 +571,8 @@ export async function registerSecretary(
     email:       data.email,
     role:        "secretary",
     displayName,
+    clinicId:    "",
+    clinicSlug:  "",
     firstName:   data.firstName,
     lastName:    data.lastName,
     phone:       data.phone,
@@ -616,6 +624,8 @@ export async function registerPhysician(
     email:          data.email,
     role:           "physician",
     displayName,
+    clinicId:       "",
+    clinicSlug:     "",
     firstName:      data.firstName,
     lastName:       data.lastName,
     phone:          data.phone,
