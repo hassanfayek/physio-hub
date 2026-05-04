@@ -41,14 +41,21 @@ const AuthContext = createContext<AuthContextValue>({
 
 // ── localStorage profile cache ─────────────────────────────────────────────────
 
-const CACHE_KEY = "phub_profile_v2";  // bumped to avoid stale cache missing new fields
+// Keep v1 key so existing users don't lose their cached profile.
+// Missing new fields (clinicId/clinicSlug) are back-filled with defaults so
+// the cache still produces an instant render; the background refresh fills them in.
+const CACHE_KEY = "phub_profile_v1";
 
 function readCache(uid: string): Profile | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return parsed?.uid === uid ? (parsed as unknown as Profile) : null;
+    if (parsed?.uid !== uid) return null;
+    // Back-fill fields added in the SaaS migration so old cache entries still type-check
+    if (!parsed.clinicId)   parsed.clinicId   = "";
+    if (!parsed.clinicSlug) parsed.clinicSlug = "";
+    return parsed as unknown as Profile;
   } catch { return null; }
 }
 
@@ -59,7 +66,10 @@ function writeCache(profile: Profile): void {
 }
 
 function clearCache(): void {
-  try { localStorage.removeItem(CACHE_KEY); } catch { /* noop */ }
+  try {
+    localStorage.removeItem(CACHE_KEY);
+    localStorage.removeItem("phub_profile_v2"); // clean up the briefly-used v2 key
+  } catch { /* noop */ }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
