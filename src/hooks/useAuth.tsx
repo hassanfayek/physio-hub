@@ -41,22 +41,25 @@ const AuthContext = createContext<AuthContextValue>({
 
 // ── localStorage profile cache ─────────────────────────────────────────────────
 
-// Keep v1 key so existing users don't lose their cached profile.
-// Missing new fields (clinicId/clinicSlug) are back-filled with defaults so
-// the cache still produces an instant render; the background refresh fills them in.
 const CACHE_KEY = "phub_profile_v1";
 
-function readCache(uid: string): Profile | null {
+// Read cache without knowing the uid — used to hydrate state synchronously on
+// the very first render so the app never shows a loading screen.
+// The auth listener will evict it if the uid doesn't match (e.g. different user).
+function readCacheAny(): Profile | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (parsed?.uid !== uid) return null;
-    // Back-fill fields added in the SaaS migration so old cache entries still type-check
     if (!parsed.clinicId)   parsed.clinicId   = "";
     if (!parsed.clinicSlug) parsed.clinicSlug = "";
     return parsed as unknown as Profile;
   } catch { return null; }
+}
+
+function readCache(uid: string): Profile | null {
+  const p = readCacheAny();
+  return p?.uid === uid ? p : null;
 }
 
 function writeCache(profile: Profile): void {
@@ -68,15 +71,16 @@ function writeCache(profile: Profile): void {
 function clearCache(): void {
   try {
     localStorage.removeItem(CACHE_KEY);
-    localStorage.removeItem("phub_profile_v2"); // clean up the briefly-used v2 key
+    localStorage.removeItem("phub_profile_v2");
   } catch { /* noop */ }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user,    setUser]    = useState<Profile>(null);
-  const [loading, setLoading] = useState(true);
+  // Hydrate from localStorage synchronously — no loading flash on return visits
+  const [user,    setUser]    = useState<Profile>(() => readCacheAny());
+  const [loading, setLoading] = useState(() => readCacheAny() === null);
 
   const applyProfile = useCallback((profile: Profile) => {
     setUser(profile);
