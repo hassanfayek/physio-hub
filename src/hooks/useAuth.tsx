@@ -17,88 +17,53 @@ import {
   type PhysioProfile,
   type SecretaryProfile,
   type PhysicianProfile,
-  type SuperAdminProfile,
 } from "../services/authService";
-import { setClinicContext, clearClinicContext } from "../services/clinicContext";
-import {
-  writeProfileCache,
-  readProfileCacheAny,
-  readProfileCache,
-  clearProfileCache,
-} from "../services/profileCache";
 
-type Profile = PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | SuperAdminProfile | null;
+type Profile = PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | null;
 
 interface AuthContextValue {
-  user:       Profile;
-  loading:    boolean;
-  clinicId:   string;
-  clinicSlug: string;
-  logout:     () => Promise<void>;
+  user:    Profile;
+  loading: boolean;
+  logout:  () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
-  user:       null,
-  loading:    true,
-  clinicId:   "",
-  clinicSlug: "",
-  logout:     async () => {},
+  user:    null,
+  loading: true,
+  logout:  async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Hydrate synchronously from cache — no loading flash on return visits
-  const [user,    setUser]    = useState<Profile>(() => readProfileCacheAny() as Profile | null);
-  const [loading, setLoading] = useState(() => readProfileCacheAny() === null);
-
-  const applyProfile = useCallback((profile: Profile) => {
-    setUser(profile);
-    if (profile) setClinicContext(profile.clinicId ?? "", profile.clinicSlug ?? "");
-  }, []);
+  const [user,    setUser]    = useState<Profile>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChange(async (firebaseUser) => {
       if (firebaseUser) {
-        // login() in authService writes to cache before navigating, so this
-        // almost always hits immediately — no Firestore wait on sign-in.
-        const cached = readProfileCache(firebaseUser.uid) as Profile | null;
-        if (cached) {
-          applyProfile(cached);
-          setLoading(false);
-        }
-
-        // Always refresh from Firestore in the background
         try {
           const profile = await loadUserProfile(firebaseUser);
-          applyProfile(profile);
-          writeProfileCache(profile);
+          setUser(profile);
         } catch {
-          if (!cached) applyProfile(null);
+          setUser(null);
         } finally {
           setLoading(false);
         }
       } else {
-        clearProfileCache();
-        clearClinicContext();
         setUser(null);
         setLoading(false);
       }
     });
 
     return unsubscribe;
-  }, [applyProfile]);
+  }, []);
 
   const logout = useCallback(async () => {
     setUser(null);
-    clearProfileCache();
-    clearClinicContext();
     await firebaseLogout();
   }, []);
 
-  const clinicId   = user?.clinicId   ?? "";
-  const clinicSlug = user?.clinicSlug ?? "";
-
   return (
-    <AuthContext.Provider value={{ user, loading, clinicId, clinicSlug, logout }}>
+    <AuthContext.Provider value={{ user, loading, logout }}>
       {children}
     </AuthContext.Provider>
   );

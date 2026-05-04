@@ -52,26 +52,19 @@ import {
 } from "firebase/firestore";
 
 import { auth, db, secondaryAuth } from "../firebase";
-import { writeProfileCache } from "./profileCache";
 import { getFirestore } from "firebase/firestore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type UserRole = "patient" | "physiotherapist" | "clinic_manager" | "secretary" | "physician" | "partner" | "superadmin";
+export type UserRole = "patient" | "physiotherapist" | "clinic_manager" | "secretary" | "physician" | "partner";
 
 export interface UserProfile {
   uid:         string;
   email:       string;
   role:        UserRole;
   displayName: string;
-  clinicId:    string;   // empty for superadmin
-  clinicSlug:  string;   // empty for superadmin
   createdAt:   Date | null;
   updatedAt:   Date | null;
-}
-
-export interface SuperAdminProfile extends UserProfile {
-  role: "superadmin";
 }
 
 export interface PatientProfile extends UserProfile {
@@ -175,13 +168,11 @@ export function codeToEmail(code: string): string {
 export async function loginWithCode(code: string): Promise<PatientProfile> {
   const normalised = code.trim().toUpperCase();
   const email      = codeToEmail(normalised);
-  // The password is always the code itself (uppercased, with dash)
   await signInWithEmailAndPassword(auth, email, normalised);
 
   const currentUser = auth.currentUser;
   if (!currentUser) throw new Error("Login failed.");
 
-  // Load profile from Firestore
   const userSnap = await getDoc(doc(db, "users", currentUser.uid));
   if (!userSnap.exists()) throw new Error("Patient profile not found.");
 
@@ -194,8 +185,6 @@ export async function loginWithCode(code: string): Promise<PatientProfile> {
     email:            userData.email ?? email,
     role:             "patient",
     displayName:      userData.displayName ?? "",
-    clinicId:         userData.clinicId   ?? "",
-    clinicSlug:       userData.clinicSlug ?? "",
     firstName:        patData.firstName ?? "",
     lastName:         patData.lastName  ?? "",
     dateOfBirth:      patData.dateOfBirth ?? "",
@@ -236,8 +225,6 @@ export function parseFirebaseError(error: unknown): AuthError {
 export async function registerPatient(
   data: RegisterPatientData
 ): Promise<PatientProfile> {
-  // Use secondaryAuth so the current user session is NOT replaced.
-  // After creating the account we sign out of secondaryAuth immediately.
   const credential: UserCredential = await createUserWithEmailAndPassword(
     secondaryAuth,
     data.email,
@@ -247,11 +234,8 @@ export async function registerPatient(
   const { user } = credential;
   const displayName = `${data.firstName} ${data.lastName}`;
 
-  // Update display name on secondary auth user
   await updateProfile(user, { displayName });
 
-  // Use the SECONDARY app's Firestore so the new patient writes their own docs.
-  // This guarantees isOwner(uid) passes in Firestore rules.
   const secondaryApp = secondaryAuth.app;
   const secondaryDb  = getFirestore(secondaryApp);
   const now = serverTimestamp();
@@ -275,10 +259,8 @@ export async function registerPatient(
     createdAt:        now,
   });
 
-  // NOW sign out of secondaryAuth — all writes are done
   await secondaryAuth.signOut();
 
-  // Log the new patient into the MAIN auth so they are immediately signed in
   await signInWithEmailAndPassword(auth, data.email, data.password);
 
   return {
@@ -286,8 +268,6 @@ export async function registerPatient(
     email:            data.email,
     role:             "patient",
     displayName,
-    clinicId:         "",
-    clinicSlug:       "",
     firstName:        data.firstName,
     lastName:         data.lastName,
     dateOfBirth:      data.dateOfBirth,
@@ -339,7 +319,6 @@ export async function registerPhysio(
 
   await secondaryAuth.signOut();
 
-  // Log the new physio into the MAIN auth
   await signInWithEmailAndPassword(auth, data.email, data.password);
 
   return {
@@ -347,8 +326,6 @@ export async function registerPhysio(
     email:           data.email,
     role:            "physiotherapist",
     displayName,
-    clinicId:        "",
-    clinicSlug:      "",
     firstName:       data.firstName,
     lastName:        data.lastName,
     licenseNumber:   data.licenseNumber,
@@ -365,17 +342,13 @@ export async function registerPhysio(
 export async function login(
   email: string,
   password: string
-): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | SuperAdminProfile> {
+): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile> {
   const credential = await signInWithEmailAndPassword(auth, email, password);
   const profile    = await loadUserProfile(credential.user);
 
   if (!profile) {
     throw { code: "profile/not-found", message: "User profile not found." };
   }
-
-  // Write to shared cache immediately so useAuth's onAuthStateChange listener
-  // finds it at once — prevents the blank-screen double-fetch on sign-in.
-  writeProfileCache(profile);
 
   return profile;
 }
@@ -393,13 +366,7 @@ export async function sendPasswordReset(email: string): Promise<void> {
 }
 
 // ─── Load full user profile ───────────────────────────────────────────────────
-// Reads /users/{uid} for the role, then fetches the role-specific collection.
 
-/**
- * Retry a Firestore getDoc up to `attempts` times when the client is offline.
- * Kept intentionally short — Firebase SDK handles reconnection internally;
- * we only need a brief window for iOS to re-establish its WebSocket.
- */
 async function getDocWithRetry(
   ref: Parameters<typeof getDoc>[0],
   attempts = 6,
@@ -422,7 +389,6 @@ async function getDocWithRetry(
   return getDoc(ref);
 }
 
-// Maps each role to its Firestore collection name
 const ROLE_COLLECTION: Partial<Record<UserRole, string>> = {
   patient:          "patients",
   physiotherapist:  "physiotherapists",
@@ -434,13 +400,7 @@ const ROLE_COLLECTION: Partial<Record<UserRole, string>> = {
 
 export async function loadUserProfile(
   user: User
-): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | SuperAdminProfile | null> {
-  // ── Read /users/{uid} and try to resolve the role-specific doc in parallel ──
-  // We fire the user doc first, and as soon as we get the role we immediately
-  // kick off the role-collection read. On a fast connection both complete at
-  // roughly the same time; on a slow/reconnecting connection we save one full
-  // RTT compared to strict sequential reads.
-
+): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | null> {
   const userDocRef = doc(db, "users", user.uid);
   const userSnap   = await getDocWithRetry(userDocRef);
 
@@ -454,16 +414,9 @@ export async function loadUserProfile(
     email:       userData.email,
     role,
     displayName: userData.displayName,
-    clinicId:    userData.clinicId   ?? "",
-    clinicSlug:  userData.clinicSlug ?? "",
     createdAt:   userData.createdAt?.toDate() ?? null,
     updatedAt:   userData.updatedAt?.toDate() ?? null,
   };
-
-  // Super-admin has no clinic and no role-specific collection
-  if (role === "superadmin") {
-    return { ...base, role: "superadmin" } as SuperAdminProfile;
-  }
 
   const collection = ROLE_COLLECTION[role];
   if (!collection) return null;
@@ -529,7 +482,7 @@ export async function loadUserProfile(
       organizationName: p.organizationName ?? "",
       phone:            p.phone            ?? "",
       sharePercent:     p.sharePercent     ?? 40,
-    } as unknown as PhysicianProfile; // partner reuses the generic UserProfile shape
+    } as unknown as PhysicianProfile;
   }
 
   return null;
@@ -576,8 +529,6 @@ export async function registerSecretary(
     email:       data.email,
     role:        "secretary",
     displayName,
-    clinicId:    "",
-    clinicSlug:  "",
     firstName:   data.firstName,
     lastName:    data.lastName,
     phone:       data.phone,
@@ -629,8 +580,6 @@ export async function registerPhysician(
     email:          data.email,
     role:           "physician",
     displayName,
-    clinicId:       "",
-    clinicSlug:     "",
     firstName:      data.firstName,
     lastName:       data.lastName,
     phone:          data.phone,
@@ -654,19 +603,6 @@ export async function updateUserProfile(
 }
 
 // ─── Auth state observer ──────────────────────────────────────────────────────
-// Returns an unsubscribe function. Use inside useEffect.
-//
-// Example:
-//   useEffect(() => {
-//     return onAuthStateChange(async (user) => {
-//       if (user) {
-//         const profile = await loadUserProfile(user);
-//         setCurrentUser(profile);
-//       } else {
-//         setCurrentUser(null);
-//       }
-//     });
-//   }, []);
 
 export function onAuthStateChange(
   callback: (user: User | null) => void

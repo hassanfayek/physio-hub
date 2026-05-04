@@ -32,7 +32,7 @@ import ClinicBillingPage from "./ClinicBillingPage";
 import TreatmentProtocolsPage from "../protocols/TreatmentProtocolsPage";
 import DiagnosisTemplatesPage from "../diagnoses/DiagnosisTemplatesPage";
 import OnlineRehabPage from "../rehab/OnlineRehabPage";
-import { runBackgroundScan, subscribeToPackageAlerts, subscribeToNewPatientAlerts } from "../../services/notificationService";
+import { runBackgroundScan, subscribeToPackageAlerts } from "../../services/notificationService";
 
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
@@ -1124,8 +1124,7 @@ export default function PhysioDashboard() {
     if (!user?.uid) return;
     runBackgroundScan(user.uid);
     const unsubPackages = subscribeToPackageAlerts(user.uid);
-    const unsubPatients = subscribeToNewPatientAlerts(user.uid);
-    return () => { unsubPackages(); unsubPatients(); };
+    return () => { unsubPackages(); };
   }, [user?.uid]);
 
   const physio = user as unknown as PhysioProfile | null;

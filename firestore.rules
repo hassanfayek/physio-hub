@@ -12,29 +12,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
-    function isSuperAdmin() { return isAuth() && role() == 'superadmin'; }
-    function isManager()    { return isAuth() && (role() == 'clinic_manager' || role() == 'manager'); }
-    function isPhysio()     { return isAuth() && role() == 'physiotherapist';  }
-    function isSecretary()  { return isAuth() && role() == 'secretary';        }
-    function isPatient()    { return isAuth() && role() == 'patient';          }
-    function isPhysician()  { return isAuth() && role() == 'physician';        }
-    function isPartner()    { return isAuth() && role() == 'partner';          }
-    function isStaff()      { return isManager() || isPhysio() || isSecretary(); }
-
-    // ── Clinics (SaaS tenant registry) ───────────────────────────────────────
-    match /clinics/{clinicId} {
-      allow read:   if isAuth();   // slug/name lookups are not sensitive
-      allow create: if isAuth();
-      allow update: if isSuperAdmin() || (isManager() && resource.data.ownerUid == request.auth.uid);
-      allow delete: if isSuperAdmin();
-    }
-
-    // ── Slug index — O(1) uniqueness check without querying the full collection ──
-    // Doc ID == the slug. Written by createClinic, read by isSlugAvailable.
-    match /slugs/{slug} {
-      allow read:   if isAuth();
-      allow write:  if isAuth();
-    }
+    function isManager()   { return isAuth() && (role() == 'clinic_manager' || role() == 'manager'); }
+    function isPhysio()    { return isAuth() && role() == 'physiotherapist';  }
+    function isSecretary() { return isAuth() && role() == 'secretary';        }
+    function isPatient()   { return isAuth() && role() == 'patient';          }
+    function isPhysician() { return isAuth() && role() == 'physician';        }
+    function isPartner()   { return isAuth() && role() == 'partner';          }
+    function isStaff()     { return isManager() || isPhysio() || isSecretary(); }
 
     // ── Users ─────────────────────────────────────────────────────────────────
     // Each user can read/update their own profile; manager can read all.
@@ -129,14 +113,11 @@ service cloud.firestore {
     }
 
     // ── Body Profile (Joint Assessment) ───────────────────────────────────────
-    // Clinic manager: full access.
-    // Physiotherapist: full access (senior assignment enforced in app layer).
     match /jointAssessments/{patientId} {
       allow read:  if isStaff();
       allow write: if isManager() || isPhysio();
     }
 
-    // Snapshot history for progress trend charts — one doc per assessment date
     match /jointAssessmentHistory/{patientId}/snapshots/{snapId} {
       allow read:  if isStaff();
       allow write: if isManager() || isPhysio();
@@ -157,21 +138,18 @@ service cloud.firestore {
     }
 
     // ── Treatment Protocols ───────────────────────────────────────────────────
-    // All staff can read; only manager can create / edit / delete.
     match /treatmentProtocols/{protocolId} {
       allow read:  if isStaff();
       allow write: if isManager();
     }
 
     // ── Diagnosis Templates ───────────────────────────────────────────────────
-    // All physio staff can read; manager and senior physios can write.
     match /diagnosisTemplates/{templateId} {
       allow read:  if isManager();
       allow write: if isManager();
     }
 
     // ── Patient Protocol Assignments ──────────────────────────────────────────
-    // All physios and manager can assign; all staff can read.
     match /patientProtocols/{docId} {
       allow read:  if isStaff();
       allow write: if isManager() || isPhysio();
@@ -207,7 +185,6 @@ service cloud.firestore {
     }
 
     // ── Daily Check-ins ───────────────────────────────────────────────────────
-    // Doc ID: {patientId}_{YYYY-MM-DD}
     match /dailyCheckIns/{docId} {
       allow read:          if isStaff() || isPatient();
       allow create, update: if isPatient() && request.resource.data.patientId == request.auth.uid;
@@ -215,7 +192,6 @@ service cloud.firestore {
     }
 
     // ── Exercise Streak Log ───────────────────────────────────────────────────
-    // Doc ID: {patientId}_{YYYY-MM-DD} — written when patient completes any exercise
     match /exerciseStreakLog/{docId} {
       allow read:          if isStaff() || isPatient();
       allow create, update: if isPatient() && request.resource.data.patientId == request.auth.uid;
@@ -234,18 +210,12 @@ service cloud.firestore {
     }
 
     // ── Notifications ─────────────────────────────────────────────────────────
-    // Per-user subcollection: notifications/{userId}/items/{notifId}
-    // Any authenticated user can read/update/delete their own notifications.
-    // Any authenticated user can CREATE a notification in any user's subcollection
-    // (needed for staff → patient fanout and manager self-notifications).
     match /notifications/{userId}/items/{notifId} {
       allow read, update, delete: if isAuth() && request.auth.uid == userId;
       allow create:               if isAuth();
     }
 
     // ── WhatsApp Sessions ─────────────────────────────────────────────────────
-    // Doc ID: normalized phone number — stores conversation history
-    // Only Cloud Functions (admin SDK) write here; no client access needed.
     match /whatsappSessions/{phone} {
       allow read, write: if false; // admin SDK only
     }
