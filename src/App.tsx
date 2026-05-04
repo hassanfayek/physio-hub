@@ -1,230 +1,185 @@
 // src/App.tsx
 // ─────────────────────────────────────────────────────────────────────────────
-// Root application with Firebase auth integration, protected routes, and
-// role-based redirects.
+// SaaS-enabled routing. One login for all users — role + clinicSlug determine
+// where each person lands after authentication.
 //
 // Route structure:
-//   /            → LoginPage       (public)
-//   /register    → RegisterPage    (public)
-//   /patient     → PatientDashboard (protected, role: patient)
-//   /physio      → PhysioDashboard  (protected, role: physiotherapist)
+//   /                     → LandingPage       (public marketing)
+//   /login                → LoginPage         (public)
+//   /signup               → ClinicRegistration (public, new clinic onboarding)
+//   /setup                → ClinicSetupPage   (existing managers without clinicId)
+//   /admin                → SuperAdminDashboard (superadmin only)
+//   /c/:slug/physio       → PhysioDashboard   (manager / physio / secretary)
+//   /c/:slug/patient      → PatientDashboard  (patient)
+//   /c/:slug/physician    → PhysicianDashboard
+//   /c/:slug/partner      → PartnerDashboard
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { type ReactNode } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { type ReactNode, lazy, Suspense } from "react";
 
-import { lazy, Suspense } from "react";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { LanguageProvider } from "./contexts/LanguageContext";
-import LoginPage    from "./features/auth/LoginPage";
-import RegisterPage from "./features/auth/RegisterPage";
+import LoginPage              from "./features/auth/LoginPage";
+import LandingPage            from "./features/landing/LandingPage";
+import ClinicRegistrationPage from "./features/auth/ClinicRegistrationPage";
+import ClinicSetupPage        from "./features/auth/ClinicSetupPage";
 import logo from "./assets/physio-logo.svg";
 
-// Truly lazy-load the heavy dashboards — they ship in separate JS chunks
-const PatientDashboard   = lazy(() => import("./features/patient/PatientDashboard"));
-const PhysioDashboard    = lazy(() => import("./features/physio/PhysioDashboard"));
-const PhysicianDashboard = lazy(() => import("./features/physician/PhysicianDashboard"));
-const PartnerDashboard   = lazy(() => import("./features/partner/PartnerDashboard"));
+const PatientDashboard    = lazy(() => import("./features/patient/PatientDashboard"));
+const PhysioDashboard     = lazy(() => import("./features/physio/PhysioDashboard"));
+const PhysicianDashboard  = lazy(() => import("./features/physician/PhysicianDashboard"));
+const PartnerDashboard    = lazy(() => import("./features/partner/PartnerDashboard"));
+const SuperAdminDashboard = lazy(() => import("./features/admin/SuperAdminDashboard"));
 
-// ─── Loading screen (shown while Firebase resolves auth state) ────────────────
+// ─── Loading screen ───────────────────────────────────────────────────────────
 
 function LoadingScreen() {
   return (
-    <div style={{
-      minHeight: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      flexDirection: "column",
-      gap: 0,
-      background: "#ffffff",
-      fontFamily: "'Outfit', sans-serif",
-    }}>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 0, background: "#ffffff", fontFamily: "'Outfit', sans-serif" }}>
       <style>{`
-
-        @keyframes ls-fade-in {
-          from { opacity: 0; transform: translateY(12px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes ls-pulse {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: 0.4; }
-        }
-        @keyframes ls-bar {
-          0%   { width: 0%; }
-          60%  { width: 75%; }
-          85%  { width: 88%; }
-          100% { width: 95%; }
-        }
-        @keyframes ls-dot {
-          0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
-          40%            { transform: scale(1);   opacity: 1;   }
-        }
-
-        .ls-wrap {
-          display: flex; flex-direction: column;
-          align-items: center; justify-content: center;
-          gap: 0;
-          animation: ls-fade-in 0.5s ease both;
-        }
-        .ls-logo {
-          height: 64px; width: auto;
-          margin-bottom: 40px;
-          filter: drop-shadow(0 4px 16px rgba(46,139,192,0.15));
-        }
-        .ls-bar-track {
-          width: 180px; height: 3px;
-          background: #f0ede8; border-radius: 100px;
-          overflow: hidden; margin-bottom: 28px;
-        }
-        .ls-bar-fill {
-          height: 100%; border-radius: 100px;
-          background: linear-gradient(90deg, #2E8BC0, #5BC0BE);
-          animation: ls-bar 2.4s cubic-bezier(0.4, 0, 0.2, 1) both;
-        }
-        .ls-dots {
-          display: flex; gap: 6px; align-items: center;
-        }
-        .ls-dot {
-          width: 6px; height: 6px;
-          border-radius: 50%;
-          background: #2E8BC0;
-          animation: ls-dot 1.2s ease-in-out infinite;
-        }
-        .ls-dot:nth-child(2) { animation-delay: 0.2s; }
-        .ls-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes ls-fade-in  { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes ls-bar      { 0%{width:0%} 60%{width:75%} 85%{width:88%} 100%{width:95%} }
+        @keyframes ls-dot      { 0%,80%,100%{transform:scale(0.6);opacity:0.3} 40%{transform:scale(1);opacity:1} }
+        .ls-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; animation:ls-fade-in 0.5s ease both; }
+        .ls-logo { height:64px; width:auto; margin-bottom:40px; filter:drop-shadow(0 4px 16px rgba(46,139,192,0.15)); }
+        .ls-bar-track { width:180px; height:3px; background:#f0ede8; border-radius:100px; overflow:hidden; margin-bottom:28px; }
+        .ls-bar-fill { height:100%; border-radius:100px; background:linear-gradient(90deg,#2E8BC0,#5BC0BE); animation:ls-bar 2.4s cubic-bezier(0.4,0,0.2,1) both; }
+        .ls-dots { display:flex; gap:6px; align-items:center; }
+        .ls-dot { width:6px; height:6px; border-radius:50%; background:#2E8BC0; animation:ls-dot 1.2s ease-in-out infinite; }
+        .ls-dot:nth-child(2){animation-delay:0.2s} .ls-dot:nth-child(3){animation-delay:0.4s}
       `}</style>
-
       <div className="ls-wrap">
         <img src={logo} alt="Physio+ Hub" className="ls-logo" />
-        <div className="ls-bar-track">
-          <div className="ls-bar-fill" />
-        </div>
-        <div className="ls-dots">
-          <div className="ls-dot" />
-          <div className="ls-dot" />
-          <div className="ls-dot" />
-        </div>
+        <div className="ls-bar-track"><div className="ls-bar-fill" /></div>
+        <div className="ls-dots"><div className="ls-dot" /><div className="ls-dot" /><div className="ls-dot" /></div>
       </div>
     </div>
   );
 }
 
-// ─── Protected route ──────────────────────────────────────────────────────────
-// Redirects to "/" if no user is logged in.
-// Optionally enforces a required role — sends wrong-role users to their portal.
+// ─── Role → destination helper ────────────────────────────────────────────────
 
-// Roles that can access the /physio portal
-const PHYSIO_PORTAL_ROLES = new Set(["physiotherapist", "clinic_manager", "secretary"]);
-// Roles that can access the /physician portal
-const PHYSICIAN_PORTAL_ROLES = new Set(["physician"]);
-// Roles that can access the /partner portal
-const PARTNER_PORTAL_ROLES = new Set(["partner"]);
-
-function ProtectedRoute({
-  children,
-  requiredRole,
-}: {
-  children:      ReactNode;
-  requiredRole?: "patient" | "physiotherapist" | "physician" | "partner";
-}) {
-  const { user, loading } = useAuth();
-
-  if (loading) return <LoadingScreen />;
-
-  if (!user) return <Navigate to="/" replace />;
-
-  if (requiredRole) {
-    const userRole = user.role as string;
-    const allowed =
-      requiredRole === "physiotherapist"
-        ? PHYSIO_PORTAL_ROLES.has(userRole)
-        : requiredRole === "physician"
-        ? PHYSICIAN_PORTAL_ROLES.has(userRole)
-        : requiredRole === "partner"
-        ? PARTNER_PORTAL_ROLES.has(userRole)
-        : userRole === requiredRole;
-
-    if (!allowed) {
-      const role = user.role as string;
-      const dest = role === "patient"   ? "/patient"
-                 : role === "physician" ? "/physician"
-                 : role === "partner"   ? "/partner"
-                 : "/physio";
-      return <Navigate to={dest} replace />;
-    }
-  }
-
-  return <>{children}</>;
+function roleDestination(role: string, clinicSlug: string): string {
+  if (role === "superadmin")                                    return "/admin";
+  if (role === "patient")                                       return `/c/${clinicSlug}/patient`;
+  if (role === "physician")                                     return `/c/${clinicSlug}/physician`;
+  if (role === "partner")                                       return `/c/${clinicSlug}/partner`;
+  /* physiotherapist | clinic_manager | secretary */            return `/c/${clinicSlug}/physio`;
 }
 
-// ─── Public route ─────────────────────────────────────────────────────────────
-// Redirects already-authenticated users to their portal.
+// ─── Public route — redirects logged-in users to their portal ─────────────────
 
 function PublicRoute({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
-
+  const { user, loading, clinicSlug } = useAuth();
   if (loading) return <LoadingScreen />;
-
-  if (user) {
-    const role = user.role as string;
-    const dest = role === "patient"   ? "/patient"
-               : role === "physician" ? "/physician"
-               : role === "partner"   ? "/partner"
-               : "/physio";
-    return <Navigate to={dest} replace />;
-  }
-
+  if (user) return <Navigate to={roleDestination(user.role, clinicSlug)} replace />;
   return <>{children}</>;
 }
 
-// ─── Router ───────────────────────────────────────────────────────────────────
+// ─── Protected route ──────────────────────────────────────────────────────────
+
+const PHYSIO_ROLES    = new Set(["physiotherapist", "clinic_manager", "secretary"]);
+const PHYSICIAN_ROLES = new Set(["physician"]);
+const PARTNER_ROLES   = new Set(["partner"]);
+
+type PortalKind = "physio" | "patient" | "physician" | "partner" | "admin";
+
+function ProtectedRoute({ children, portal }: { children: ReactNode; portal: PortalKind }) {
+  const { user, loading, clinicId, clinicSlug } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user)   return <Navigate to="/login" replace />;
+
+  // Existing manager with no clinicId yet → one-time setup wizard
+  if (!clinicId && user.role !== "superadmin" && user.role !== "patient") {
+    return <Navigate to="/setup" replace />;
+  }
+
+  const role = user.role;
+  const allowed =
+    portal === "admin"     ? role === "superadmin"         :
+    portal === "physio"    ? PHYSIO_ROLES.has(role)        :
+    portal === "physician" ? PHYSICIAN_ROLES.has(role)     :
+    portal === "partner"   ? PARTNER_ROLES.has(role)       :
+    role === "patient";
+
+  if (!allowed) return <Navigate to={roleDestination(role, clinicSlug)} replace />;
+
+  // Validate the slug in the URL matches the user's clinic (prevents URL spoofing)
+  return <SlugGuard clinicSlug={clinicSlug}>{children}</SlugGuard>;
+}
+
+function SlugGuard({ clinicSlug, children }: { clinicSlug: string; children: ReactNode }) {
+  const { slug } = useParams<{ slug?: string }>();
+  // If there's a slug in the URL and it doesn't match the user's clinic, redirect
+  if (slug && clinicSlug && slug !== clinicSlug) {
+    return <Navigate to={`/c/${clinicSlug}/physio`} replace />;
+  }
+  return <>{children}</>;
+}
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
 
 function AppRoutes() {
   return (
     <Suspense fallback={<LoadingScreen />}>
       <Routes>
-        {/* Public */}
-        <Route path="/" element={
-          <PublicRoute><LoginPage /></PublicRoute>
-        } />
+        {/* Public — marketing + auth */}
+        <Route path="/"       element={<PublicRoute><LandingPage /></PublicRoute>} />
+        <Route path="/login"  element={<PublicRoute><LoginPage /></PublicRoute>} />
+        <Route path="/signup" element={<PublicRoute><ClinicRegistrationPage /></PublicRoute>} />
 
-        {/* Staff registration — protected, only accessible when already logged in as staff */}
-        <Route path="/register" element={
-          <ProtectedRoute requiredRole="physiotherapist">
-            <RegisterPage />
+        {/* Clinic setup (existing managers migrating to multi-tenant) */}
+        <Route path="/setup"  element={<ClinicSetupPage />} />
+
+        {/* Super-admin */}
+        <Route path="/admin"  element={
+          <ProtectedRoute portal="admin">
+            <SuperAdminDashboard />
           </ProtectedRoute>
         } />
 
-        {/* Protected */}
-        <Route path="/patient" element={
-          <ProtectedRoute requiredRole="patient">
-            <PatientDashboard />
-          </ProtectedRoute>
-        } />
-        <Route path="/physio" element={
-          <ProtectedRoute requiredRole="physiotherapist">
+        {/* Clinic portals — scoped under /c/:slug/ */}
+        <Route path="/c/:slug/physio" element={
+          <ProtectedRoute portal="physio">
             <PhysioDashboard />
           </ProtectedRoute>
         } />
-
-        <Route path="/physician" element={
-          <ProtectedRoute requiredRole="physician">
+        <Route path="/c/:slug/patient" element={
+          <ProtectedRoute portal="patient">
+            <PatientDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/c/:slug/physician" element={
+          <ProtectedRoute portal="physician">
             <PhysicianDashboard />
           </ProtectedRoute>
         } />
-
-        <Route path="/partner" element={
-          <ProtectedRoute requiredRole="partner">
+        <Route path="/c/:slug/partner" element={
+          <ProtectedRoute portal="partner">
             <PartnerDashboard />
           </ProtectedRoute>
         } />
+
+        {/* Legacy redirects — old bookmarks still work */}
+        <Route path="/physio"    element={<LegacyRedirect to="physio"    />} />
+        <Route path="/patient"   element={<LegacyRedirect to="patient"   />} />
+        <Route path="/physician" element={<LegacyRedirect to="physician" />} />
+        <Route path="/partner"   element={<LegacyRedirect to="partner"   />} />
+        <Route path="/register"  element={<Navigate to="/signup" replace />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
   );
+}
+
+function LegacyRedirect({ to }: { to: string }) {
+  const { user, loading, clinicSlug } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user)   return <Navigate to="/login" replace />;
+  return <Navigate to={`/c/${clinicSlug || "_"}/${to}`} replace />;
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────

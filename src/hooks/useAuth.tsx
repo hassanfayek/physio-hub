@@ -17,27 +17,31 @@ import {
   type PhysioProfile,
   type SecretaryProfile,
   type PhysicianProfile,
+  type SuperAdminProfile,
 } from "../services/authService";
+import { setClinicContext, clearClinicContext } from "../services/clinicContext";
 
-type Profile = PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | null;
+type Profile = PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | SuperAdminProfile | null;
 
 interface AuthContextValue {
-  user:    Profile;
-  loading: boolean;
-  logout:  () => Promise<void>;
+  user:       Profile;
+  loading:    boolean;
+  clinicId:   string;
+  clinicSlug: string;
+  logout:     () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
-  user:    null,
-  loading: true,
-  logout:  async () => {},
+  user:       null,
+  loading:    true,
+  clinicId:   "",
+  clinicSlug: "",
+  logout:     async () => {},
 });
 
 // ── localStorage profile cache ─────────────────────────────────────────────────
-// Stores a minimal snapshot so the dashboard renders immediately on return visits
-// without waiting for Firestore. The full profile is always refreshed in background.
 
-const CACHE_KEY = "phub_profile_v1";
+const CACHE_KEY = "phub_profile_v2";  // bumped to avoid stale cache missing new fields
 
 function readCache(uid: string): Profile | null {
   try {
@@ -51,7 +55,7 @@ function readCache(uid: string): Profile | null {
 function writeCache(profile: Profile): void {
   try {
     if (profile) localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
-  } catch { /* storage quota exceeded — skip */ }
+  } catch { /* storage quota exceeded */ }
 }
 
 function clearCache(): void {
@@ -64,51 +68,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user,    setUser]    = useState<Profile>(null);
   const [loading, setLoading] = useState(true);
 
+  const applyProfile = useCallback((profile: Profile) => {
+    setUser(profile);
+    if (profile) {
+      setClinicContext(profile.clinicId ?? "", profile.clinicSlug ?? "");
+    }
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChange(async (firebaseUser) => {
       if (firebaseUser) {
-        // ── Step 1: serve cached profile instantly ─────────────────────────
-        // This ends the loading screen immediately on return visits so the
-        // dashboard renders without waiting for any network round-trips.
+        // Serve cached profile instantly
         const cached = readCache(firebaseUser.uid);
         if (cached) {
-          setUser(cached);
+          applyProfile(cached);
           setLoading(false);
         }
 
-        // ── Step 2: always refresh from Firestore in the background ────────
+        // Always refresh from Firestore in the background
         try {
           const profile = await loadUserProfile(firebaseUser);
-          setUser(profile);
+          applyProfile(profile);
           writeCache(profile);
         } catch {
-          // Firestore unreachable — keep the cached profile if we already
-          // showed it; otherwise clear the user to force re-login.
-          if (!cached) setUser(null);
+          if (!cached) applyProfile(null);
         } finally {
-          // No-op when cache already cleared loading; needed for first login.
           setLoading(false);
         }
       } else {
         clearCache();
+        clearClinicContext();
         setUser(null);
         setLoading(false);
       }
     });
 
     return unsubscribe;
-  }, []);
+  }, [applyProfile]);
 
-  // Clears React state FIRST (synchronous), then tells Firebase to sign out.
-  // This prevents the race condition where navigate() fires before the session clears.
   const logout = useCallback(async () => {
     setUser(null);
     clearCache();
+    clearClinicContext();
     await firebaseLogout();
   }, []);
 
+  const clinicId   = user?.clinicId   ?? "";
+  const clinicSlug = user?.clinicSlug ?? "";
+
   return (
-    <AuthContext.Provider value={{ user, loading, logout }}>
+    <AuthContext.Provider value={{ user, loading, clinicId, clinicSlug, logout }}>
       {children}
     </AuthContext.Provider>
   );

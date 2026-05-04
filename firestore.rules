@@ -12,6 +12,7 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
+    function isSuperAdmin() { return isAuth() && role() == 'superadmin'; }
     function isManager()    { return isAuth() && (role() == 'clinic_manager' || role() == 'manager'); }
     function isPhysio()     { return isAuth() && role() == 'physiotherapist';  }
     function isSecretary()  { return isAuth() && role() == 'secretary';        }
@@ -19,6 +20,16 @@ service cloud.firestore {
     function isPhysician()  { return isAuth() && role() == 'physician';        }
     function isPartner()    { return isAuth() && role() == 'partner';          }
     function isStaff()      { return isManager() || isPhysio() || isSecretary(); }
+
+    // ── Clinics (SaaS tenant registry) ───────────────────────────────────────
+    // Super-admin: full access to all clinics.
+    // Clinic manager: read + update their own clinic doc.
+    match /clinics/{clinicId} {
+      allow read:   if isSuperAdmin() || (isManager() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isAuth();   // registration flow creates the clinic doc
+      allow update: if isSuperAdmin() || (isManager() && resource.data.ownerUid == request.auth.uid);
+      allow delete: if isSuperAdmin();
+    }
 
     // ── Users ─────────────────────────────────────────────────────────────────
     // Each user can read/update their own profile; manager can read all.
