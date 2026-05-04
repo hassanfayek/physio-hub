@@ -61,11 +61,21 @@ function LoadingScreen() {
 // ─── Role → destination helper ────────────────────────────────────────────────
 
 function roleDestination(role: string, clinicSlug: string): string {
-  if (role === "superadmin")                                    return "/admin";
-  if (role === "patient")                                       return `/c/${clinicSlug}/patient`;
-  if (role === "physician")                                     return `/c/${clinicSlug}/physician`;
-  if (role === "partner")                                       return `/c/${clinicSlug}/partner`;
-  /* physiotherapist | clinic_manager | secretary */            return `/c/${clinicSlug}/physio`;
+  if (role === "superadmin") return "/admin";
+
+  // No clinic slug yet → send clinic staff to the one-time setup wizard.
+  // Patients and physicians use slug-less fallback routes until their clinic is linked.
+  if (!clinicSlug) {
+    if (role === "patient")   return "/patient";
+    if (role === "physician") return "/physician";
+    if (role === "partner")   return "/partner";
+    return "/setup";
+  }
+
+  if (role === "patient")   return `/c/${clinicSlug}/patient`;
+  if (role === "physician") return `/c/${clinicSlug}/physician`;
+  if (role === "partner")   return `/c/${clinicSlug}/partner`;
+  return `/c/${clinicSlug}/physio`;
 }
 
 // ─── Public route — redirects logged-in users to their portal ─────────────────
@@ -161,11 +171,17 @@ function AppRoutes() {
           </ProtectedRoute>
         } />
 
-        {/* Legacy redirects — old bookmarks still work */}
+        {/* Slug-less fallbacks — users whose clinic isn't linked yet, or old bookmarks */}
         <Route path="/physio"    element={<LegacyRedirect to="physio"    />} />
-        <Route path="/patient"   element={<LegacyRedirect to="patient"   />} />
-        <Route path="/physician" element={<LegacyRedirect to="physician" />} />
-        <Route path="/partner"   element={<LegacyRedirect to="partner"   />} />
+        <Route path="/patient"   element={
+          <ProtectedRoute portal="patient"><PatientDashboard /></ProtectedRoute>
+        } />
+        <Route path="/physician" element={
+          <ProtectedRoute portal="physician"><PhysicianDashboard /></ProtectedRoute>
+        } />
+        <Route path="/partner"   element={
+          <ProtectedRoute portal="partner"><PartnerDashboard /></ProtectedRoute>
+        } />
         <Route path="/register"  element={<Navigate to="/signup" replace />} />
 
         {/* Fallback */}
