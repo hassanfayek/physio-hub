@@ -87,10 +87,11 @@ function docToClinic(id: string, d: Record<string, unknown>): Clinic {
 }
 
 // ─── Slug availability ────────────────────────────────────────────────────────
+// Uses a dedicated /slugs/{slug} index document — single read, no collection scan.
 
 export async function isSlugAvailable(slug: string): Promise<boolean> {
-  const snap = await getDocs(query(collection(db, "clinics"), where("slug", "==", slug)));
-  return snap.empty;
+  const snap = await getDoc(doc(db, "slugs", slug));
+  return !snap.exists();
 }
 
 // ─── Create clinic (called during registration) ───────────────────────────────
@@ -126,6 +127,8 @@ export async function createClinic(data: {
   };
 
   await setDoc(doc(db, "clinics", id), clinicData);
+  // Write slug index so future isSlugAvailable checks are a single O(1) read
+  await setDoc(doc(db, "slugs", data.slug), { clinicId: id, createdAt: now });
 
   return docToClinic(id, { ...clinicData, createdAt: null, updatedAt: null, trialEndsAt: null });
 }

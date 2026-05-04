@@ -54,8 +54,9 @@ function roleDestination(role: string, clinicSlug: string): string {
 
 function PublicRoute({ children }: { children: ReactNode }) {
   const { user, loading, clinicSlug } = useAuth();
-  if (loading) return null;
-  if (user) return <Navigate to={roleDestination(user.role, clinicSlug)} replace />;
+  // Don't block rendering while auth resolves — show the page immediately.
+  // Only redirect once we positively know a user is logged in.
+  if (!loading && user) return <Navigate to={roleDestination(user.role, clinicSlug)} replace />;
   return <>{children}</>;
 }
 
