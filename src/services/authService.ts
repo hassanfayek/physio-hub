@@ -52,6 +52,7 @@ import {
 } from "firebase/firestore";
 
 import { auth, db, secondaryAuth } from "../firebase";
+import { writeProfileCache } from "./profileCache";
 import { getFirestore } from "firebase/firestore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -371,6 +372,10 @@ export async function login(
   if (!profile) {
     throw { code: "profile/not-found", message: "User profile not found." };
   }
+
+  // Write to shared cache immediately so useAuth's onAuthStateChange listener
+  // finds it at once — prevents the blank-screen double-fetch on sign-in.
+  writeProfileCache(profile);
 
   return profile;
 }
