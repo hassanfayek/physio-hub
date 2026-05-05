@@ -3537,14 +3537,8 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
 
           {/* Input card */}
           <div style={{ background: "#fff", border: "1.5px solid #e5e0d8", borderRadius: 16, padding: 24, marginBottom: 20 }}>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Diagnosis</div>
-              <div style={{ fontSize: 14, color: "#1a1a1a", background: "#fafaf8", padding: "10px 14px", borderRadius: 10, border: "1px solid #e5e0d8" }}>
-                {diagData.primaryDiagnosis
-                  ? [diagData.primaryDiagnosis, diagData.icdCode ? `(${diagData.icdCode})` : "", diagData.mechanism ? `Mechanism: ${diagData.mechanism}` : ""].filter(Boolean).join(" — ")
-                  : <span style={{ color: "#9a9590" }}>No diagnosis recorded — add it in the Diagnosis tab first</span>
-                }
-              </div>
+            <div style={{ marginBottom: 16, padding: "10px 14px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 10, fontSize: 13, color: "#166534" }}>
+              The AI will automatically read this patient's full diagnosis, PT assessment, and body profile from the system before generating the plan.
             </div>
 
             <div style={{ marginBottom: 16 }}>
@@ -3575,18 +3569,8 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                   const functions = getFunctions(firebaseApp.default);
                   const generateTreatmentPlan = httpsCallable(functions, "generateTreatmentPlan");
 
-                  const diagParts: string[] = [];
-                  if (diagData.primaryDiagnosis) diagParts.push(diagData.primaryDiagnosis);
-                  if (diagData.icdCode) diagParts.push(`ICD-10: ${diagData.icdCode}`);
-                  if (diagData.mechanism) diagParts.push(`Mechanism: ${diagData.mechanism}`);
-                  if (diagData.contraindications) diagParts.push(`Contraindications: ${diagData.contraindications}`);
-                  if (diagData.surgeryDate) diagParts.push(`Surgery date: ${diagData.surgeryDate}`);
-
                   const result = await generateTreatmentPlan({
                     patientId,
-                    diagnosis: diagParts.join(", ") || "Not specified",
-                    patientAge: patient?.age ?? undefined,
-                    patientGender: undefined,
                     notes: aiPlanNotes.trim() || undefined,
                   });
 
