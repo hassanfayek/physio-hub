@@ -3574,7 +3574,22 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                     notes: aiPlanNotes.trim() || undefined,
                   });
 
-                  setAiPlanResult((result.data as { plan: string }).plan);
+                  const { goals, plan } = result.data as { goals: string; plan: string };
+
+                  // Save directly to patientSessions as a treatment plan entry
+                  await addDoc(collection(db, "patientSessions"), {
+                    patientId,
+                    physioId:      user?.uid ?? "",
+                    date:          new Date().toISOString().slice(0, 10),
+                    treatmentType: "AI Treatment Plan",
+                    notes:         plan,
+                    entryMode:     "plan",
+                    goals:         goals || "",
+                    createdAt:     serverTimestamp(),
+                  });
+
+                  setAiPlanResult(plan);
+                  setAiPlanNotes("");
                 } catch (err: unknown) {
                   setAiPlanError(err instanceof Error ? err.message : "Failed to generate plan. Try again.");
                 } finally {
@@ -3613,33 +3628,28 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
             )}
           </div>
 
-          {/* Result */}
+          {/* Success — saved */}
           {aiPlanResult && (
-            <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 16, padding: 24 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#2E8BC0" }}>
-                  Generated Plan
-                </div>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(aiPlanResult);
-                  }}
-                  style={{
-                    padding: "5px 14px", borderRadius: 8, border: "1.5px solid #B3DEF0",
-                    background: "#EAF5FC", color: "#2E8BC0", fontFamily: "'Outfit', sans-serif",
-                    fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  }}
-                >
-                  Copy
-                </button>
+            <div style={{ background: "#f0fdf4", border: "1.5px solid #86efac", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#15803d" }}>Treatment plan generated and saved</div>
               </div>
-              <pre style={{
-                margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word",
-                fontSize: 13.5, lineHeight: 1.7, color: "#1a1a1a",
-                fontFamily: "'Outfit', sans-serif",
-              }}>
-                {aiPlanResult}
-              </pre>
+              <div style={{ fontSize: 13, color: "#166534" }}>
+                The AI treatment plan has been added to this patient's Treatment Program tab. You can view, edit, or delete it there.
+              </div>
+              <button
+                onClick={() => { setAiPlanResult(null); setActiveSection("notes"); }}
+                style={{
+                  alignSelf: "flex-start", padding: "9px 20px", borderRadius: 10,
+                  border: "none", background: "#16a34a", color: "#fff",
+                  fontFamily: "'Outfit', sans-serif", fontSize: 13.5, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                Go to Treatment Tab →
+              </button>
             </div>
           )}
 

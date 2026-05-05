@@ -244,37 +244,25 @@ exports.generateTreatmentPlan = onCall(
 You will receive a full clinical picture: diagnosis, subjective and objective assessment, body profile with joint ROM, muscle strength, special tests, and balance data.
 Use ALL of this information to produce a specific, practical, and clinically sound treatment plan.
 Do not make generic recommendations — tailor everything to the exact deficits, findings, and context provided.
-Format your response with clear sections using markdown-style headings (##).`;
+
+IMPORTANT: Respond with valid JSON only — no markdown fences, no extra text. Two keys:
+- "goals": a concise string with short-term (2-4 weeks) and long-term (6-12 weeks) goals tailored to this patient.
+- "plan": the full treatment plan as a plain string.`;
 
     const userPrompt = `Based on the following complete clinical data, create a detailed physiotherapy treatment plan:
 
 ${clinicalSummary}
 
-Please provide:
-## Treatment Goals
-- Short-term (2–4 weeks)
-- Long-term (6–12 weeks)
-
-## Manual Therapy
-Specific techniques, target structures, frequency, and rationale based on the findings above.
-
-## Exercise Program
-Phase 1 (Weeks 1–2), Phase 2 (Weeks 3–4), Phase 3 (Weeks 5+) — each with specific exercises, sets, reps, frequency, and parameters. Address the specific ROM deficits, muscle weakness grades, and functional limitations found.
-
-## Modalities
-If applicable: electrotherapy, heat/cold, ultrasound, taping — with rationale tied to the findings.
-
-## Patient Education
-Key points to communicate based on this patient's specific situation.
-
-## Home Exercise Program
-3–5 exercises the patient can perform independently, matched to their deficits.
-
-## Progression Criteria & Milestones
-Objective criteria (ROM values, strength grades, functional tests) to progress between phases.
-
-## Red Flags to Monitor
-Based on the diagnosis and findings, what should trigger re-evaluation or referral.`;
+Return a JSON object with:
+1. "goals" — one concise paragraph covering short-term (2-4 weeks) and long-term (6-12 weeks) goals tailored to this patient's specific deficits.
+2. "plan" — the full treatment plan as plain text covering:
+   MANUAL THERAPY: specific techniques, target structures, frequency, rationale.
+   EXERCISE PROGRAM: Phase 1 (Weeks 1-2), Phase 2 (Weeks 3-4), Phase 3 (Weeks 5+) with exercises, sets, reps, frequency. Address specific ROM deficits and muscle weakness grades.
+   MODALITIES: if applicable — with rationale tied to the findings.
+   PATIENT EDUCATION: key points specific to this patient.
+   HOME EXERCISE PROGRAM: 3-5 exercises matched to their deficits.
+   PROGRESSION CRITERIA: objective ROM values, strength grades, and functional tests to progress between phases.
+   RED FLAGS: what should trigger re-evaluation or referral based on this diagnosis.`;
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
@@ -283,12 +271,23 @@ Based on the diagnosis and findings, what should trigger re-evaluation or referr
       messages: [{ role: "user", content: userPrompt }],
     });
 
-    const plan = response.content
+    const raw = response.content
       .filter((b) => b.type === "text")
       .map((b) => b.text)
-      .join("\n")
+      .join("")
       .trim();
 
-    return { plan };
+    let goals = "";
+    let plan = raw;
+
+    try {
+      const parsed = JSON.parse(raw);
+      goals = parsed.goals ?? "";
+      plan  = parsed.plan  ?? raw;
+    } catch {
+      // Claude didn't return valid JSON — fall back to raw text as the plan
+    }
+
+    return { goals, plan };
   }
 );
