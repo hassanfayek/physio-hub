@@ -3577,20 +3577,13 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
 
                   const { goals, plan } = result.data as { goals: string; plan: string };
 
-                  // Save directly to patientSessions as a treatment plan entry
-                  await addDoc(collection(db, "patientSessions"), {
-                    patientId,
-                    physioId:      user?.uid ?? "",
-                    date:          new Date().toISOString().slice(0, 10),
-                    treatmentType: "Exercise Therapy",
-                    notes:         plan,
-                    entryMode:     "plan",
-                    goals:         goals || "",
-                    createdAt:     serverTimestamp(),
-                  });
-
-                  setAiPlanResult(plan);
+                  // Pre-fill the treatment plan form and navigate there
+                  setTpMode("plan");
+                  setTpGoals(goals || "");
+                  setTpNotes(plan);
+                  setTpDate(new Date().toISOString().slice(0, 10));
                   setAiPlanNotes("");
+                  setAiPlanResult(plan);
                 } catch (err: unknown) {
                   setAiPlanError(err instanceof Error ? err.message : "Failed to generate plan. Try again.");
                 } finally {
@@ -3629,17 +3622,17 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
             )}
           </div>
 
-          {/* Success — saved */}
+          {/* Success — ready to review */}
           {aiPlanResult && (
             <div style={{ background: "#f0fdf4", border: "1.5px solid #86efac", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#15803d" }}>Treatment plan generated and saved</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#15803d" }}>Treatment plan ready</div>
               </div>
               <div style={{ fontSize: 13, color: "#166534" }}>
-                The AI treatment plan has been added to this patient's Treatment Program tab. You can view, edit, or delete it there.
+                The plan has been filled into the Treatment Program form. Review and edit it there, then click Save.
               </div>
               <button
                 onClick={() => { setAiPlanResult(null); setActiveSection("notes"); }}
@@ -3649,7 +3642,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                   fontFamily: "'Outfit', sans-serif", fontSize: 13.5, fontWeight: 600, cursor: "pointer",
                 }}
               >
-                Go to Treatment Tab →
+                Review &amp; Save →
               </button>
             </div>
           )}
