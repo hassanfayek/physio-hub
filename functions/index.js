@@ -242,37 +242,50 @@ exports.generateTreatmentPlan = onCall(
 
     const systemPrompt = `You are a senior physiotherapist writing a treatment plan for a colleague's clinical records.
 Write in a natural, professional clinical tone — like a detailed handover note from one physio to another.
-Use plain language, not report-style headings in all-caps. Write in flowing paragraphs where appropriate, and use bullet points only for lists of exercises or specific items.
+Use plain language. Write in flowing paragraphs where appropriate, and use bullet points (starting with -) only for exercise lists.
 Be specific and directly reference the patient's actual findings (ROM values, muscle grades, positive tests, pain scores) throughout.
-Do not be generic. Every sentence should be grounded in the data provided.
-
-IMPORTANT: Respond with valid JSON only — no markdown fences, no extra text. Two keys:
-- "goals": a concise, natural-language summary of short-term (2-4 weeks) and long-term (6-12 weeks) goals for this specific patient.
-- "plan": the full treatment plan written as readable clinical notes.`;
+Do not be generic. Every sentence should be grounded in the data provided.`;
 
     const userPrompt = `Based on the following complete clinical data, write a detailed physiotherapy treatment plan:
 
 ${clinicalSummary}
 
-Return a JSON object with:
-1. "goals" — a natural sentence or two covering what we expect to achieve in 2-4 weeks and 6-12 weeks, directly tied to this patient's deficits and presentation.
-2. "plan" — written as clinical notes a colleague would read, covering:
+Format your response EXACTLY like this — no JSON, no code blocks, just plain text with these two markers:
 
-   Manual Therapy — what techniques, which structures, how often, and why based on the findings.
+##GOALS##
+Write 2-3 sentences covering short-term (2-4 weeks) and long-term (6-12 weeks) goals tied to this patient's specific deficits.
 
-   Exercise Program — broken into phases (Phase 1 weeks 1-2, Phase 2 weeks 3-4, Phase 3 weeks 5+). For each phase list the exercises with sets, reps, and frequency. Reference the specific ROM deficits and muscle weakness grades when explaining progression.
+##PLAN##
+Write the full treatment plan covering these sections, each on its own line with a blank line between sections:
 
-   Modalities — only if clinically indicated based on the findings. Explain the rationale.
+Manual Therapy
+[paragraphs describing techniques, structures targeted, frequency, rationale]
 
-   Patient Education — what to tell this patient specifically given their diagnosis, mechanism, and lifestyle.
+Exercise Program
+Phase 1 — Weeks 1-2:
+- exercise name — sets x reps, frequency, brief rationale
+(continue for all exercises in this phase)
 
-   Home Program — 3 to 5 exercises the patient does independently, with sets and reps, chosen based on their deficits.
+Phase 2 — Weeks 3-4:
+- exercise name — sets x reps, frequency
 
-   Progression Criteria — objective markers (ROM degrees, MMT grades, functional tests) that indicate readiness to move to the next phase.
+Phase 3 — Weeks 5+:
+- exercise name — sets x reps, frequency
 
-   Red Flags — specific to this patient's diagnosis and findings, not generic.
+Modalities
+[only if clinically indicated — explain rationale tied to findings]
 
-Write the plan field as a single string. Separate sections with a blank line. Use bullet points (- ) for exercise lists.`;
+Patient Education
+[key points specific to this patient's diagnosis and lifestyle]
+
+Home Program
+- exercise — sets x reps, frequency
+
+Progression Criteria
+[objective ROM values, strength grades, functional tests to progress between phases]
+
+Red Flags
+[specific to this patient's diagnosis and findings]`;
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
@@ -289,17 +302,16 @@ Write the plan field as a single string. Separate sections with a blank line. Us
     let goals = "";
     let plan = rawText.trim();
 
-    // Extract the JSON object robustly — find first { to last }
-    const jsonStart = rawText.indexOf("{");
-    const jsonEnd   = rawText.lastIndexOf("}");
-    if (jsonStart !== -1 && jsonEnd > jsonStart) {
-      try {
-        const parsed = JSON.parse(rawText.slice(jsonStart, jsonEnd + 1));
-        goals = (parsed.goals ?? "").replace(/\\n/g, "\n");
-        plan  = (parsed.plan  ?? plan).replace(/\\n/g, "\n");
-      } catch {
-        // JSON malformed — fall back to raw text
-      }
+    const goalsMarker = "##GOALS##";
+    const planMarker  = "##PLAN##";
+    const goalsIdx = rawText.indexOf(goalsMarker);
+    const planIdx  = rawText.indexOf(planMarker);
+
+    if (goalsIdx !== -1 && planIdx !== -1) {
+      goals = rawText.slice(goalsIdx + goalsMarker.length, planIdx).trim();
+      plan  = rawText.slice(planIdx  + planMarker.length).trim();
+    } else if (planIdx !== -1) {
+      plan = rawText.slice(planIdx + planMarker.length).trim();
     }
 
     return { goals, plan };
