@@ -925,7 +925,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     { id: "joint-assessment",  label: "Body Profile",     physioOnly: patient?.hideBodyProfile !== false },
     { id: "pricing",           label: "Price Sheet",       billingOnly: true },
     { id: "physician-notes",   label: "Physician Notes",   hideFromPatient: true },
-    { id: "ai-plan",           label: "AI Treatment Plan", managerOnly: true },
+    { id: "ai-plan",           label: "AI Treatment Plan", managerOnly: true, hideFromPatient: true },
   ];
   // Filter sections by role:
   //   physioOnly  → hidden from patients and secretaries (clinical data)
@@ -3581,7 +3581,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                     patientId,
                     physioId:      user?.uid ?? "",
                     date:          new Date().toISOString().slice(0, 10),
-                    treatmentType: "AI Treatment Plan",
+                    treatmentType: "Exercise Therapy",
                     notes:         plan,
                     entryMode:     "plan",
                     goals:         goals || "",
