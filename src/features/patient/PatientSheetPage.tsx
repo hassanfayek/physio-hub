@@ -925,6 +925,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     { id: "joint-assessment",  label: "Body Profile",     physioOnly: patient?.hideBodyProfile !== false },
     { id: "pricing",           label: "Price Sheet",       billingOnly: true },
     { id: "physician-notes",   label: "Physician Notes",   hideFromPatient: true },
+    { id: "ai-plan",           label: "AI Treatment Plan", managerOnly: true },
   ];
   // Filter sections by role:
   //   physioOnly  → hidden from patients and secretaries (clinical data)
@@ -972,6 +973,12 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
 
   // ── Session feedback (read-only view from sessionFeedback collection) ──────
   const [sessionFeedbackList, setSessionFeedbackList] = useState<SessionFeedback[]>([]);
+
+  // ── AI Treatment Plan ─────────────────────────────────────────────────────
+  const [aiPlanLoading,  setAiPlanLoading]  = useState(false);
+  const [aiPlanResult,   setAiPlanResult]   = useState<string | null>(null);
+  const [aiPlanError,    setAiPlanError]    = useState<string | null>(null);
+  const [aiPlanNotes,    setAiPlanNotes]    = useState("");
 
   // ── Session history (from appointments collection) ────────────────────────
   const [sessionHistory,     setSessionHistory]     = useState<ApptRecord[]>([]);
@@ -3514,6 +3521,146 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         </>
       )}
     </>
+      )}
+
+      {/* ── AI TREATMENT PLAN ── */}
+      {activeSection === "ai-plan" && (role === "clinic_manager" || role === "physiotherapist") && (
+        <div style={{ fontFamily: "'Outfit', sans-serif" }}>
+          <div className="ps-edit-toolbar">
+            <div>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 500, color: "#1a1a1a" }}>AI Treatment Plan</div>
+              <div style={{ fontSize: 13, color: "#9a9590", marginTop: 2 }}>
+                Generate an evidence-based treatment plan using Claude AI
+              </div>
+            </div>
+          </div>
+
+          {/* Input card */}
+          <div style={{ background: "#fff", border: "1.5px solid #e5e0d8", borderRadius: 16, padding: 24, marginBottom: 20 }}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Diagnosis</div>
+              <div style={{ fontSize: 14, color: "#1a1a1a", background: "#fafaf8", padding: "10px 14px", borderRadius: 10, border: "1px solid #e5e0d8" }}>
+                {diagData.primaryDiagnosis
+                  ? [diagData.primaryDiagnosis, diagData.icdCode ? `(${diagData.icdCode})` : "", diagData.mechanism ? `Mechanism: ${diagData.mechanism}` : ""].filter(Boolean).join(" — ")
+                  : <span style={{ color: "#9a9590" }}>No diagnosis recorded — add it in the Diagnosis tab first</span>
+                }
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Additional Notes for AI (optional)</div>
+              <textarea
+                value={aiPlanNotes}
+                onChange={(e) => setAiPlanNotes(e.target.value)}
+                placeholder="e.g. Patient is elderly, prefers home exercises, has knee replacement, pain level 7/10..."
+                rows={3}
+                style={{
+                  width: "100%", boxSizing: "border-box", padding: "10px 14px",
+                  border: "1.5px solid #e5e0d8", borderRadius: 10, fontSize: 13,
+                  fontFamily: "'Outfit', sans-serif", resize: "vertical", outline: "none",
+                  color: "#1a1a1a", background: "#fff",
+                }}
+              />
+            </div>
+
+            <button
+              disabled={aiPlanLoading}
+              onClick={async () => {
+                setAiPlanLoading(true);
+                setAiPlanError(null);
+                setAiPlanResult(null);
+                try {
+                  const { getFunctions, httpsCallable } = await import("firebase/functions");
+                  const firebaseApp = await import("../../firebase");
+                  const functions = getFunctions(firebaseApp.default);
+                  const generateTreatmentPlan = httpsCallable(functions, "generateTreatmentPlan");
+
+                  const diagParts: string[] = [];
+                  if (diagData.primaryDiagnosis) diagParts.push(diagData.primaryDiagnosis);
+                  if (diagData.icdCode) diagParts.push(`ICD-10: ${diagData.icdCode}`);
+                  if (diagData.mechanism) diagParts.push(`Mechanism: ${diagData.mechanism}`);
+                  if (diagData.contraindications) diagParts.push(`Contraindications: ${diagData.contraindications}`);
+                  if (diagData.surgeryDate) diagParts.push(`Surgery date: ${diagData.surgeryDate}`);
+
+                  const result = await generateTreatmentPlan({
+                    patientId,
+                    diagnosis: diagParts.join(", ") || "Not specified",
+                    patientAge: patient?.age ?? undefined,
+                    patientGender: undefined,
+                    notes: aiPlanNotes.trim() || undefined,
+                  });
+
+                  setAiPlanResult((result.data as { plan: string }).plan);
+                } catch (err: unknown) {
+                  setAiPlanError(err instanceof Error ? err.message : "Failed to generate plan. Try again.");
+                } finally {
+                  setAiPlanLoading(false);
+                }
+              }}
+              style={{
+                padding: "10px 24px", borderRadius: 10, border: "none",
+                background: aiPlanLoading ? "#B3DEF0" : "#2E8BC0", color: "#fff",
+                fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 600,
+                cursor: aiPlanLoading ? "not-allowed" : "pointer", transition: "background 0.15s",
+                display: "flex", alignItems: "center", gap: 8,
+              }}
+            >
+              {aiPlanLoading ? (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite" }}>
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                  </svg>
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+                  </svg>
+                  Generate Treatment Plan
+                </>
+              )}
+            </button>
+
+            {aiPlanError && (
+              <div style={{ marginTop: 12, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, fontSize: 13, color: "#b91c1c" }}>
+                {aiPlanError}
+              </div>
+            )}
+          </div>
+
+          {/* Result */}
+          {aiPlanResult && (
+            <div style={{ background: "#fff", border: "1.5px solid #B3DEF0", borderRadius: 16, padding: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#2E8BC0" }}>
+                  Generated Plan
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(aiPlanResult);
+                  }}
+                  style={{
+                    padding: "5px 14px", borderRadius: 8, border: "1.5px solid #B3DEF0",
+                    background: "#EAF5FC", color: "#2E8BC0", fontFamily: "'Outfit', sans-serif",
+                    fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  Copy
+                </button>
+              </div>
+              <pre style={{
+                margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word",
+                fontSize: 13.5, lineHeight: 1.7, color: "#1a1a1a",
+                fontFamily: "'Outfit', sans-serif",
+              }}>
+                {aiPlanResult}
+              </pre>
+            </div>
+          )}
+
+          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        </div>
       )}
 
       {/* ── Diagnosis Template Picker modal ── */}
