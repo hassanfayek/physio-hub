@@ -281,23 +281,25 @@ Write the plan field as a single string. Separate sections with a blank line. Us
       messages: [{ role: "user", content: userPrompt }],
     });
 
-    const raw = response.content
+    const rawText = response.content
       .filter((b) => b.type === "text")
       .map((b) => b.text)
-      .join("")
-      .trim()
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```$/, "");
+      .join("");
 
     let goals = "";
-    let plan = raw;
+    let plan = rawText.trim();
 
-    try {
-      const parsed = JSON.parse(raw);
-      goals = parsed.goals ?? "";
-      plan  = parsed.plan  ?? raw;
-    } catch {
-      // Claude didn't return valid JSON — fall back to raw text as the plan
+    // Extract the JSON object robustly — find first { to last }
+    const jsonStart = rawText.indexOf("{");
+    const jsonEnd   = rawText.lastIndexOf("}");
+    if (jsonStart !== -1 && jsonEnd > jsonStart) {
+      try {
+        const parsed = JSON.parse(rawText.slice(jsonStart, jsonEnd + 1));
+        goals = (parsed.goals ?? "").replace(/\\n/g, "\n");
+        plan  = (parsed.plan  ?? plan).replace(/\\n/g, "\n");
+      } catch {
+        // JSON malformed — fall back to raw text
+      }
     }
 
     return { goals, plan };
