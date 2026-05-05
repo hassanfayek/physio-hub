@@ -1681,8 +1681,9 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
           font-size: 14px; color: #1a1a1a; line-height: 1.6;
           width: 100%; padding: 11px 14px; border-radius: 10px;
           border: 1.5px solid #e5e0d8; background: #fafaf8;
-          outline: none; resize: vertical; min-height: 110px;
+          outline: none; resize: vertical; min-height: 200px;
           transition: border-color 0.15s; margin-bottom: 14px;
+          box-sizing: border-box;
         }
         .ps-sn-textarea:focus {
           border-color: #2E8BC0; background: #fff;
@@ -1731,7 +1732,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
           background: #D6EEF8; padding: 2px 10px; border-radius: 100px;
         }
         .ps-sn-card-date { font-size: 12px; color: #9a9590; margin-left: auto; }
-        .ps-sn-card-notes { font-size: 14px; color: #5a5550; line-height: 1.6; }
+        .ps-sn-card-notes { font-size: 14px; color: #5a5550; line-height: 1.75; white-space: pre-wrap; word-break: break-word; }
         .ps-sn-card-actions {
           display: flex; gap: 6px; margin-top: 10px; padding-top: 10px;
           border-top: 1px solid #f5f3ef;

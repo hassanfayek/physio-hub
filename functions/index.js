@@ -240,29 +240,39 @@ exports.generateTreatmentPlan = onCall(
 
     const client = new Anthropic({ apiKey: CLAUDE_API_KEY.value() });
 
-    const systemPrompt = `You are an expert physiotherapy clinical assistant helping experienced physiotherapists create evidence-based, highly personalised treatment plans.
-You will receive a full clinical picture: diagnosis, subjective and objective assessment, body profile with joint ROM, muscle strength, special tests, and balance data.
-Use ALL of this information to produce a specific, practical, and clinically sound treatment plan.
-Do not make generic recommendations — tailor everything to the exact deficits, findings, and context provided.
+    const systemPrompt = `You are a senior physiotherapist writing a treatment plan for a colleague's clinical records.
+Write in a natural, professional clinical tone — like a detailed handover note from one physio to another.
+Use plain language, not report-style headings in all-caps. Write in flowing paragraphs where appropriate, and use bullet points only for lists of exercises or specific items.
+Be specific and directly reference the patient's actual findings (ROM values, muscle grades, positive tests, pain scores) throughout.
+Do not be generic. Every sentence should be grounded in the data provided.
 
 IMPORTANT: Respond with valid JSON only — no markdown fences, no extra text. Two keys:
-- "goals": a concise string with short-term (2-4 weeks) and long-term (6-12 weeks) goals tailored to this patient.
-- "plan": the full treatment plan as a plain string.`;
+- "goals": a concise, natural-language summary of short-term (2-4 weeks) and long-term (6-12 weeks) goals for this specific patient.
+- "plan": the full treatment plan written as readable clinical notes.`;
 
-    const userPrompt = `Based on the following complete clinical data, create a detailed physiotherapy treatment plan:
+    const userPrompt = `Based on the following complete clinical data, write a detailed physiotherapy treatment plan:
 
 ${clinicalSummary}
 
 Return a JSON object with:
-1. "goals" — one concise paragraph covering short-term (2-4 weeks) and long-term (6-12 weeks) goals tailored to this patient's specific deficits.
-2. "plan" — the full treatment plan as plain text covering:
-   MANUAL THERAPY: specific techniques, target structures, frequency, rationale.
-   EXERCISE PROGRAM: Phase 1 (Weeks 1-2), Phase 2 (Weeks 3-4), Phase 3 (Weeks 5+) with exercises, sets, reps, frequency. Address specific ROM deficits and muscle weakness grades.
-   MODALITIES: if applicable — with rationale tied to the findings.
-   PATIENT EDUCATION: key points specific to this patient.
-   HOME EXERCISE PROGRAM: 3-5 exercises matched to their deficits.
-   PROGRESSION CRITERIA: objective ROM values, strength grades, and functional tests to progress between phases.
-   RED FLAGS: what should trigger re-evaluation or referral based on this diagnosis.`;
+1. "goals" — a natural sentence or two covering what we expect to achieve in 2-4 weeks and 6-12 weeks, directly tied to this patient's deficits and presentation.
+2. "plan" — written as clinical notes a colleague would read, covering:
+
+   Manual Therapy — what techniques, which structures, how often, and why based on the findings.
+
+   Exercise Program — broken into phases (Phase 1 weeks 1-2, Phase 2 weeks 3-4, Phase 3 weeks 5+). For each phase list the exercises with sets, reps, and frequency. Reference the specific ROM deficits and muscle weakness grades when explaining progression.
+
+   Modalities — only if clinically indicated based on the findings. Explain the rationale.
+
+   Patient Education — what to tell this patient specifically given their diagnosis, mechanism, and lifestyle.
+
+   Home Program — 3 to 5 exercises the patient does independently, with sets and reps, chosen based on their deficits.
+
+   Progression Criteria — objective markers (ROM degrees, MMT grades, functional tests) that indicate readiness to move to the next phase.
+
+   Red Flags — specific to this patient's diagnosis and findings, not generic.
+
+Write the plan field as a single string. Separate sections with a blank line. Use bullet points (- ) for exercise lists.`;
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
@@ -275,7 +285,9 @@ Return a JSON object with:
       .filter((b) => b.type === "text")
       .map((b) => b.text)
       .join("")
-      .trim();
+      .trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/, "");
 
     let goals = "";
     let plan = raw;
