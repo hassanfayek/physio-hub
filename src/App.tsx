@@ -13,6 +13,22 @@ const PhysioDashboard    = lazy(() => import("./features/physio/PhysioDashboard"
 const PhysicianDashboard = lazy(() => import("./features/physician/PhysicianDashboard"));
 const PartnerDashboard   = lazy(() => import("./features/partner/PartnerDashboard"));
 
+function AppLoader() {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center", background: "#fafaf8",
+    }}>
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#2E8BC0"
+        strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+        style={{ animation: "spin 0.9s linear infinite" }}>
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+      </svg>
+      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+}
+
 // ─── Role → destination helper ────────────────────────────────────────────────
 
 function roleDestination(role: string): string {
@@ -26,7 +42,7 @@ function roleDestination(role: string): string {
 
 function PublicRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
-  if (loading) return null;
+  if (loading) return <AppLoader />;
   if (user)    return <Navigate to={roleDestination(user.role)} replace />;
   return <>{children}</>;
 }
@@ -41,7 +57,7 @@ type PortalKind = "physio" | "patient" | "physician" | "partner";
 
 function ProtectedRoute({ children, portal }: { children: ReactNode; portal: PortalKind }) {
   const { user, loading } = useAuth();
-  if (loading) return null;
+  if (loading) return <AppLoader />;
   if (!user)   return <Navigate to="/login" replace />;
 
   const role = user.role;
@@ -59,7 +75,7 @@ function ProtectedRoute({ children, portal }: { children: ReactNode; portal: Por
 
 function AppRoutes() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<AppLoader />}>
       <Routes>
         <Route path="/login"    element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
