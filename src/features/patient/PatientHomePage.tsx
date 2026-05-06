@@ -68,7 +68,10 @@ const BUCKET_ICON: Record<ProgramBucket, string> = {
 function isoDate(offsetDays = 0): string {
   const d = new Date();
   d.setDate(d.getDate() - offsetDays);
-  return d.toISOString().slice(0, 10);
+  const y  = d.getFullYear();
+  const m  = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
 }
 
 function getGreeting(): string {
@@ -120,8 +123,11 @@ function buildWeek(centerDate: string): { iso: string; dow: number; day: number 
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(center);
     d.setDate(center.getDate() - 3 + i);
+    const y  = d.getFullYear();
+    const m  = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
     return {
-      iso: d.toISOString().slice(0, 10),
+      iso: `${y}-${m}-${dd}`,
       dow: d.getDay(),
       day: d.getDate(),
     };

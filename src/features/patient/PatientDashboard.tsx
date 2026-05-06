@@ -475,7 +475,7 @@ export default function PatientDashboard() {
         {/* ── Bottom nav bar — mobile only ── */}
         <nav className="pd2-bottom-nav">
           {TABS.map((tab) => {
-            const isActive = activeTab === tab.id;
+            const isActive = activeTab === tab.id && !(tab.id === "sheet" && sheetSection === "session-history");
             return (
               <button
                 key={tab.id}
@@ -487,6 +487,13 @@ export default function PatientDashboard() {
               </button>
             );
           })}
+          <button
+            className={`pd2-bn-item${activeTab === "sheet" && sheetSection === "session-history" ? " active" : ""}`}
+            onClick={() => { setActiveTab("sheet"); setSheetSection("session-history"); }}
+          >
+            <div className="pd2-bn-icon"><History size={18} strokeWidth={1.8} color="currentColor" /></div>
+            <span className="pd2-bn-label">History</span>
+          </button>
         </nav>
       </div>
 
