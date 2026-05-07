@@ -1,7 +1,7 @@
 // FILE: src/features/physio/PatientsTab.tsx
 
-import { useState, useEffect, useRef } from "react";
-import { Check, Trash2, Search, X, Plus, AlertCircle, UserPlus } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { Check, Trash2, Search, X, Plus, AlertCircle, UserPlus, Filter } from "lucide-react";
 import AddPatientModal from "../../components/AddPatientModal";
 import {
   subscribeToPhysioPatients,
@@ -155,6 +155,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
   const [error,          setError]          = useState<string | null>(null);
   const [toastMsg,       setToastMsg]       = useState<string | null>(null);
   const [searchQuery,    setSearchQuery]    = useState("");
+  const [referralFilter, setReferralFilter] = useState("");
 
   const canAddPatient = isManager || isSenior || isSecretary;
 
@@ -194,15 +195,28 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
     return () => unsubscribe();
   }, []);
 
-  // ── Real-time search filter ───────────────────────────────────────────────
+  // ── Unique referral sources for filter dropdown ───────────────────────────
+  const referralOptions = useMemo(() => {
+    const set = new Set<string>();
+    patients.forEach((p) => { if (p.referredBy) set.add(p.referredBy.trim()); });
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [patients]);
+
+  // ── Real-time search + referral filter ───────────────────────────────────
   const filteredPatients = patients.filter((p) => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      p.firstName?.toLowerCase().includes(q) ||
-      p.lastName?.toLowerCase().includes(q)  ||
-      p.email?.toLowerCase().includes(q)
-    );
+    if (q) {
+      const matches =
+        p.firstName?.toLowerCase().includes(q) ||
+        p.lastName?.toLowerCase().includes(q)  ||
+        p.email?.toLowerCase().includes(q);
+      if (!matches) return false;
+    }
+    if (referralFilter) {
+      const ref = (p.referredBy ?? "").trim().toLowerCase();
+      if (ref !== referralFilter.toLowerCase()) return false;
+    }
+    return true;
   });
 
 
@@ -258,9 +272,12 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
         }
         .pt-btn-secondary:hover { background: #ede9fe; border-color: #a78bfa; }
 
-        /* Search bar */
+        /* Search + filter row */
+        .pt-filter-row {
+          display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;
+        }
         .pt-search-wrap {
-          position: relative; margin-bottom: 14px;
+          position: relative; flex: 1; min-width: 180px;
         }
         .pt-search-icon {
           position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
@@ -282,6 +299,31 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
           transition: color 0.15s;
         }
         .pt-search-clear:hover { color: #5a5550; }
+
+        .pt-referral-select-wrap {
+          position: relative; display: flex; align-items: center;
+        }
+        .pt-referral-icon {
+          position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+          color: #c0bbb4; pointer-events: none;
+        }
+        .pt-referral-select {
+          font-family: 'Outfit', sans-serif; font-size: 14px; color: #1a1a1a;
+          padding: 10px 36px 10px 34px; border-radius: 12px;
+          border: 1.5px solid #e5e0d8; background: #fff; outline: none;
+          cursor: pointer; appearance: none; -webkit-appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a9590' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat; background-position: right 10px center;
+          transition: border-color 0.15s, box-shadow 0.15s;
+          white-space: nowrap; min-width: 160px;
+        }
+        .pt-referral-select:focus { border-color: #2d6a4f; box-shadow: 0 0 0 3px rgba(45,106,79,0.08); }
+        .pt-referral-select.active { border-color: #2d6a4f; background-color: #f0fdf4; color: #2d6a4f; }
+        .pt-referral-clear {
+          position: absolute; right: 24px; top: 50%; transform: translateY(-50%);
+          background: none; border: none; cursor: pointer; color: #2d6a4f;
+          display: flex; align-items: center; padding: 2px; pointer-events: all;
+        }
 
         /* Stats */
         .pt-stats {
@@ -543,23 +585,48 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
           </div>
         )}
 
-        {/* Search bar */}
+        {/* Search + referral filter row */}
         {!loading && patients.length > 0 && (
-          <div className="pt-search-wrap">
-            <span className="pt-search-icon">
-              <Search size={16} strokeWidth={2} />
-            </span>
-            <input
-              type="text"
-              className="pt-search-input"
-              placeholder="Search patients by name or email..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button className="pt-search-clear" onClick={() => setSearchQuery("")} aria-label="Clear search">
-                <X size={14} strokeWidth={2.5} />
-              </button>
+          <div className="pt-filter-row">
+            <div className="pt-search-wrap">
+              <span className="pt-search-icon">
+                <Search size={16} strokeWidth={2} />
+              </span>
+              <input
+                type="text"
+                className="pt-search-input"
+                placeholder="Search patients by name or email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button className="pt-search-clear" onClick={() => setSearchQuery("")} aria-label="Clear search">
+                  <X size={14} strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
+
+            {referralOptions.length > 0 && (
+              <div className="pt-referral-select-wrap">
+                <span className="pt-referral-icon">
+                  <Filter size={14} strokeWidth={2} />
+                </span>
+                <select
+                  className={`pt-referral-select${referralFilter ? " active" : ""}`}
+                  value={referralFilter}
+                  onChange={(e) => setReferralFilter(e.target.value)}
+                >
+                  <option value="">All Referrals</option>
+                  {referralOptions.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+                {referralFilter && (
+                  <button className="pt-referral-clear" onClick={() => setReferralFilter("")} aria-label="Clear referral filter">
+                    <X size={12} strokeWidth={2.5} />
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
