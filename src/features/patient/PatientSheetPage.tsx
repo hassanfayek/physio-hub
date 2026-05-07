@@ -2248,22 +2248,6 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                 <div className={`ps-profile-val ${!extProfile.address ? "empty" : ""}`}>{extProfile.address || "Not recorded"}</div>
               </div>
 
-              {/* Emergency contact — all physios */}
-              <div className="ps-profile-card full" style={{ borderTop: "2px solid #f5f3ef" }}>
-                <div className="ps-profile-key" style={{ marginBottom: 10 }}>Emergency Contact</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div>
-                    <div className="ps-profile-key">Name</div>
-                    <div className={`ps-profile-val ${!extProfile.emergencyContact ? "empty" : ""}`}>{extProfile.emergencyContact || "—"}</div>
-                  </div>
-                  {isManager && (
-                    <div>
-                      <div className="ps-profile-key">Phone</div>
-                      <div className={`ps-profile-val ${!extProfile.emergencyPhone ? "empty" : ""}`}>{extProfile.emergencyPhone || "—"}</div>
-                    </div>
-                  )}
-                </div>
-              </div>
 
               {/* Assigned Team */}
               <div className="ps-profile-card full">
@@ -2372,20 +2356,6 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                   onChange={(e) => setExtDraft({ ...extDraft, address: e.target.value })}
                   placeholder="Street, City, Country" style={{ minHeight: 70 }} />
               </div>
-              <div className="ps-field-row-2">
-                <div className="ps-field-group" style={{ marginBottom: 0 }}>
-                  <label className="ps-field-label">Emergency Contact Name</label>
-                  <input className="ps-field-input" value={extDraft.emergencyContact}
-                    onChange={(e) => setExtDraft({ ...extDraft, emergencyContact: e.target.value })}
-                    placeholder="Full name" />
-                </div>
-                <div className="ps-field-group" style={{ marginBottom: 0 }}>
-                  <label className="ps-field-label">Emergency Contact Phone</label>
-                  <input className="ps-field-input" value={extDraft.emergencyPhone}
-                    onChange={(e) => setExtDraft({ ...extDraft, emergencyPhone: e.target.value })}
-                    placeholder="+20 100 000 0000" />
-                </div>
-              </div>
             </div>
           )}
         </>
@@ -2444,14 +2414,6 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                     <div className="ps-diag-label">Primary Diagnosis</div>
                     <div className="ps-diag-value" style={{ fontSize: 16, fontWeight: 600 }}>
                       {diagData.primaryDiagnosis || <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>Not recorded</span>}
-                    </div>
-                  </div>
-                  <div className="ps-diag-card">
-                    <div className="ps-diag-label">ICD-10 Code</div>
-                    <div className="ps-diag-value">
-                      {diagData.icdCode
-                        ? <span className="ps-icd-badge">{diagData.icdCode}</span>
-                        : <span style={{ color: "#c0bbb4", fontStyle: "italic" }}>—</span>}
                     </div>
                   </div>
                   <div className="ps-diag-card">
@@ -2564,12 +2526,6 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                   placeholder="e.g. Right ACL Rupture — Grade III" />
               </div>
               <div className="ps-field-row-2">
-                <div className="ps-field-group" style={{ marginBottom: 0 }}>
-                  <label className="ps-field-label">ICD-10 Code</label>
-                  <input className="ps-field-input" value={diagDraft.icdCode}
-                    onChange={(e) => setDiagDraft({ ...diagDraft, icdCode: e.target.value })}
-                    placeholder="e.g. S83.511A" />
-                </div>
                 <div className="ps-field-group" style={{ marginBottom: 0 }}>
                   <label className="ps-field-label">Onset Date</label>
                   <input className="ps-field-input" value={diagDraft.onsetDate}
