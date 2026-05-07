@@ -433,6 +433,25 @@ export async function updateAppointmentStatus(
 ): Promise<{ error?: string }> {
   try {
     await updateDoc(doc(db, "appointments", appointmentId), { status });
+    const snap = await getDoc(doc(db, "appointments", appointmentId));
+    if (snap.exists()) {
+      const a = docToAppointment(snap.id, snap.data() as Record<string, unknown>);
+      const statusLabels: Record<string, string> = {
+        completed:  "marked as completed",
+        cancelled:  "cancelled",
+        "no-show":  "marked as no-show",
+        confirmed:  "confirmed",
+        scheduled:  "rescheduled",
+      };
+      const label = statusLabels[status] ?? status;
+      notifyStaff({
+        type:      "appointment_booked",
+        title:     `Appointment ${label}`,
+        body:      `${a.patientName}'s appointment on ${a.date} at ${fmtHour12(a.hour)} was ${label}.`,
+        sourceId:  `appt_status_${appointmentId}_${status}`,
+        patientId: a.patientId,
+      }, { physioId: a.physioId });
+    }
     return {};
   } catch (err) {
     return { error: parseError(err) };
