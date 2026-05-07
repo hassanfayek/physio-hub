@@ -75,8 +75,15 @@ export async function sendNotification(
   try {
     if (notif.sourceId) {
       const docRef = doc(db, "notifications", userId, "items", notif.sourceId);
-      const existing = await getDoc(docRef);
-      if (existing.exists()) return;
+      // Read to deduplicate — but we may not have permission to read another
+      // user's subcollection (e.g. secretary sending to manager). If the read
+      // fails, fall through and write anyway.
+      try {
+        const existing = await getDoc(docRef);
+        if (existing.exists()) return;
+      } catch {
+        // Permission denied on read — proceed to write
+      }
       await setDoc(docRef, { ...notif, read: false, createdAt: serverTimestamp() });
     } else {
       await addDoc(itemsCol(userId), { ...notif, read: false, createdAt: serverTimestamp() });
