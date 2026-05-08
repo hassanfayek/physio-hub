@@ -1,49 +1,65 @@
 // src/App.tsx
+// SaaS routing — landing page at /, clinic portals under /c/:slug/
 
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { type ReactNode, lazy, Suspense } from "react";
 
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { LanguageProvider } from "./contexts/LanguageContext";
-import LoginPage    from "./features/auth/LoginPage";
-import RegisterPage from "./features/auth/RegisterPage";
+import LoginPage              from "./features/auth/LoginPage";
+import LandingPage            from "./features/landing/LandingPage";
+import ClinicRegistrationPage from "./features/auth/ClinicRegistrationPage";
+import ClinicSetupPage        from "./features/auth/ClinicSetupPage";
+import logo from "./assets/physio-logo.svg";
 
-const PatientDashboard   = lazy(() => import("./features/patient/PatientDashboard"));
-const PhysioDashboard    = lazy(() => import("./features/physio/PhysioDashboard"));
-const PhysicianDashboard = lazy(() => import("./features/physician/PhysicianDashboard"));
-const PartnerDashboard   = lazy(() => import("./features/partner/PartnerDashboard"));
+const PatientDashboard    = lazy(() => import("./features/patient/PatientDashboard"));
+const PhysioDashboard     = lazy(() => import("./features/physio/PhysioDashboard"));
+const PhysicianDashboard  = lazy(() => import("./features/physician/PhysicianDashboard"));
+const PartnerDashboard    = lazy(() => import("./features/partner/PartnerDashboard"));
+const SuperAdminDashboard = lazy(() => import("./features/admin/SuperAdminDashboard"));
 
-function AppLoader() {
+// ─── Loading screen ───────────────────────────────────────────────────────────
+
+function LoadingScreen() {
   return (
-    <div style={{
-      position: "fixed", inset: 0, display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center", background: "#fafaf8",
-    }}>
-      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#2E8BC0"
-        strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-        style={{ animation: "spin 0.9s linear infinite" }}>
-        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-      </svg>
-      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 0, background: "#ffffff", fontFamily: "'Outfit', sans-serif" }}>
+      <style>{`
+        @keyframes ls-fade-in  { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes ls-bar      { 0%{width:0%} 60%{width:75%} 85%{width:88%} 100%{width:95%} }
+        @keyframes ls-dot      { 0%,80%,100%{transform:scale(0.6);opacity:0.3} 40%{transform:scale(1);opacity:1} }
+        .ls-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; animation:ls-fade-in 0.5s ease both; }
+        .ls-logo { height:64px; width:auto; margin-bottom:40px; filter:drop-shadow(0 4px 16px rgba(46,139,192,0.15)); }
+        .ls-bar-track { width:180px; height:3px; background:#f0ede8; border-radius:100px; overflow:hidden; margin-bottom:28px; }
+        .ls-bar-fill { height:100%; border-radius:100px; background:linear-gradient(90deg,#2E8BC0,#5BC0BE); animation:ls-bar 2.4s cubic-bezier(0.4,0,0.2,1) both; }
+        .ls-dots { display:flex; gap:6px; align-items:center; }
+        .ls-dot { width:6px; height:6px; border-radius:50%; background:#2E8BC0; animation:ls-dot 1.2s ease-in-out infinite; }
+        .ls-dot:nth-child(2){animation-delay:0.2s} .ls-dot:nth-child(3){animation-delay:0.4s}
+      `}</style>
+      <div className="ls-wrap">
+        <img src={logo} alt="Physio+ Hub" className="ls-logo" />
+        <div className="ls-bar-track"><div className="ls-bar-fill" /></div>
+        <div className="ls-dots"><div className="ls-dot" /><div className="ls-dot" /><div className="ls-dot" /></div>
+      </div>
     </div>
   );
 }
 
 // ─── Role → destination helper ────────────────────────────────────────────────
 
-function roleDestination(role: string): string {
-  if (role === "patient")   return "/patient";
-  if (role === "physician") return "/physician";
-  if (role === "partner")   return "/partner";
-  return "/physio";
+function roleDestination(role: string, clinicSlug: string): string {
+  if (role === "superadmin")                                    return "/admin";
+  if (role === "patient")                                       return `/c/${clinicSlug}/patient`;
+  if (role === "physician")                                     return `/c/${clinicSlug}/physician`;
+  if (role === "partner")                                       return `/c/${clinicSlug}/partner`;
+  return `/c/${clinicSlug}/physio`;
 }
 
 // ─── Public route — redirects logged-in users to their portal ─────────────────
 
 function PublicRoute({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
-  if (loading) return <AppLoader />;
-  if (user)    return <Navigate to={roleDestination(user.role)} replace />;
+  const { user, loading, clinicSlug } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (user)    return <Navigate to={roleDestination(user.role, clinicSlug)} replace />;
   return <>{children}</>;
 }
 
@@ -53,21 +69,36 @@ const PHYSIO_ROLES    = new Set(["physiotherapist", "clinic_manager", "secretary
 const PHYSICIAN_ROLES = new Set(["physician"]);
 const PARTNER_ROLES   = new Set(["partner"]);
 
-type PortalKind = "physio" | "patient" | "physician" | "partner";
+type PortalKind = "physio" | "patient" | "physician" | "partner" | "admin";
 
 function ProtectedRoute({ children, portal }: { children: ReactNode; portal: PortalKind }) {
-  const { user, loading } = useAuth();
-  if (loading) return <AppLoader />;
+  const { user, loading, clinicId, clinicSlug } = useAuth();
+  if (loading) return <LoadingScreen />;
   if (!user)   return <Navigate to="/login" replace />;
+
+  // Existing manager with no clinicId yet → one-time setup wizard
+  if (!clinicId && user.role !== "superadmin" && user.role !== "patient") {
+    return <Navigate to="/setup" replace />;
+  }
 
   const role = user.role;
   const allowed =
-    portal === "physio"    ? PHYSIO_ROLES.has(role)    :
-    portal === "physician" ? PHYSICIAN_ROLES.has(role) :
-    portal === "partner"   ? PARTNER_ROLES.has(role)   :
+    portal === "admin"     ? role === "superadmin"         :
+    portal === "physio"    ? PHYSIO_ROLES.has(role)        :
+    portal === "physician" ? PHYSICIAN_ROLES.has(role)     :
+    portal === "partner"   ? PARTNER_ROLES.has(role)       :
     role === "patient";
 
-  if (!allowed) return <Navigate to={roleDestination(role)} replace />;
+  if (!allowed) return <Navigate to={roleDestination(role, clinicSlug)} replace />;
+
+  return <SlugGuard clinicSlug={clinicSlug}>{children}</SlugGuard>;
+}
+
+function SlugGuard({ clinicSlug, children }: { clinicSlug: string; children: ReactNode }) {
+  const { slug } = useParams<{ slug?: string }>();
+  if (slug && clinicSlug && slug !== clinicSlug) {
+    return <Navigate to={`/c/${clinicSlug}/physio`} replace />;
+  }
   return <>{children}</>;
 }
 
@@ -75,28 +106,64 @@ function ProtectedRoute({ children, portal }: { children: ReactNode; portal: Por
 
 function AppRoutes() {
   return (
-    <Suspense fallback={<AppLoader />}>
+    <Suspense fallback={<LoadingScreen />}>
       <Routes>
-        <Route path="/login"    element={<PublicRoute><LoginPage /></PublicRoute>} />
-        <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+        {/* Public */}
+        <Route path="/"       element={<PublicRoute><LandingPage /></PublicRoute>} />
+        <Route path="/login"  element={<PublicRoute><LoginPage /></PublicRoute>} />
+        <Route path="/signup" element={<PublicRoute><ClinicRegistrationPage /></PublicRoute>} />
 
-        <Route path="/physio" element={
-          <ProtectedRoute portal="physio"><PhysioDashboard /></ProtectedRoute>
-        } />
-        <Route path="/patient" element={
-          <ProtectedRoute portal="patient"><PatientDashboard /></ProtectedRoute>
-        } />
-        <Route path="/physician" element={
-          <ProtectedRoute portal="physician"><PhysicianDashboard /></ProtectedRoute>
-        } />
-        <Route path="/partner" element={
-          <ProtectedRoute portal="partner"><PartnerDashboard /></ProtectedRoute>
+        {/* Setup wizard for pre-existing managers without a clinicId */}
+        <Route path="/setup" element={<ClinicSetupPage />} />
+
+        {/* Super admin */}
+        <Route path="/admin" element={
+          <ProtectedRoute portal="admin">
+            <SuperAdminDashboard />
+          </ProtectedRoute>
         } />
 
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* Clinic portals — scoped under /c/:slug/ */}
+        <Route path="/c/:slug/physio" element={
+          <ProtectedRoute portal="physio">
+            <PhysioDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/c/:slug/patient" element={
+          <ProtectedRoute portal="patient">
+            <PatientDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/c/:slug/physician" element={
+          <ProtectedRoute portal="physician">
+            <PhysicianDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/c/:slug/partner" element={
+          <ProtectedRoute portal="partner">
+            <PartnerDashboard />
+          </ProtectedRoute>
+        } />
+
+        {/* Legacy redirects — old bookmarks */}
+        <Route path="/physio"    element={<LegacyRedirect to="physio"    />} />
+        <Route path="/patient"   element={<LegacyRedirect to="patient"   />} />
+        <Route path="/physician" element={<LegacyRedirect to="physician" />} />
+        <Route path="/partner"   element={<LegacyRedirect to="partner"   />} />
+        <Route path="/register"  element={<Navigate to="/signup" replace />} />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
   );
+}
+
+function LegacyRedirect({ to }: { to: string }) {
+  const { user, loading, clinicSlug } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user)   return <Navigate to="/login" replace />;
+  return <Navigate to={`/c/${clinicSlug || "_"}/${to}`} replace />;
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────

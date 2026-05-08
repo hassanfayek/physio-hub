@@ -56,15 +56,21 @@ import { getFirestore } from "firebase/firestore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type UserRole = "patient" | "physiotherapist" | "clinic_manager" | "secretary" | "physician" | "partner";
+export type UserRole = "patient" | "physiotherapist" | "clinic_manager" | "secretary" | "physician" | "partner" | "superadmin";
 
 export interface UserProfile {
   uid:         string;
   email:       string;
   role:        UserRole;
   displayName: string;
+  clinicId:    string;
+  clinicSlug:  string;
   createdAt:   Date | null;
   updatedAt:   Date | null;
+}
+
+export interface SuperAdminProfile extends UserProfile {
+  role: "superadmin";
 }
 
 export interface PatientProfile extends UserProfile {
@@ -400,7 +406,7 @@ const ROLE_COLLECTION: Partial<Record<UserRole, string>> = {
 
 export async function loadUserProfile(
   user: User
-): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | null> {
+): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | SuperAdminProfile | null> {
   const userDocRef = doc(db, "users", user.uid);
   const userSnap   = await getDocWithRetry(userDocRef);
 
@@ -414,9 +420,16 @@ export async function loadUserProfile(
     email:       userData.email,
     role,
     displayName: userData.displayName,
+    clinicId:    userData.clinicId   ?? "",
+    clinicSlug:  userData.clinicSlug ?? "",
     createdAt:   userData.createdAt?.toDate() ?? null,
     updatedAt:   userData.updatedAt?.toDate() ?? null,
   };
+
+  // Superadmin has no role-specific subcollection
+  if (role === "superadmin") {
+    return { ...base, role: "superadmin" } as SuperAdminProfile;
+  }
 
   const collection = ROLE_COLLECTION[role];
   if (!collection) return null;
