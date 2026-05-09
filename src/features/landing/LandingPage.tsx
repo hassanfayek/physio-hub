@@ -202,17 +202,53 @@ export default function LandingPage() {
         .lp-plan-card.popular .lp-plan-cta { background: #2E8BC0; }
         .lp-plan-card.popular .lp-plan-cta:hover { background: #0C3C60; }
 
-        .lp-footer {
-          background: #0C3C60; color: rgba(255,255,255,0.7);
-          padding: 40px; text-align: center; font-size: 14px;
+        .lp-contact-section {
+          padding: 80px 40px; text-align: center;
+          background: linear-gradient(135deg, #0C3C60 0%, #1a5a8a 100%);
+          color: #fff;
         }
-        .lp-footer strong { color: #fff; }
+        .lp-contact-label {
+          font-size: 11px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.12em; color: #B3DEF0; margin-bottom: 12px;
+        }
+        .lp-contact-title {
+          font-size: clamp(28px, 3vw, 40px); font-weight: 700;
+          color: #fff; margin-bottom: 14px; line-height: 1.2;
+        }
+        .lp-contact-sub {
+          font-size: 17px; color: rgba(255,255,255,0.75);
+          max-width: 500px; margin: 0 auto 36px; line-height: 1.6;
+        }
+        .lp-contact-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .lp-btn-contact-primary {
+          padding: 14px 32px; border-radius: 12px; border: none;
+          background: #fff; color: #0C3C60;
+          font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 700;
+          cursor: pointer; transition: all 0.2s;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        .lp-btn-contact-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,0.2); }
+        .lp-btn-contact-ghost {
+          padding: 14px 32px; border-radius: 12px;
+          border: 1.5px solid rgba(255,255,255,0.4); background: transparent;
+          color: #fff; font-family: 'Outfit', sans-serif;
+          font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+          text-decoration: none; display: inline-flex; align-items: center;
+        }
+        .lp-btn-contact-ghost:hover { border-color: #fff; background: rgba(255,255,255,0.08); }
+
+        .lp-footer {
+          background: #071e30; color: rgba(255,255,255,0.55);
+          padding: 32px 40px; text-align: center; font-size: 14px;
+        }
+        .lp-footer strong { color: rgba(255,255,255,0.85); }
 
         @media (max-width: 640px) {
           .lp-nav { padding: 0 20px; }
           .lp-hero { padding: 60px 20px; }
           .lp-section { padding: 60px 20px; }
           .lp-pricing-section { padding: 60px 20px; }
+          .lp-contact-section { padding: 60px 20px; }
         }
       `}</style>
 
@@ -223,6 +259,7 @@ export default function LandingPage() {
           <span className="lp-logo-name">Physio+</span>
         </div>
         <div className="lp-nav-right">
+          <button className="lp-btn-ghost" onClick={() => document.getElementById("lp-contact")?.scrollIntoView({ behavior: "smooth" })}>Contact</button>
           <button className="lp-btn-ghost" onClick={() => navigate("/login")}>Log in</button>
           <button className="lp-btn-primary" onClick={() => navigate("/signup")}>Start free trial</button>
         </div>
@@ -299,7 +336,13 @@ export default function LandingPage() {
                 </ul>
                 <button
                   className="lp-plan-cta"
-                  onClick={() => navigate(plan.cta === "Contact us" ? "/login" : "/signup")}
+                  onClick={() => {
+                    if (plan.cta === "Contact us") {
+                      document.getElementById("lp-contact")?.scrollIntoView({ behavior: "smooth" });
+                    } else {
+                      navigate("/signup");
+                    }
+                  }}
                 >
                   {plan.cta}
                 </button>
@@ -309,10 +352,26 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Contact / CTA */}
+      <section className="lp-contact-section" id="lp-contact">
+        <div className="lp-contact-label">Get in touch</div>
+        <h2 className="lp-contact-title">Ready to transform your clinic?</h2>
+        <p className="lp-contact-sub">
+          Start a free trial instantly, or reach out and we'll walk you through the platform — no pressure.
+        </p>
+        <div className="lp-contact-btns">
+          <button className="lp-btn-contact-primary" onClick={() => navigate("/signup")}>
+            Start free trial
+          </button>
+          <a className="lp-btn-contact-ghost" href="mailto:hello@physioplus.app">
+            ✉️ &nbsp;hello@physioplus.app
+          </a>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="lp-footer">
         <p>© 2026 <strong>Physio+ Hub</strong> · Sports & Rehabilitation Management Platform</p>
-        <p style={{ marginTop: 6 }}>Questions? Contact us at <strong>hello@physioplus.app</strong></p>
       </footer>
     </div>
   );
