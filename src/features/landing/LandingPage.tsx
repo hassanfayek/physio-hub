@@ -230,7 +230,7 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="lp-hero">
-        <div className="lp-badge">🚀 Built for physiotherapy clinics</div>
+        <div className="lp-badge">🚀 Physio+ SaaS — Preview Build v1</div>
         <h1 className="lp-h1">
           The complete platform for<br />
           <span>sports rehabilitation</span> clinics
