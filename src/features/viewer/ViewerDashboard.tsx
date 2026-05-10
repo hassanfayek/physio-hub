@@ -2,6 +2,7 @@
 // Read-only portal: today's schedule + active patient session balances
 
 import { useState, useEffect } from "react";
+import logo from "../../assets/physio-logo.svg";
 import { Calendar, Users, LogOut, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import {
@@ -140,13 +141,8 @@ export default function ViewerDashboard() {
           display: flex; align-items: center; justify-content: space-between;
         }
         .vd-logo { display: flex; align-items: center; gap: 10px; }
-        .vd-logo-icon {
-          width: 32px; height: 32px; border-radius: 8px;
-          background: linear-gradient(135deg, #0C3C60, #2E8BC0);
-          display: flex; align-items: center; justify-content: center;
-          color: #fff; font-size: 16px;
-        }
-        .vd-logo-name { font-size: 17px; font-weight: 700; color: #0C3C60; }
+        .vd-logo-name { font-size: 15px; font-weight: 700; color: #0C3C60; line-height: 1.2; }
+        .vd-logo-sub  { font-size: 11px; font-weight: 500; color: #9a9590; letter-spacing: 0.02em; }
         .vd-user { display: flex; align-items: center; gap: 12px; }
         .vd-user-name { font-size: 14px; color: #5a5550; }
         .vd-logout {
@@ -267,8 +263,11 @@ export default function ViewerDashboard() {
       {/* Header */}
       <header className="vd-header">
         <div className="vd-logo">
-          <div className="vd-logo-icon">🦴</div>
-          <span className="vd-logo-name">Physio+</span>
+          <img src={logo} alt="Physio+ Clinic" style={{ height: 36, width: "auto", objectFit: "contain", display: "block" }} />
+          <div>
+            <div className="vd-logo-name">Physio+ Clinic</div>
+            <div className="vd-logo-sub">Management Portal</div>
+          </div>
         </div>
         <div className="vd-user">
           {profile && (
