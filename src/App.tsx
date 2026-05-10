@@ -12,6 +12,7 @@ const PatientDashboard   = lazy(() => import("./features/patient/PatientDashboar
 const PhysioDashboard    = lazy(() => import("./features/physio/PhysioDashboard"));
 const PhysicianDashboard = lazy(() => import("./features/physician/PhysicianDashboard"));
 const PartnerDashboard   = lazy(() => import("./features/partner/PartnerDashboard"));
+const ViewerDashboard    = lazy(() => import("./features/viewer/ViewerDashboard"));
 
 function AppLoader() {
   return (
@@ -35,6 +36,7 @@ function roleDestination(role: string): string {
   if (role === "patient")   return "/patient";
   if (role === "physician") return "/physician";
   if (role === "partner")   return "/partner";
+  if (role === "viewer")    return "/viewer";
   return "/physio";
 }
 
@@ -53,7 +55,7 @@ const PHYSIO_ROLES    = new Set(["physiotherapist", "clinic_manager", "secretary
 const PHYSICIAN_ROLES = new Set(["physician"]);
 const PARTNER_ROLES   = new Set(["partner"]);
 
-type PortalKind = "physio" | "patient" | "physician" | "partner";
+type PortalKind = "physio" | "patient" | "physician" | "partner" | "viewer";
 
 function ProtectedRoute({ children, portal }: { children: ReactNode; portal: PortalKind }) {
   const { user, loading } = useAuth();
@@ -65,6 +67,7 @@ function ProtectedRoute({ children, portal }: { children: ReactNode; portal: Por
     portal === "physio"    ? PHYSIO_ROLES.has(role)    :
     portal === "physician" ? PHYSICIAN_ROLES.has(role) :
     portal === "partner"   ? PARTNER_ROLES.has(role)   :
+    portal === "viewer"    ? role === "viewer"          :
     role === "patient";
 
   if (!allowed) return <Navigate to={roleDestination(role)} replace />;
@@ -91,6 +94,9 @@ function AppRoutes() {
         } />
         <Route path="/partner" element={
           <ProtectedRoute portal="partner"><PartnerDashboard /></ProtectedRoute>
+        } />
+        <Route path="/viewer" element={
+          <ProtectedRoute portal="viewer"><ViewerDashboard /></ProtectedRoute>
         } />
 
         <Route path="*" element={<Navigate to="/login" replace />} />

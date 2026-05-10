@@ -56,7 +56,7 @@ import { getFirestore } from "firebase/firestore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type UserRole = "patient" | "physiotherapist" | "clinic_manager" | "secretary" | "physician" | "partner";
+export type UserRole = "patient" | "physiotherapist" | "clinic_manager" | "secretary" | "physician" | "partner" | "viewer";
 
 export interface UserProfile {
   uid:         string;
@@ -102,6 +102,21 @@ export interface PhysicianProfile extends UserProfile {
   phone:          string;
   specialization: string;
   clinicName:     string;
+}
+
+export interface ViewerProfile extends UserProfile {
+  role:      "viewer";
+  firstName: string;
+  lastName:  string;
+  phone:     string;
+}
+
+export interface RegisterViewerData {
+  email:     string;
+  password:  string;
+  firstName: string;
+  lastName:  string;
+  phone:     string;
 }
 
 export interface RegisterPhysicianData {
@@ -396,11 +411,12 @@ const ROLE_COLLECTION: Partial<Record<UserRole, string>> = {
   secretary:        "secretaries",
   physician:        "physicians",
   partner:          "partners",
+  viewer:           "viewers",
 };
 
 export async function loadUserProfile(
   user: User
-): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | null> {
+): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | ViewerProfile | null> {
   const userDocRef = doc(db, "users", user.uid);
   const userSnap   = await getDocWithRetry(userDocRef);
 
@@ -485,6 +501,16 @@ export async function loadUserProfile(
     } as unknown as PhysicianProfile;
   }
 
+  if (role === "viewer") {
+    return {
+      ...base,
+      role:      "viewer",
+      firstName: p.firstName,
+      lastName:  p.lastName,
+      phone:     p.phone ?? "",
+    } as ViewerProfile;
+  }
+
   return null;
 }
 
@@ -534,6 +560,48 @@ export async function registerSecretary(
     phone:       data.phone,
     createdAt:   null,
     updatedAt:   null,
+  };
+}
+
+// ─── Register viewer (manager-initiated) ─────────────────────────────────────
+
+export async function registerViewer(data: RegisterViewerData): Promise<ViewerProfile> {
+  const credential = await createUserWithEmailAndPassword(secondaryAuth, data.email, data.password);
+  const { user } = credential;
+  const displayName = `${data.firstName} ${data.lastName}`;
+
+  await updateProfile(user, { displayName });
+
+  const now = serverTimestamp();
+
+  await setDoc(doc(db, "users", user.uid), {
+    email: data.email,
+    role:  "viewer" as UserRole,
+    displayName,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await setDoc(doc(db, "viewers", user.uid), {
+    firstName: data.firstName,
+    lastName:  data.lastName,
+    phone:     data.phone,
+    email:     data.email,
+    createdAt: now,
+  });
+
+  await secondaryAuth.signOut();
+
+  return {
+    uid:       user.uid,
+    email:     data.email,
+    role:      "viewer",
+    displayName,
+    firstName: data.firstName,
+    lastName:  data.lastName,
+    phone:     data.phone,
+    createdAt: null,
+    updatedAt: null,
   };
 }
 

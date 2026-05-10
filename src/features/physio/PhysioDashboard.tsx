@@ -20,8 +20,9 @@ import {
 import type { PhysioProfile } from "../../services/authService";
 import logo from "../../assets/physio-logo.svg";
 import { subscribeToPhysiotherapists, subscribeToPhysioPatients, subscribeToAllPatients, type Physiotherapist, type Patient } from "../../services/patientService";
-import { registerSecretary } from "../../services/authService";
+import { registerSecretary, registerViewer, type RegisterViewerData } from "../../services/authService";
 import { subscribeToSecretaries, deleteSecretary, type Secretary } from "../../services/secretaryService";
+import { subscribeToViewers, deleteViewer, type Viewer } from "../../services/viewerService";
 import { subscribeToPhysicians, deletePhysician, type Physician } from "../../services/physicianService";
 import { registerPhysician, type RegisterPhysicianData } from "../../services/authService";
 import { subscribeToPartners, registerPartner, deletePartner, type Partner } from "../../services/partnerService";
@@ -88,6 +89,14 @@ function TeamTab() {
   const [physicianError,    setPhysicianError]    = React.useState<string | null>(null);
   const [deletingPhyUid,    setDeletingPhyUid]    = React.useState<string | null>(null);
 
+  // ── Viewer state ──────────────────────────────────────────────────────────
+  const [viewers,           setViewers]           = React.useState<Viewer[]>([]);
+  const [showAddViewer,     setShowAddViewer]     = React.useState(false);
+  const [viewerForm,        setViewerForm]        = React.useState<RegisterViewerData>({ firstName: "", lastName: "", email: "", password: "", phone: "" });
+  const [viewerSaving,      setViewerSaving]      = React.useState(false);
+  const [viewerError,       setViewerError]       = React.useState<string | null>(null);
+  const [deletingViewerUid, setDeletingViewerUid] = React.useState<string | null>(null);
+
   // ── Partner state ─────────────────────────────────────────────────────────
   const [partners,          setPartners]          = React.useState<Partner[]>([]);
   const [showAddPartner,    setShowAddPartner]    = React.useState(false);
@@ -106,6 +115,10 @@ function TeamTab() {
 
   React.useEffect(() => {
     return subscribeToPhysicians(setPhysicians, () => {});
+  }, []);
+
+  React.useEffect(() => {
+    return subscribeToViewers(setViewers, () => {});
   }, []);
 
   React.useEffect(() => {
@@ -167,6 +180,32 @@ function TeamTab() {
     const { error } = await deletePartner(uid);
     if (error) alert(error);
     setDeletingPartnerUid(null);
+  };
+
+  const handleAddViewer = async () => {
+    if (!viewerForm.email || !viewerForm.password || !viewerForm.firstName || !viewerForm.lastName) {
+      setViewerError("First name, last name, email and password are required."); return;
+    }
+    setViewerSaving(true); setViewerError(null);
+    try {
+      await registerViewer(viewerForm);
+      setSaveSuccess(`${viewerForm.firstName} ${viewerForm.lastName} added as viewer.`);
+      setViewerForm({ firstName: "", lastName: "", email: "", password: "", phone: "" });
+      setShowAddViewer(false);
+      setTimeout(() => setSaveSuccess(null), 4000);
+    } catch (err: unknown) {
+      const msg = (err as { message?: string }).message ?? "";
+      setViewerError(msg.includes("email-already-in-use") ? "This email is already registered." : msg || "Failed to add viewer.");
+    }
+    setViewerSaving(false);
+  };
+
+  const handleDeleteViewer = async (uid: string, name: string) => {
+    if (!window.confirm(`Remove ${name}? This will permanently delete their account.`)) return;
+    setDeletingViewerUid(uid);
+    const { error } = await deleteViewer(uid);
+    if (error) alert(error);
+    setDeletingViewerUid(null);
   };
 
   const handleDeletePhysio = async (uid: string, name: string) => {
@@ -391,6 +430,9 @@ function TeamTab() {
         <button className="tm-add-btn patient" onClick={() => { setShowAddPhysician(true); setPhysicianError(null); }} style={{ background: "#f0fdf4", color: "#2d7a3a", borderColor: "#b7e4c7" }}>
           <IconAdd /> Add Physician
         </button>
+        <button className="tm-add-btn patient" onClick={() => { setShowAddViewer(true); setViewerError(null); }} style={{ background: "#fef3c7", color: "#92400e", borderColor: "#fcd34d" }}>
+          <IconAdd /> Add Viewer
+        </button>
       </div>
 
       <div className="tm-section-label" style={{ color: "#9a9590", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: 12 }}>
@@ -541,6 +583,42 @@ function TeamTab() {
         </div>
       )}
 
+      {/* ── Viewers section ── */}
+      <div className="tm-section-label" style={{ color: "#9a9590", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: 12, marginTop: 24 }}>
+        Viewers ({viewers.length})
+      </div>
+      {viewers.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "24px 0", color: "#9a9590", fontSize: 14, marginBottom: 16 }}>No viewer accounts yet. Viewers can see the daily schedule and patient session balances only.</div>
+      ) : (
+        <div className="tm-grid" style={{ marginBottom: 16 }}>
+          {viewers.map((v) => (
+            <div key={v.uid} className="tm-card">
+              <div className="tm-card-header" style={{ cursor: "default" }}>
+                <div className="tm-avatar" style={{ background: "linear-gradient(135deg, #92400e, #d97706)" }}>
+                  {v.firstName[0]}{v.lastName[0]}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div className="tm-name">{v.firstName} {v.lastName}</div>
+                  <div className="tm-spec">{v.email}</div>
+                  <div style={{ marginTop: 4 }}>
+                    <span className="tm-badge" style={{ background: "#fef3c7", color: "#92400e" }}>View only</span>
+                  </div>
+                </div>
+                <button
+                  className="tm-del-btn"
+                  style={{ position: "static", marginLeft: 4 }}
+                  disabled={deletingViewerUid === v.uid}
+                  onClick={() => handleDeleteViewer(v.uid, `${v.firstName} ${v.lastName}`)}
+                  title="Remove viewer"
+                >
+                  {deletingViewerUid === v.uid ? "…" : "✕"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Add Physio Modal */}
       {showAddPhysio && (
         <AddPhysioModal
@@ -570,6 +648,31 @@ function TeamTab() {
               <button className="tm-modal-cancel" onClick={() => setShowAddSecretary(false)}>Cancel</button>
               <button className="tm-modal-save" disabled={secretarySaving} onClick={handleAddSecretary}>
                 {secretarySaving ? "Creating account…" : "Create Account"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Add Viewer Modal */}
+      {showAddViewer && createPortal(
+        <div className="tm-modal-overlay" onClick={() => !viewerSaving && setShowAddViewer(false)}>
+          <div className="tm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="tm-modal-title">Add Viewer</div>
+            <div className="tm-modal-sub">Viewer accounts can only see the daily schedule and patient session balances. No other access is granted.</div>
+            <div className="tm-field-row">
+              <div className="tm-field"><label className="tm-label">First Name</label><input className="tm-input" value={viewerForm.firstName} onChange={(e) => setViewerForm({ ...viewerForm, firstName: e.target.value })} placeholder="Sara" /></div>
+              <div className="tm-field"><label className="tm-label">Last Name</label><input className="tm-input" value={viewerForm.lastName} onChange={(e) => setViewerForm({ ...viewerForm, lastName: e.target.value })} placeholder="Ali" /></div>
+            </div>
+            <div className="tm-field"><label className="tm-label">Email Address</label><input className="tm-input" type="email" value={viewerForm.email} onChange={(e) => setViewerForm({ ...viewerForm, email: e.target.value })} placeholder="viewer@clinic.com" /></div>
+            <div className="tm-field"><label className="tm-label">Password</label><input className="tm-input" type="password" value={viewerForm.password} onChange={(e) => setViewerForm({ ...viewerForm, password: e.target.value })} placeholder="Min. 6 characters" /></div>
+            <div className="tm-field"><label className="tm-label">Phone (optional)</label><input className="tm-input" value={viewerForm.phone} onChange={(e) => setViewerForm({ ...viewerForm, phone: e.target.value })} placeholder="+20 100 000 0000" /></div>
+            {viewerError && <div className="tm-modal-error">{viewerError}</div>}
+            <div className="tm-modal-actions">
+              <button className="tm-modal-cancel" onClick={() => setShowAddViewer(false)}>Cancel</button>
+              <button className="tm-modal-save" disabled={viewerSaving} onClick={handleAddViewer}>
+                {viewerSaving ? "Creating account…" : "Create Account"}
               </button>
             </div>
           </div>
