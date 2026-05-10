@@ -407,8 +407,8 @@ export default function ViewerDashboard() {
                     .slice()
                     .sort((a, b) => {
                       // patients with packages first, sorted by sessions remaining (ascending)
-                      const pa = pkgMap.get(a.id);
-                      const pb = pkgMap.get(b.id);
+                      const pa = pkgMap.get(a.uid);
+                      const pb = pkgMap.get(b.uid);
                       if (pa && !pb) return -1;
                       if (!pa && pb) return 1;
                       if (pa && pb) {
@@ -417,7 +417,7 @@ export default function ViewerDashboard() {
                       return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
                     })
                     .map((p) => {
-                      const pkg = pkgMap.get(p.id);
+                      const pkg = pkgMap.get(p.uid);
                       const remaining = pkg ? pkg.packageSize - pkg.sessionsUsed : null;
                       const color =
                         remaining === null ? "#9a9590" :
@@ -426,12 +426,12 @@ export default function ViewerDashboard() {
                                              "#3aaa6c";
                       const initials = `${p.firstName[0] ?? ""}${p.lastName[0] ?? ""}`.toUpperCase();
                       return (
-                        <div key={p.id} className="vd-patient-row">
+                        <div key={p.uid} className="vd-patient-row">
                           <div className="vd-patient-avatar">{initials}</div>
                           <div className="vd-patient-info">
                             <div className="vd-patient-name">{p.firstName} {p.lastName}</div>
                             <div className="vd-patient-sub">
-                              {p.primaryCondition || "—"}
+                              {p.occupation || "—"}
                             </div>
                           </div>
                           <div className="vd-sessions-badge">

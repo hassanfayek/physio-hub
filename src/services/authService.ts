@@ -357,7 +357,7 @@ export async function registerPhysio(
 export async function login(
   email: string,
   password: string
-): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile> {
+): Promise<PatientProfile | PhysioProfile | SecretaryProfile | PhysicianProfile | ViewerProfile> {
   const credential = await signInWithEmailAndPassword(auth, email, password);
   const profile    = await loadUserProfile(credential.user);
 
