@@ -1279,8 +1279,11 @@ export default function PhysioDashboard() {
           box-shadow: 0 2px 12px rgba(0,0,0,0.04);
           height: 56px;
         }
-        .phd-topbar-left { display: flex; align-items: center; gap: 8px; }
-        .phd-topbar-logo { display: flex; align-items: center; justify-content: center; }
+        .phd-topbar-left { display: flex; align-items: center; gap: 12px; }
+        .phd-topbar-brand { display: flex; align-items: center; gap: 10px; }
+        .phd-topbar-brand-name { font-size: 15px; font-weight: 700; color: #0C3C60; line-height: 1.2; }
+        .phd-topbar-brand-sub  { font-size: 11px; font-weight: 500; color: #9a9590; letter-spacing: 0.02em; }
+        .phd-topbar-logo { display: none; }
         .phd-topbar-right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 
         .phd-user-chip {
@@ -1539,22 +1542,24 @@ export default function PhysioDashboard() {
       <div className="phd-root">
         {/* Topbar */}
         <header className="phd-topbar">
-          {/* Left: user name chip */}
+          {/* Left: logo + clinic name */}
           <div className="phd-topbar-left">
+            <div className="phd-topbar-brand">
+              <img src={logo} alt="Physio+ Hub" style={{ height: 36, width: "auto", objectFit: "contain", display: "block" }} />
+              <div>
+                <div className="phd-topbar-brand-name">Physio+ Clinic</div>
+                <div className="phd-topbar-brand-sub">Management Portal</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: user chip + notifications + language + sign out */}
+          <div className="phd-topbar-right">
             <div className="phd-user-chip">
               <div className="phd-user-name">
                 {isManager ? physio.firstName : isSecretary ? physio.firstName : `Dr. ${physio.lastName}`}
               </div>
             </div>
-          </div>
-
-          {/* Centre: logo */}
-          <div className="phd-topbar-logo">
-            <img src={logo} alt="Physio+ Hub" style={{ height: 40, width: "auto", objectFit: "contain", display: "block" }} />
-          </div>
-
-          {/* Right: notifications + language + sign out */}
-          <div className="phd-topbar-right">
             <NotificationPanel
               userId={user!.uid}
               onNavigateToPatient={(patientId) => {
