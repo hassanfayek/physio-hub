@@ -924,7 +924,6 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     { id: "session-history",   label: "Session History" },
     { id: "exercises",         label: "Exercises" },
     { id: "joint-assessment",  label: "Body Profile",     physioOnly: patient?.hideBodyProfile !== false },
-    { id: "explosive-power",   label: "Explosive Power",  physioOnly: true },
     { id: "pricing",           label: "Price Sheet",       billingOnly: true },
     { id: "physician-notes",   label: "Physician Notes",   hideFromPatient: true },
     { id: "ai-plan",           label: "AI Treatment Plan", managerOnly: true, hideFromPatient: true },
@@ -3477,18 +3476,18 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
             patientName={patient ? `${patient.firstName} ${patient.lastName}` : ""}
             canEdit={canEditBodyProfile}
           />
+          {role !== "patient" && !isSecretary && (
+            <div style={{ marginTop: 32, borderTop: "1.5px solid #e8e3dc", paddingTop: 28 }}>
+              <ExplosivePowerSheet
+                patientId={patientId!}
+                patientName={patient ? `${patient.firstName} ${patient.lastName}` : undefined}
+                canEdit={isManager || role === "physiotherapist"}
+              />
+            </div>
+          )}
         </>
       )}
     </>
-      )}
-
-      {/* ── EXPLOSIVE POWER ── */}
-      {activeSection === "explosive-power" && role !== "patient" && !isSecretary && (
-        <ExplosivePowerSheet
-          patientId={patientId!}
-          patientName={patient ? `${patient.firstName} ${patient.lastName}` : undefined}
-          canEdit={isManager || role === "physiotherapist"}
-        />
       )}
 
       {/* ── AI TREATMENT PLAN ── */}
