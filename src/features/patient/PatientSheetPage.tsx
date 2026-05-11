@@ -27,6 +27,7 @@ import type { PhysioProfile } from "../../services/authService";
 import ExerciseProgram        from "./ExerciseProgram";
 import JointAssessmentSheet  from "./JointAssessmentSheet";
 import ExplosivePowerSheet   from "./ExplosivePowerSheet";
+import FifaRefereeSheet      from "./FifaRefereeSheet";
 import PatientPricingSection from "./PatientPricingSection";
 import { subscribeToBillingSettings, updateSessionPackage } from "../../services/priceService";
 import {
@@ -812,7 +813,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     role === "physician" ||
     (role === "physiotherapist" && !!(
       (patient?.seniorEditorId && patient.seniorEditorId === myUid) ||
-      (patient?.juniorId        && patient.juniorId        === myUid) ||
+      (patient?.juniorIds       && patient.juniorIds.includes(myUid))  ||
       (patient?.traineeId       && patient.traineeId       === myUid) ||
       (patient?.physioId        && patient.physioId        === myUid)
     ));
@@ -924,6 +925,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     { id: "session-history",   label: "Session History" },
     { id: "exercises",         label: "Exercises" },
     { id: "joint-assessment",  label: "Body Profile",     physioOnly: patient?.hideBodyProfile !== false },
+    { id: "fifa-assessment",   label: "FIFA Assessment",  physioOnly: true },
     { id: "pricing",           label: "Price Sheet",       billingOnly: true },
     { id: "physician-notes",   label: "Physician Notes",   hideFromPatient: true },
     { id: "ai-plan",           label: "AI Treatment Plan", managerOnly: true, hideFromPatient: true },
@@ -2260,11 +2262,11 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                       Senior: {patient.seniorEditorName}
                     </span>
                   )}
-                  {patient?.juniorName && (
-                    <span className="ps-profile-team-chip" style={{ background: "#D6EEF8", color: "#0C3C60" }}>
-                      Junior: {patient.juniorName}
+                  {(patient?.juniorNames ?? []).map((name, i) => (
+                    <span key={i} className="ps-profile-team-chip" style={{ background: "#D6EEF8", color: "#0C3C60" }}>
+                      Junior: {name}
                     </span>
-                  )}
+                  ))}
                   {patient?.traineeName && (
                     <span className="ps-profile-team-chip" style={{ background: "#f3f4f6", color: "#374151" }}>
                       Trainee: {patient.traineeName}
@@ -2276,7 +2278,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                       Physician: {patient.referredByPhysicianName}
                     </span>
                   )}
-                  {!patient?.seniorEditorName && !patient?.juniorName && !patient?.traineeName && !patient?.referredByPhysicianName && (
+                  {!patient?.seniorEditorName && !(patient?.juniorNames ?? []).length && !patient?.traineeName && !patient?.referredByPhysicianName && (
                     <span style={{ fontSize: 13, color: "#c0bbb4", fontStyle: "italic" }}>No team assigned yet</span>
                   )}
                 </div>
@@ -3488,6 +3490,15 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         </>
       )}
     </>
+      )}
+
+      {/* ── FIFA ASSESSMENT ── */}
+      {activeSection === "fifa-assessment" && role !== "patient" && !isSecretary && (
+        <FifaRefereeSheet
+          patientId={patientId!}
+          patientName={patient ? `${patient.firstName} ${patient.lastName}` : undefined}
+          canEdit={isManager || role === "physiotherapist"}
+        />
       )}
 
       {/* ── AI TREATMENT PLAN ── */}

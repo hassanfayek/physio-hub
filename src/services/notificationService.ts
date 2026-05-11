@@ -113,19 +113,18 @@ async function getStaffUids(): Promise<{ managerIds: string[]; secretaryIds: str
   return staffCache;
 }
 
-// ─── Fanout: notify managers + secretaries + optional physio ──────────────────
+// ─── Fanout: notify managers + secretaries only ───────────────────────────────
 
 export async function notifyStaff(
   notif: Omit<AppNotification, "id" | "createdAt" | "read">,
-  opts:  { managers?: boolean; secretaries?: boolean; physioId?: string } = {}
+  opts:  { managers?: boolean; secretaries?: boolean } = {}
 ): Promise<void> {
-  const { managers = true, secretaries = true, physioId } = opts;
+  const { managers = true, secretaries = true } = opts;
   try {
     const { managerIds, secretaryIds } = await getStaffUids();
     const targets = new Set<string>();
     if (managers)    managerIds.forEach((id)   => targets.add(id));
     if (secretaries) secretaryIds.forEach((id) => targets.add(id));
-    if (physioId)    targets.add(physioId);
     await Promise.all([...targets].map((uid) => sendNotification(uid, notif)));
   } catch {
     // fire-and-forget — never throw

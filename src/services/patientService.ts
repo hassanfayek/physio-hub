@@ -35,8 +35,8 @@ export interface Patient {
   createdAt:        Timestamp | null;
   seniorEditorId:   string | null;
   seniorEditorName: string | null;
-  juniorId:         string | null;
-  juniorName:       string | null;
+  juniorIds:        string[];
+  juniorNames:      string[];
   traineeId:        string | null;
   traineeName:      string | null;
   age?:                      string;
@@ -112,8 +112,13 @@ function docToPatient(id: string, data: Record<string, unknown>): Patient {
     createdAt:        (data.createdAt        as Timestamp | null) ?? null,
     seniorEditorId:   (data.seniorEditorId   as string | null) ?? null,
     seniorEditorName: (data.seniorEditorName as string | null) ?? null,
-    juniorId:         (data.juniorId         as string | null) ?? null,
-    juniorName:       (data.juniorName       as string | null) ?? null,
+    // Handle both old single-value format (juniorId) and new array format (juniorIds)
+    juniorIds:        Array.isArray(data.juniorIds)
+                        ? (data.juniorIds as string[])
+                        : (data.juniorId ? [data.juniorId as string] : []),
+    juniorNames:      Array.isArray(data.juniorNames)
+                        ? (data.juniorNames as string[])
+                        : (data.juniorName ? [data.juniorName as string] : []),
     traineeId:        (data.traineeId        as string | null) ?? null,
     traineeName:      (data.traineeName      as string | null) ?? null,
     age:                      (data.age                      as string | undefined)  ?? "",
@@ -227,7 +232,7 @@ export async function createPatient(
       body:      `${payload.firstName} ${payload.lastName} has been added to the system.`,
       sourceId:  `new_patient_${uid}`,
       patientId: uid,
-    }, { physioId: payload.physioId });
+    });
 
     return {
       patient: {
@@ -242,8 +247,8 @@ export async function createPatient(
         createdAt: null,
         seniorEditorId:   null,
         seniorEditorName: null,
-        juniorId:         null,
-        juniorName:       null,
+        juniorIds:        [],
+        juniorNames:      [],
         traineeId:        null,
         traineeName:      null,
       },
@@ -364,17 +369,20 @@ export async function assignPatientStaff(
   updates: {
     seniorEditorId?:   string | null;
     seniorEditorName?: string | null;
-    juniorId?:         string | null;
-    juniorName?:       string | null;
+    juniorIds?:        string[];
+    juniorNames?:      string[];
     traineeId?:        string | null;
     traineeName?:      string | null;
   }
 ): Promise<{ error?: string }> {
   try {
-    await updateDoc(doc(db, "patients", patientId), {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    });
+    const payload: Record<string, unknown> = { ...updates, updatedAt: serverTimestamp() };
+    // When updating juniorIds (new format), clear old single-value fields to prevent stale queries
+    if (updates.juniorIds !== undefined) {
+      payload.juniorId   = null;
+      payload.juniorName = null;
+    }
+    await updateDoc(doc(db, "patients", patientId), payload);
     return {};
   } catch (err) {
     return { error: parseError(err) };
@@ -440,27 +448,25 @@ export function subscribeToPhysioPatients(
     onData(merged);
   };
 
-  const makeQ = (field: string) =>
+  const makeEqQ = (field: string) =>
     query(collection(db, "patients"), where(field, "==", physioId));
 
+  const fields = ["physioId", "seniorEditorId", "juniorId", "traineeId"];
   const unsubs = [
-    "physioId",
-    "seniorEditorId",
-    "juniorId",
-    "traineeId",
-  ].map((field) =>
+    ...fields.map((field) =>
+      onSnapshot(
+        makeEqQ(field),
+        (snap) => { snap.docs.forEach((d) => byUid.set(d.id, docToPatient(d.id, d.data()))); notify(); },
+        (err)  => onError?.(err)
+      )
+    ),
+    // New format: juniorIds is an array — use array-contains query
     onSnapshot(
-      makeQ(field),
-      (snap) => {
-        snap.docs.forEach((d) => byUid.set(d.id, docToPatient(d.id, d.data())));
-        // Also handle removals: if a doc is no longer in this snapshot
-        // we can't remove it here (another field may still match),
-        // so we re-query on next snapshot trigger instead
-        notify();
-      },
-      (err) => onError?.(err)
-    )
-  );
+      query(collection(db, "patients"), where("juniorIds", "array-contains", physioId)),
+      (snap) => { snap.docs.forEach((d) => byUid.set(d.id, docToPatient(d.id, d.data()))); notify(); },
+      (err)  => onError?.(err)
+    ),
+  ];
 
   return () => unsubs.forEach((u) => u());
 }

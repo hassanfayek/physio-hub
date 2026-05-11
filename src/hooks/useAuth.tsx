@@ -65,9 +65,12 @@ const AuthContext = createContext<AuthContextValue>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Initialise from cache so returning users see their dashboard immediately
-  const [user,    setUser]    = useState<Profile>(readCache);
-  const [loading, setLoading] = useState(true);
+  // If a cached profile exists, skip the loading spinner entirely — returning
+  // users land directly on their dashboard. Auth is still verified in background;
+  // if the session is expired, setUser(null) triggers a redirect to /login.
+  const initialProfile = readCache();
+  const [user,    setUser]    = useState<Profile>(initialProfile);
+  const [loading, setLoading] = useState(initialProfile === null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChange(async (firebaseUser) => {

@@ -42,6 +42,13 @@ export default function LoginPage() {
         navigate("/physio");
       }
     } catch (err) {
+      const e = err as { code?: string; message?: string };
+      // If Firebase Auth succeeded but Firestore profile load failed,
+      // navigate to the dashboard — onAuthStateChange will reload the profile.
+      if (role !== "patient" && e.code && !e.code.startsWith("auth/")) {
+        navigate("/physio");
+        return;
+      }
       const msg = parseFirebaseError(err).message;
       setError(
         role === "patient"

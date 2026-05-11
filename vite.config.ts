@@ -1,8 +1,34 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: "autoUpdate",
+      workbox: {
+        // Cache all JS/CSS assets with a cache-first strategy
+        globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
+        runtimeCaching: [
+          {
+            // Google Fonts CSS — stale-while-revalidate
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: "StaleWhileRevalidate",
+            options: { cacheName: "google-fonts-css", expiration: { maxEntries: 4, maxAgeSeconds: 60 * 60 * 24 * 365 } },
+          },
+          {
+            // Google Fonts files — cache-first (fonts never change at the same URL)
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: "CacheFirst",
+            options: { cacheName: "google-fonts-webfonts", expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 } },
+          },
+        ],
+      },
+      includeAssets: ["physio-logo.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"],
+      manifest: false, // keep existing manifest.json
+    }),
+  ],
   build: {
     outDir: "dist",
     emptyOutDir: true,

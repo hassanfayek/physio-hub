@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import {
   collection, addDoc, getDocs, deleteDoc, doc,
-  query, where, orderBy, serverTimestamp, type Timestamp,
+  query, where, serverTimestamp, type Timestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { Plus, Trash2, ChevronDown, ChevronUp, Zap } from "lucide-react";
@@ -255,7 +255,6 @@ export default function ExplosivePowerSheet({ patientId, patientName, canEdit }:
       query(
         collection(db, "explosivePowerSessions"),
         where("patientId", "==", patientId),
-        orderBy("date", "asc"),
       )
     ).then((snap) => {
       const list: PowerSession[] = snap.docs.map((d) => {
@@ -275,7 +274,7 @@ export default function ExplosivePowerSheet({ patientId, patientName, canEdit }:
           createdAt: data.createdAt ?? null,
         };
       });
-      setSessions(list);
+      setSessions(list.sort((a, b) => (a.date > b.date ? 1 : -1)));
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [patientId]);
@@ -587,6 +586,13 @@ export default function ExplosivePowerSheet({ patientId, patientName, canEdit }:
           .eps-snapshot-grid { grid-template-columns: 1fr 1fr; }
           .eps-snapshot-group { min-width: 0; }
         }
+
+        @media (max-width: 480px) {
+          .eps-section-body { grid-template-columns: 1fr; }
+          .eps-snapshot-grid { grid-template-columns: 1fr; }
+          .eps-field label { font-size: 11px; }
+          .eps-session-date { font-size: 12px; }
+        }
       `}</style>
 
       {/* Header */}
@@ -721,9 +727,7 @@ export default function ExplosivePowerSheet({ patientId, patientName, canEdit }:
       )}
 
       {/* History */}
-      {loading ? (
-        <div className="eps-empty">Loading…</div>
-      ) : sessions.length === 0 && !showForm ? (
+      {sessions.length === 0 && !showForm && !loading ? (
         <div className="eps-empty">
           No explosive power assessments recorded yet.
           {canEdit && <div style={{ marginTop: 8, fontSize: 13, color: "#b0aaa5" }}>Click "New Assessment" to start tracking.</div>}

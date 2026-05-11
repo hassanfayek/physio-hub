@@ -393,6 +393,7 @@ async function getDocWithRetry(
     } catch (err) {
       const code = (err as { code?: string }).code ?? "";
       const isOffline = code === "unavailable" || code === "failed-precondition" ||
+        code === "permission-denied" ||   // auth token may not propagate immediately after sign-in
         (err instanceof Error && err.message.toLowerCase().includes("offline"));
       if (isOffline && i < attempts - 1) {
         await new Promise((r) => setTimeout(r, delayMs * (i + 1)));

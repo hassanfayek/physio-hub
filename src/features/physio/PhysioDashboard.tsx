@@ -938,6 +938,14 @@ function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false,
     return () => unsub();
   }, [physio.uid, isManager, isSecretary]);
 
+  const isJunior = !isManager && !isSecretary && !isSenior;
+
+  // For juniors: only show appointments for their assigned patients
+  const juniorPatientIdSet = isJunior ? new Set(patients.map((p) => p.uid)) : null;
+  const displayedAppts = (isJunior && juniorPatientIdSet && !patientsLoading)
+    ? todayAppts.filter((a) => juniorPatientIdSet!.has(a.patientId))
+    : todayAppts;
+
   // Derive stats from live patient list
   const stats = {
     totalPatients:      patients.length,
@@ -949,9 +957,6 @@ function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false,
   useEffect(() => {
     setApptLoading(true);
     const today = toDateStr(new Date());
-    // Juniors (non-senior, non-manager, non-secretary) see all clinic appointments
-    // because their patients' appointments are booked under other physios' IDs
-    const isJunior = !isManager && !isSecretary && !isSenior;
     const unsubscribe = subscribeToAppointmentsByDay(
       today,
       (isManager || isSecretary || isJunior) ? null : physio.uid,
@@ -959,7 +964,7 @@ function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false,
       ()     => setApptLoading(false)
     );
     return () => unsubscribe();
-  }, [physio.uid, isManager, isSecretary, isSenior]);
+  }, [physio.uid, isManager, isSecretary, isJunior]);
 
   return (
     <>
@@ -1041,11 +1046,11 @@ function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false,
               <div key={n} style={{ height: 48, borderRadius: 10, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "phShimmer 1.4s ease infinite" }} />
             ))}
           </div>
-        ) : todayAppts.length === 0 ? (
+        ) : displayedAppts.length === 0 ? (
           <div className="ph-ov-empty">No appointments scheduled for today.</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {todayAppts.map((a) => {
+            {displayedAppts.map((a) => {
               const { label, color, textColor } = apptDisplayStatus(a.status);
               return (
                 <div key={a.id} style={{
@@ -1222,13 +1227,14 @@ export default function PhysioDashboard() {
     Promise.all([userPromise, physioPromise]).finally(() => setRoleLoading(false));
   }, [user?.uid, user?.role]);
 
-  // Live package-expiry alerts + new-patient alerts + daily unpaid-balance scan
+  // Live package-expiry alerts + daily unpaid-balance scan — manager/secretary only
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || roleLoading) return;
+    if (!isManager && !isSecretary) return;
     runBackgroundScan(user.uid);
     const unsubPackages = subscribeToPackageAlerts(user.uid);
     return () => { unsubPackages(); };
-  }, [user?.uid]);
+  }, [user?.uid, isManager, isSecretary, roleLoading]);
 
   const physio = user as unknown as PhysioProfile | null;
   if (!physio) return null;
@@ -1496,13 +1502,9 @@ export default function PhysioDashboard() {
           .phd-sidebar { display: none !important; }
           .phd-logout-btn { padding: 8px; }
           .phd-logout-btn .phd-logout-text { display: none; }
-          .phd-user-name { max-width: 70px; }
-          .phd-user-chip { padding: 5px 8px; }
+          .phd-user-name { max-width: 90px; }
+          .phd-user-chip { padding: 5px 10px; }
           .phd-main { padding: 14px 12px 80px; }
-          .phd-topbar-brand-sub { display: none; }
-          .phd-topbar-brand-name { font-size: 13px; }
-          .phd-topbar-brand img { height: 28px !important; }
-          .phd-topbar-brand { gap: 7px; }
 
           .phd-bottom-nav {
             display: flex;
@@ -1564,13 +1566,15 @@ export default function PhysioDashboard() {
                 {isManager ? physio.firstName : isSecretary ? physio.firstName : `Dr. ${physio.lastName}`}
               </div>
             </div>
-            <NotificationPanel
-              userId={user!.uid}
-              onNavigateToPatient={(patientId) => {
-                setViewingPatientId(patientId);
-                setActiveTab(isManager ? "people" : "patients");
-              }}
-            />
+            {(isManager || isSecretary) && (
+              <NotificationPanel
+                userId={user!.uid}
+                onNavigateToPatient={(patientId) => {
+                  setViewingPatientId(patientId);
+                  setActiveTab(isManager ? "people" : "patients");
+                }}
+              />
+            )}
             <button className="lang-toggle" onClick={toggleLang} title="Switch language">
               {lang === "en" ? "🌐 العربية" : "🌐 English"}
             </button>

@@ -88,17 +88,31 @@ function StaffAssignmentPanel({ patient, physios }: { patient: Patient; physios:
         seniorEditorId:   uid   || null,
         seniorEditorName: name  || null,
       });
-    } else if (field === "junior") {
-      result = await assignPatientStaff(patient.uid, {
-        juniorId:   uid  || null,
-        juniorName: name || null,
-      });
     } else {
       result = await assignPatientStaff(patient.uid, {
         traineeId:   uid  || null,
         traineeName: name || null,
       });
     }
+    setSaving(null);
+    if (result.error) setErr(result.error);
+  };
+
+  const toggleJunior = async (uid: string, name: string) => {
+    setSaving("junior"); setErr(null);
+    const currentIds   = patient.juniorIds   ?? [];
+    const currentNames = patient.juniorNames ?? [];
+    let newIds: string[];
+    let newNames: string[];
+    if (currentIds.includes(uid)) {
+      const idx = currentIds.indexOf(uid);
+      newIds   = currentIds.filter((_, i) => i !== idx);
+      newNames = currentNames.filter((_, i) => i !== idx);
+    } else {
+      newIds   = [...currentIds,   uid];
+      newNames = [...currentNames, name];
+    }
+    const result = await assignPatientStaff(patient.uid, { juniorIds: newIds, juniorNames: newNames });
     setSaving(null);
     if (result.error) setErr(result.error);
   };
@@ -136,11 +150,42 @@ function StaffAssignmentPanel({ patient, physios }: { patient: Patient; physios:
     </div>
   );
 
+  const currentJuniorIds = patient.juniorIds ?? [];
+
   return (
     <div className="sa-panel">
       {makeSelect("senior",  patient.seniorEditorId ?? "", seniors,  "Senior",  true)}
-      {makeSelect("junior",  patient.juniorId        ?? "", juniors,  "Junior",  false)}
-      {makeSelect("trainee", patient.traineeId       ?? "", trainees, "Trainee", false)}
+
+      {/* Junior — multi-select checkboxes */}
+      <div className="sa-field">
+        <label className="sa-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          Junior(s)
+          {saving === "junior" && <span className="ps-spinner" style={{ width: 10, height: 10 }} />}
+        </label>
+        {juniors.length === 0 ? (
+          <span style={{ fontSize: 11, color: "#c0bbb4" }}>No juniors registered</span>
+        ) : (
+          <div className="sa-junior-list">
+            {juniors.map((p) => {
+              const checked = currentJuniorIds.includes(p.uid);
+              return (
+                <label key={p.uid} className={`sa-junior-item${checked ? " checked" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleJunior(p.uid, `Dr. ${p.firstName} ${p.lastName}`)}
+                    disabled={saving === "junior"}
+                    style={{ accentColor: "#2d6a4f", cursor: "pointer" }}
+                  />
+                  <span>Dr. {p.firstName} {p.lastName}</span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {makeSelect("trainee", patient.traineeId ?? "", trainees, "Trainee", false)}
       {err && <div className="sa-err">{err}</div>}
     </div>
   );
@@ -423,6 +468,15 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
         .sa-select { min-width: 160px; }
         .sa-required { border-color: #fca5a5 !important; }
         .sa-err { font-size: 11.5px; color: #b91c1c; margin-top: 2px; }
+        .sa-junior-list { display: flex; flex-direction: column; gap: 3px; max-height: 120px; overflow-y: auto; }
+        .sa-junior-item {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 12.5px; color: #1a1a1a; cursor: pointer;
+          padding: 4px 8px; border-radius: 7px; border: 1.5px solid #e5e0d8;
+          background: #fafaf8; transition: all 0.12s; user-select: none;
+        }
+        .sa-junior-item:hover { border-color: #b7e4c7; background: #f0fdf4; }
+        .sa-junior-item.checked { border-color: #2d6a4f; background: #e8f5ee; color: #1b4332; font-weight: 500; }
         .ps-select {
           font-family: 'Outfit', sans-serif; font-size: 13px; color: #1a1a1a;
           background: #f5f3ef; border: 1.5px solid #e5e0d8; border-radius: 8px;
@@ -704,19 +758,19 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
                                   <span style={{ fontSize: 13, color: "#1a1a1a" }}>{patient.seniorEditorName}</span>
                                 </div>
                               )}
-                              {patient.juniorName && (
-                                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                              {(patient.juniorNames ?? []).map((name, i) => (
+                                <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                   <span style={{ fontSize: 10, fontWeight: 700, background: "#D6EEF8", color: "#0C3C60", padding: "1px 6px", borderRadius: 100, textTransform: "uppercase" }}>Junior</span>
-                                  <span style={{ fontSize: 13, color: "#1a1a1a" }}>{patient.juniorName}</span>
+                                  <span style={{ fontSize: 13, color: "#1a1a1a" }}>{name}</span>
                                 </div>
-                              )}
+                              ))}
                               {patient.traineeName && (
                                 <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                   <span style={{ fontSize: 10, fontWeight: 700, background: "#f3f4f6", color: "#374151", padding: "1px 6px", borderRadius: 100, textTransform: "uppercase" }}>Trainee</span>
                                   <span style={{ fontSize: 13, color: "#1a1a1a" }}>{patient.traineeName}</span>
                                 </div>
                               )}
-                              {!patient.seniorEditorName && !patient.juniorName && !patient.traineeName && (
+                              {!patient.seniorEditorName && (patient.juniorNames ?? []).length === 0 && !patient.traineeName && (
                                 <span className="pt-unassigned-chip">
                                   <Plus size={10} strokeWidth={2.5} />
                                   Unassigned

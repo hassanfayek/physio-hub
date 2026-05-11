@@ -160,7 +160,7 @@ export async function createAppointment(
       body:      `${payload.patientName} → ${payload.physioName} on ${payload.date} at ${fmtHour12(payload.hour)}`,
       sourceId:  `appt_booked_${ref.id}`,
       patientId: payload.patientId,
-    }, { physioId: payload.physioId });
+    });
     return { id: ref.id };
   } catch (err) {
     return { error: parseError(err) };
@@ -184,7 +184,7 @@ export async function deleteAppointment(
         body:      `${a.patientName} → ${a.physioName} on ${a.date} at ${fmtHour12(a.hour)}`,
         sourceId:  `appt_cancelled_${appointmentId}`,
         patientId: a.patientId,
-      }, { physioId: a.physioId });
+      });
     }
     return {};
   } catch (err) {
@@ -450,7 +450,7 @@ export async function updateAppointmentStatus(
         body:      `${a.patientName}'s appointment on ${a.date} at ${fmtHour12(a.hour)} was ${label}.`,
         sourceId:  `appt_status_${appointmentId}_${status}`,
         patientId: a.patientId,
-      }, { physioId: a.physioId });
+      });
     }
     return {};
   } catch (err) {
@@ -519,7 +519,7 @@ export async function updateAppointmentConfirmation(
           body:      `${a.patientName} confirmed their session on ${a.date} at ${fmtHour12(a.hour)}`,
           sourceId:  `appt_confirmed_${appointmentId}`,
           patientId: a.patientId,
-        }, { physioId: a.physioId });
+        });
       }
     }
     return {};
