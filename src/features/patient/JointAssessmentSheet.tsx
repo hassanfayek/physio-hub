@@ -352,7 +352,7 @@ const END_FEELS      = ["","firm","soft","hard","empty","springy"];
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ROMEntry { active: string; passive: string; endFeel: string; pain: string; }
-interface MuscleEntry { grade: string; force: string; }
+interface MuscleEntry { grade: string; force: string; timeToPeak: string; firingDuration: string; }
 interface TestEntry    { result: string; notes: string; }
 interface BalanceEntry { value: string; result: string; notes: string; }
 
@@ -509,7 +509,7 @@ function MuscleTable({
       ...data,
       muscles: {
         ...data.muscles,
-        [mid]: { ...{ grade: "", force: "" }, ...data.muscles[mid], [field]: val },
+        [mid]: { ...{ grade: "", force: "", timeToPeak: "", firingDuration: "" }, ...data.muscles[mid], [field]: val },
       },
     };
     onChange(jointKey, updated);
@@ -532,11 +532,13 @@ function MuscleTable({
             <th className="jas-th-muscle">Muscle / Group</th>
             <th className="jas-th-grade">Oxford Grade (0–5)</th>
             <th className="jas-th-force">Force (N/kg) <span className="jas-device-badge">Device</span></th>
+            <th className="jas-th-val" style={{ minWidth: 90 }}>Time to Peak <span style={{ fontSize: 9, color: "#9a9590", display: "block" }}>ms</span></th>
+            <th className="jas-th-val" style={{ minWidth: 90 }}>Firing Duration <span style={{ fontSize: 9, color: "#9a9590", display: "block" }}>ms</span></th>
           </tr>
         </thead>
         <tbody>
           {muscles.map((m) => {
-            const mu = data.muscles[m.id] ?? { grade: "", force: "" };
+            const mu = data.muscles[m.id] ?? { grade: "", force: "", timeToPeak: "", firingDuration: "" };
             return (
               <tr key={m.id}>
                 <td className="jas-td-muscle">{m.label}</td>
@@ -559,6 +561,16 @@ function MuscleTable({
                   {canEdit
                     ? <input className="jas-cell-input" value={mu.force} onChange={(e) => set(m.id, "force", e.target.value)} placeholder="pending device" />
                     : <span className="jas-cell-val">{mu.force || <span style={{ color: "#c0bbb4", fontStyle: "italic", fontSize: 12 }}>pending</span>}</span>}
+                </td>
+                <td>
+                  {canEdit
+                    ? <input className="jas-cell-input" type="number" min="0" value={mu.timeToPeak ?? ""} onChange={(e) => set(m.id, "timeToPeak", e.target.value)} placeholder="—" />
+                    : <span className="jas-cell-val">{mu.timeToPeak || "—"}</span>}
+                </td>
+                <td>
+                  {canEdit
+                    ? <input className="jas-cell-input" type="number" min="0" value={mu.firingDuration ?? ""} onChange={(e) => set(m.id, "firingDuration", e.target.value)} placeholder="—" />
+                    : <span className="jas-cell-val">{mu.firingDuration || "—"}</span>}
                 </td>
               </tr>
             );
