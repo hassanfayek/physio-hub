@@ -1496,9 +1496,13 @@ export default function PhysioDashboard() {
           .phd-sidebar { display: none !important; }
           .phd-logout-btn { padding: 8px; }
           .phd-logout-btn .phd-logout-text { display: none; }
-          .phd-user-name { max-width: 90px; }
-          .phd-user-chip { padding: 5px 10px; }
+          .phd-user-name { max-width: 70px; }
+          .phd-user-chip { padding: 5px 8px; }
           .phd-main { padding: 14px 12px 80px; }
+          .phd-topbar-brand-sub { display: none; }
+          .phd-topbar-brand-name { font-size: 13px; }
+          .phd-topbar-brand img { height: 28px !important; }
+          .phd-topbar-brand { gap: 7px; }
 
           .phd-bottom-nav {
             display: flex;

@@ -569,9 +569,23 @@ export default function ExplosivePowerSheet({ patientId, patientName, canEdit }:
         .eps-empty { text-align: center; padding: 40px 20px; color: #9a9590; font-size: 14px; }
 
         @media (max-width: 640px) {
+          .eps-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+          .eps-header > div:last-child { width: 100%; display: flex; gap: 8px; }
+          .eps-add-btn { flex: 1; justify-content: center; }
+          .eps-charts-toggle { flex: 1; justify-content: center; }
+
           .eps-form-row { grid-template-columns: 1fr; }
           .eps-section-body { grid-template-columns: 1fr 1fr; }
           .eps-charts-grid { grid-template-columns: 1fr; }
+          .eps-form-card { padding: 16px; }
+
+          .eps-session-header { flex-wrap: wrap; gap: 8px; }
+          .eps-session-date { min-width: unset; font-size: 13px; }
+          .eps-session-pills { order: 3; width: 100%; }
+          .eps-session-del { order: 2; }
+
+          .eps-snapshot-grid { grid-template-columns: 1fr 1fr; }
+          .eps-snapshot-group { min-width: 0; }
         }
       `}</style>
 

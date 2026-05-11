@@ -257,6 +257,10 @@ export default function ViewerDashboard() {
           .vd-body  { padding: 16px; }
           .vd-stat-strip { grid-template-columns: repeat(2, 1fr); }
           .vd-user-name { display: none; }
+          .vd-logo-sub { display: none; }
+          .vd-logo-name { font-size: 13px; }
+          .vd-logo img { height: 28px !important; }
+          .vd-logo { gap: 7px; }
         }
       `}</style>
 
