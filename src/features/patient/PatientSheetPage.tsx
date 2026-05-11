@@ -26,6 +26,7 @@ import {
 import type { PhysioProfile } from "../../services/authService";
 import ExerciseProgram        from "./ExerciseProgram";
 import JointAssessmentSheet  from "./JointAssessmentSheet";
+import ExplosivePowerSheet   from "./ExplosivePowerSheet";
 import PatientPricingSection from "./PatientPricingSection";
 import { subscribeToBillingSettings, updateSessionPackage } from "../../services/priceService";
 import {
@@ -923,6 +924,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     { id: "session-history",   label: "Session History" },
     { id: "exercises",         label: "Exercises" },
     { id: "joint-assessment",  label: "Body Profile",     physioOnly: patient?.hideBodyProfile !== false },
+    { id: "explosive-power",   label: "Explosive Power",  physioOnly: true },
     { id: "pricing",           label: "Price Sheet",       billingOnly: true },
     { id: "physician-notes",   label: "Physician Notes",   hideFromPatient: true },
     { id: "ai-plan",           label: "AI Treatment Plan", managerOnly: true, hideFromPatient: true },
@@ -3478,6 +3480,15 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         </>
       )}
     </>
+      )}
+
+      {/* ── EXPLOSIVE POWER ── */}
+      {activeSection === "explosive-power" && role !== "patient" && !isSecretary && (
+        <ExplosivePowerSheet
+          patientId={patientId!}
+          patientName={patient ? `${patient.firstName} ${patient.lastName}` : undefined}
+          canEdit={isManager || role === "physiotherapist"}
+        />
       )}
 
       {/* ── AI TREATMENT PLAN ── */}

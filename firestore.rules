@@ -162,6 +162,13 @@ service cloud.firestore {
       allow write: if isManager() || isPhysio();
     }
 
+    // ── Explosive Power Assessments ───────────────────────────────────────────
+    match /explosivePowerSessions/{docId} {
+      allow read:   if isStaff();
+      allow create: if isManager() || isPhysio();
+      allow delete: if isManager() || isPhysio();
+    }
+
     // ── Clinic Settings ──────────────────────────────────────────────────────
     match /clinicSettings/{docId} {
       allow read:  if isStaff() || isPatient();
