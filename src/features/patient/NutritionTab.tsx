@@ -699,15 +699,21 @@ export default function NutritionTab({ patientId, patientName, canEdit }: Props)
 
   useEffect(() => {
     setLoading(true);
-    getNutritionProfile(patientId).then((data) => {
-      if (data) {
-        setProfile(data);
-        setIsNew(false);
-      } else {
+    getNutritionProfile(patientId)
+      .then((data) => {
+        if (data) {
+          setProfile(data);
+          setIsNew(false);
+        } else {
+          setIsNew(true);
+        }
+      })
+      .catch(() => {
         setIsNew(true);
-      }
-      setLoading(false);
-    });
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [patientId]);
 
   const handleSave = useCallback(async (updated: NutritionProfile) => {

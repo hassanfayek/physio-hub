@@ -169,11 +169,10 @@ service cloud.firestore {
       allow delete: if isManager() || isPhysio();
     }
 
-    // ── FIFA Referee Assessments ──────────────────────────────────────────────
-    match /fifaRefereeAssessments/{docId} {
-      allow read:   if isStaff();
-      allow create: if isManager() || isPhysio();
-      allow delete: if isManager() || isPhysio();
+    // ── Nutrition Plans ───────────────────────────────────────────────────────
+    match /nutritionProfiles/{patientId} {
+      allow read:  if isStaff();
+      allow write: if isManager() || isPhysio();
     }
 
     // ── Clinic Settings ──────────────────────────────────────────────────────
