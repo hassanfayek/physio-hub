@@ -349,14 +349,12 @@ exports.generateNutritionQuantities = onCall(
 
     // ── Core profile ─────────────────────────────────────────────────────────
 
-    const weight      = nutrition.weight        ?? 75;
-    const gender      = nutrition.gender        ?? "male";
-    const goal        = (nutrition.goal         ?? "maintenance").replace(/_/g, " ");
-    const activity    = nutrition.activityLevel ?? "moderate";
-    const carbChoice  = nutrition.carbChoice    ?? "rice";
-    const meal3Choice = nutrition.meal3Choice   ?? "chicken";
-    const ib          = nutrition.inBody        ?? {};
-    const intake      = nutrition.intakeForm    ?? {};
+    const weight   = nutrition.weight        ?? 75;
+    const gender   = nutrition.gender        ?? "male";
+    const goal     = (nutrition.goal         ?? "maintenance").replace(/_/g, " ");
+    const activity = nutrition.activityLevel ?? "moderate";
+    const ib       = nutrition.inBody        ?? {};
+    const intake   = nutrition.intakeForm    ?? {};
 
     // ── InBody section ───────────────────────────────────────────────────────
 
@@ -437,11 +435,11 @@ Meal 1 (~1:00 PM — Lunch):
 
 Meal 2 (5:00–7:00 PM):
   - Animal protein (chicken/fish/meat, cooked weight): base 200 g
-  - ${carbChoice === "rice" ? "Rice (white or brown, cooked weight): base 100 g" : "Potatoes (boiled/grilled, cooked weight): base 150 g"}
+  - Rice or Potatoes (cooked weight): base 100 g — use rice as reference quantity; potatoes ×1.5 if preferred
   - Sautéed / grilled vegetables: base 150 g
 
 Meal 3 (11:00 PM):
-  - ${meal3Choice === "chicken" ? "Grilled chicken breast (cooked weight): base 150 g" : "Tuna (canned in brine): 1 can — do NOT quantify"}
+  - Grilled Chicken Breast / Tuna (cooked weight for chicken; 1 can tuna): base 150 g for chicken
   - Sweet corn: base 50 g
   - Greek yogurt: base 170 g
   - Natural honey (1 tsp): fixed — do NOT quantify
@@ -491,9 +489,9 @@ Return ONLY valid JSON (no markdown fences, no text outside JSON):
   "bran_bread": <grams, multiple of 5>,
   "fresh_cheese": <grams, multiple of 5>,
   "protein2": <grams, multiple of 5>,
-  ${carbChoice === "rice" ? '"rice"' : '"potatoes"'}: <grams, multiple of 5>,
+  "carb2": <grams, multiple of 5>,
   "veg2": <grams, multiple of 5>,
-  ${meal3Choice === "chicken" ? '"chicken3": <grams, multiple of 5>,' : ""}
+  "protein3": <grams, multiple of 5>,
   "sweetcorn3": <grams, multiple of 5>,
   "yogurt3": <grams, multiple of 5>,
   "waterLiters": <number to one decimal place>,

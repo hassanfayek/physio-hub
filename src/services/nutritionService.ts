@@ -5,10 +5,8 @@ import { db } from "../firebase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type NutritionGoal      = "weight_loss" | "maintenance" | "muscle_gain" | "performance";
-export type ActivityLevel      = "sedentary"   | "moderate"   | "active"      | "athlete";
-export type CarbChoice         = "rice"        | "potatoes";
-export type Meal3ProteinChoice = "tuna"        | "chicken";
+export type NutritionGoal = "weight_loss" | "maintenance" | "muscle_gain" | "performance";
+export type ActivityLevel = "sedentary"   | "moderate"   | "active"      | "athlete";
 
 export interface InBodyData {
   measuredAt:         string;        // ISO date string  (YYYY-MM-DD)
@@ -54,8 +52,6 @@ export interface NutritionProfile {
   gender:        "male" | "female";
   goal:          NutritionGoal;
   activityLevel: ActivityLevel;
-  carbChoice:    CarbChoice;
-  meal3Choice:   Meal3ProteinChoice;
   overrides:     Record<string, number>; // manual overrides: itemId → quantity
   inBody?:       InBodyData;
   supplements?:  CustomSupplement[];
@@ -109,8 +105,6 @@ export const DEFAULT_NUTRITION_PROFILE: NutritionProfile = {
   gender:        "male",
   goal:          "maintenance",
   activityLevel: "moderate",
-  carbChoice:    "rice",
-  meal3Choice:   "chicken",
   overrides:     {},
   supplements:   DEFAULT_SUPPLEMENTS,
 };
@@ -128,8 +122,6 @@ export async function getNutritionProfile(
     gender:        d.gender        ?? DEFAULT_NUTRITION_PROFILE.gender,
     goal:          d.goal          ?? DEFAULT_NUTRITION_PROFILE.goal,
     activityLevel: d.activityLevel ?? DEFAULT_NUTRITION_PROFILE.activityLevel,
-    carbChoice:    d.carbChoice    ?? DEFAULT_NUTRITION_PROFILE.carbChoice,
-    meal3Choice:   d.meal3Choice   ?? DEFAULT_NUTRITION_PROFILE.meal3Choice,
     overrides:     d.overrides     ?? {},
     inBody:        d.inBody        ?? undefined,
     supplements:   d.supplements   ?? DEFAULT_SUPPLEMENTS,

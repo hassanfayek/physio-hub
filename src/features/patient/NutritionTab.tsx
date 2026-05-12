@@ -17,8 +17,6 @@ import {
   type IntakeForm,
   type NutritionGoal,
   type ActivityLevel,
-  type CarbChoice,
-  type Meal3ProteinChoice,
 } from "../../services/nutritionService";
 
 // ─── Plan Template ────────────────────────────────────────────────────────────
@@ -35,8 +33,6 @@ interface FoodItem {
   unit:        string;
   scaleType:   ScaleType;
   note?:       string;
-  carbGuard?:  CarbChoice;
-  meal3Guard?: Meal3ProteinChoice;
   overridable: boolean;
 }
 
@@ -71,10 +67,9 @@ const MEALS: MealDef[] = [
       "Carbs weighed after cooking as well",
     ],
     items: [
-      { id: "protein2",  label: "Animal Protein",              baseQty: 200, unit: "g", scaleType: "protein", overridable: true, note: "Chicken breast / thigh fillet / shish tawook / smoked fish — weight after cooking" },
-      { id: "rice",      label: "Rice (white or brown)",       baseQty: 100, unit: "g", scaleType: "carb",    overridable: true, carbGuard: "rice",     note: "Weight after cooking" },
-      { id: "potatoes",  label: "Potatoes",                    baseQty: 150, unit: "g", scaleType: "carb",    overridable: true, carbGuard: "potatoes", note: "Boiled, mashed, or grilled — weight after cooking" },
-      { id: "veg2",      label: "Sautéed / Grilled Vegetables",baseQty: 150, unit: "g", scaleType: "fixed",   overridable: true, note: "With tomato sauce, no oil" },
+      { id: "protein2", label: "Animal Protein",               baseQty: 200, unit: "g", scaleType: "protein", overridable: true, note: "Chicken breast / thigh fillet / shish tawook / smoked fish — weight after cooking" },
+      { id: "carb2",    label: "Rice / Potatoes",              baseQty: 100, unit: "g", scaleType: "carb",    overridable: true, note: "Rice (white or brown) or potatoes — weight after cooking" },
+      { id: "veg2",     label: "Sautéed / Grilled Vegetables", baseQty: 150, unit: "g", scaleType: "fixed",   overridable: true, note: "With tomato sauce, no oil" },
       { id: "salad2",    label: "Green Salad",                 baseQty: 0,   unit: "free", scaleType: "fixed", overridable: false, note: "Unlimited" },
     ],
   },
@@ -82,8 +77,7 @@ const MEALS: MealDef[] = [
     id: "meal3", label: "Third Meal", time: "11:00 PM – 12:00 AM",
     tips: ["Can add small drizzle of olive oil to salad"],
     items: [
-      { id: "chicken3",   label: "Grilled Chicken Breast",     baseQty: 150, unit: "g",     scaleType: "protein", overridable: true,  meal3Guard: "chicken", note: "Weight after cooking" },
-      { id: "tuna3",      label: "Tuna (canned, in brine)",    baseQty: 0,   unit: "1 can", scaleType: "fixed",   overridable: false, meal3Guard: "tuna" },
+      { id: "protein3",   label: "Grilled Chicken Breast / Tuna", baseQty: 150, unit: "g", scaleType: "protein", overridable: true, note: "Chicken breast (cooked weight) or 1 can tuna in brine" },
       { id: "sweetcorn3", label: "Sweet Corn",                 baseQty: 50,  unit: "g",     scaleType: "fixed",   overridable: true  },
       { id: "mushroom3",  label: "Mushroom",                   baseQty: 0,   unit: "free",  scaleType: "fixed",   overridable: false, note: "Any amount" },
       { id: "salad3",     label: "Green Salad",                baseQty: 0,   unit: "free",  scaleType: "fixed",   overridable: false, note: "Unlimited" },
@@ -200,11 +194,7 @@ function MealCard({
   };
   const c = COLORS[meal.id] ?? COLORS.meal1;
 
-  const visible = meal.items.filter((item) => {
-    if (item.carbGuard  && item.carbGuard  !== profile.carbChoice)  return false;
-    if (item.meal3Guard && item.meal3Guard !== profile.meal3Choice) return false;
-    return true;
-  });
+  const visible = meal.items;
 
   const commit = (item: FoodItem) => {
     const v = parseFloat(editVal);
@@ -938,11 +928,6 @@ export default function NutritionTab({ patientId, patientName, canEdit }: Props)
     if (!win) return;
     const mealHTML = MEALS.map((meal) => {
       const rows = meal.items
-        .filter((item) => {
-          if (item.carbGuard  && item.carbGuard  !== profile.carbChoice)  return false;
-          if (item.meal3Guard && item.meal3Guard !== profile.meal3Choice) return false;
-          return true;
-        })
         .map((item) => {
           const { value } = resolveQty(item, profile);
           return `<tr><td style="padding:6px 10px;border-bottom:1px solid #f0ede8">${item.label}${item.note ? `<br><small style="color:#9a9590">${item.note}</small>` : ""}</td><td style="padding:6px 10px;border-bottom:1px solid #f0ede8;text-align:right;font-weight:700">${value}</td></tr>`;
