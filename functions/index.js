@@ -317,3 +317,148 @@ Red Flags
     return { goals, plan };
   }
 );
+
+// ─── Generate Nutrition Quantities ───────────────────────────────────────────
+
+exports.generateNutritionQuantities = onCall(
+  { secrets: [CLAUDE_API_KEY] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be logged in.");
+    }
+
+    const callerDoc = await admin.firestore()
+      .collection("users").doc(request.auth.uid).get();
+    if (!callerDoc.exists) throw new HttpsError("permission-denied", "User not found.");
+    const role = callerDoc.data().role;
+    if (role !== "clinic_manager" && role !== "physiotherapist") {
+      throw new HttpsError("permission-denied", "Only physiotherapists and managers can use AI nutrition.");
+    }
+
+    const { patientId } = request.data;
+    if (!patientId) throw new HttpsError("invalid-argument", "patientId is required.");
+
+    const db = admin.firestore();
+    const [patientSnap, nutritionSnap] = await Promise.all([
+      db.collection("patients").doc(patientId).get(),
+      db.collection("nutritionProfiles").doc(patientId).get(),
+    ]);
+
+    const patient   = patientSnap.exists   ? patientSnap.data()   : {};
+    const nutrition = nutritionSnap.exists ? nutritionSnap.data() : {};
+
+    // ── Build context ────────────────────────────────────────────────────────
+
+    const weight      = nutrition.weight        ?? 75;
+    const gender      = nutrition.gender        ?? "male";
+    const goal        = (nutrition.goal         ?? "maintenance").replace(/_/g, " ");
+    const activity    = nutrition.activityLevel ?? "moderate";
+    const carbChoice  = nutrition.carbChoice    ?? "rice";
+    const meal3Choice = nutrition.meal3Choice   ?? "chicken";
+    const ib          = nutrition.inBody        ?? {};
+
+    const inBodyLines = [];
+    if (ib.weight)             inBodyLines.push(`  Measured Weight: ${ib.weight} kg`);
+    if (ib.skeletalMuscleMass) inBodyLines.push(`  Skeletal Muscle Mass (SMM): ${ib.skeletalMuscleMass} kg`);
+    if (ib.bodyFatMass)        inBodyLines.push(`  Body Fat Mass: ${ib.bodyFatMass} kg`);
+    if (ib.bodyFatPercent)     inBodyLines.push(`  Body Fat %: ${ib.bodyFatPercent}%`);
+    if (ib.bmi)                inBodyLines.push(`  BMI: ${ib.bmi}`);
+    if (ib.bmr)                inBodyLines.push(`  BMR (Basal Metabolic Rate): ${ib.bmr} kcal/day`);
+    if (ib.visceralFatLevel)   inBodyLines.push(`  Visceral Fat Level: ${ib.visceralFatLevel}/20`);
+    if (ib.totalBodyWater)     inBodyLines.push(`  Total Body Water: ${ib.totalBodyWater} L`);
+    if (ib.notes && ib.notes.trim()) inBodyLines.push(`  Notes: ${ib.notes}`);
+
+    const inBodySection = inBodyLines.length > 0
+      ? `InBody Measurement:\n${inBodyLines.join("\n")}`
+      : "InBody Measurement: Not recorded";
+
+    const prompt = `You are a clinical nutrition specialist. Analyse the patient data below and return optimised food quantities for the 3-meal diet plan template.
+
+PATIENT:
+  Name: ${[patient.firstName, patient.lastName].filter(Boolean).join(" ") || "Unknown"}
+  Self-reported weight: ${weight} kg
+  Gender: ${gender}
+  Goal: ${goal}
+  Activity level: ${activity}
+
+${inBodySection}
+
+BASE DIET PLAN TEMPLATE:
+Meal 1 (~1 PM — Lunch):
+  - Eggs: base 3 eggs
+  - Bran bread: base 30 g
+  - Fresh cheese: base 150 g
+  - Green salad: unlimited (do not quantify)
+  - Fruit: 1 piece (do not quantify)
+
+Meal 2 (5–7 PM):
+  - Animal protein: base 200 g (cooked weight)
+  - Carb — ${carbChoice === "rice" ? "Rice: base 100 g" : "Potatoes: base 150 g"} (cooked weight)
+  - Sautéed vegetables: base 150 g
+
+Meal 3 (11 PM):
+  - ${meal3Choice === "chicken" ? "Chicken breast: base 150 g (cooked weight)" : "Tuna: 1 can (do not quantify)"}
+  - Sweet corn: base 50 g
+  - Greek yogurt: base 170 g
+  - Honey: 1 tsp (do not quantify)
+
+CALCULATION RULES:
+1. If BMR is provided, compute TDEE = BMR × activity_multiplier:
+   - sedentary: ×1.20, moderate: ×1.55, active: ×1.725, athlete: ×1.90
+2. Adjust for goal:
+   - weight loss: TDEE × 0.80 (20% deficit)
+   - maintenance: TDEE × 1.00
+   - muscle gain: TDEE × 1.00 + extra 250–300 kcal (mostly protein)
+   - performance: TDEE × 1.10
+3. Protein target:
+   - If SMM known: protein_g = SMM(kg) × 3.5 (to protect muscle)
+   - Else: weight × (1.8 for weight loss, 2.0 maintenance, 2.4 muscle gain, 2.6 performance)
+4. Carbs: drive by activity — athlete gets significantly more than sedentary
+5. Water: max(4.0, weight × 0.040) L + activity bonus (sedentary: 0, moderate: +0.5, active: +1.0, athlete: +1.5), round to nearest 0.5
+6. Eggs: 1–6, integer only
+7. All gram values must be multiples of 5
+8. Apply gender factor for females: multiply all quantities by 0.85 before rounding
+
+Return ONLY valid JSON, no markdown, no explanation outside the "reasoning" field:
+{
+  "eggs": <1–6>,
+  "bran_bread": <grams, multiple of 5>,
+  "fresh_cheese": <grams, multiple of 5>,
+  "protein2": <grams, multiple of 5>,
+  ${carbChoice === "rice" ? '"rice"' : '"potatoes"'}: <grams, multiple of 5>,
+  "veg2": <grams, multiple of 5>,
+  ${meal3Choice === "chicken" ? '"chicken3": <grams, multiple of 5>,' : ""}
+  "sweetcorn3": <grams, multiple of 5>,
+  "yogurt3": <grams, multiple of 5>,
+  "waterLiters": <number, one decimal, e.g. 3.5>,
+  "reasoning": "<2–3 sentences explaining the key decisions, referencing specific InBody values if available>"
+}`;
+
+    const client = new Anthropic({ apiKey: CLAUDE_API_KEY.value() });
+
+    const response = await client.messages.create({
+      model:      "claude-sonnet-4-6",
+      max_tokens: 600,
+      messages:   [{ role: "user", content: prompt }],
+    });
+
+    const raw = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+
+    // Strip markdown code fences if present
+    const jsonStr = raw.replace(/^```[a-z]*\n?/i, "").replace(/```$/,"").trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      throw new HttpsError("internal", "AI returned invalid JSON. Please try again.");
+    }
+
+    const { reasoning, ...quantities } = parsed;
+    return { quantities, reasoning: reasoning ?? "" };
+  }
+);
