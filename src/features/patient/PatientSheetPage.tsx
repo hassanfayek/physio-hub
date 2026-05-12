@@ -27,7 +27,7 @@ import type { PhysioProfile } from "../../services/authService";
 import ExerciseProgram        from "./ExerciseProgram";
 import JointAssessmentSheet  from "./JointAssessmentSheet";
 import ExplosivePowerSheet   from "./ExplosivePowerSheet";
-import FifaRefereeSheet      from "./FifaRefereeSheet";
+import NutritionTab          from "./NutritionTab";
 import PatientPricingSection from "./PatientPricingSection";
 import { subscribeToBillingSettings, updateSessionPackage } from "../../services/priceService";
 import {
@@ -927,6 +927,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
     { id: "joint-assessment",  label: "Body Profile",     physioOnly: patient?.hideBodyProfile !== false },
     { id: "pricing",           label: "Price Sheet",       billingOnly: true },
     { id: "physician-notes",   label: "Physician Notes",   hideFromPatient: true },
+    { id: "nutrition",         label: "Nutrition Plan",    physioOnly: true },
     { id: "ai-plan",           label: "AI Treatment Plan", managerOnly: true, hideFromPatient: true },
   ];
   // Filter sections by role:
@@ -3486,16 +3487,15 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
               />
             </div>
           )}
-          {role !== "patient" && !isSecretary && (
-            <div style={{ marginTop: 32, borderTop: "1.5px solid #e8e3dc", paddingTop: 28 }}>
-              <FifaRefereeSheet
-                patientId={patientId!}
-                patientName={patient ? `${patient.firstName} ${patient.lastName}` : undefined}
-                canEdit={isManager || role === "physiotherapist"}
-              />
-            </div>
-          )}
         </>
+      )}
+      {/* ── NUTRITION PLAN ── */}
+      {activeSection === "nutrition" && (
+        <NutritionTab
+          patientId={patientId!}
+          patientName={patient ? `${patient.firstName} ${patient.lastName}` : "Patient"}
+          canEdit={isManager || role === "physiotherapist"}
+        />
       )}
     </>
       )}
