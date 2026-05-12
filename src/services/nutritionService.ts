@@ -1,6 +1,6 @@
 // FILE: src/services/nutritionService.ts
 
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -109,5 +109,16 @@ export async function saveNutritionProfile(
     return {};
   } catch (err) {
     return { error: (err as Error).message ?? "Failed to save." };
+  }
+}
+
+export async function deleteNutritionProfile(
+  patientId: string
+): Promise<{ error?: string }> {
+  try {
+    await deleteDoc(doc(db, "nutritionProfiles", patientId));
+    return {};
+  } catch (err) {
+    return { error: (err as Error).message ?? "Failed to delete." };
   }
 }

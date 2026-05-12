@@ -6,6 +6,7 @@ import { Printer, ChevronDown, ChevronUp, Edit2, Save, X, RotateCcw, Sparkles, P
 import {
   getNutritionProfile,
   saveNutritionProfile,
+  deleteNutritionProfile,
   DEFAULT_NUTRITION_PROFILE,
   DEFAULT_INBODY,
   DEFAULT_SUPPLEMENTS,
@@ -588,6 +589,8 @@ export default function NutritionTab({ patientId, patientName, canEdit }: Props)
   const [aiLoading,       setAiLoading]       = useState(false);
   const [aiError,         setAiError]         = useState<string | null>(null);
   const [aiReasoningOpen, setAiReasoningOpen] = useState(false);
+  const [deleteConfirm,   setDeleteConfirm]   = useState(false);
+  const [deleting,        setDeleting]        = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -624,6 +627,17 @@ export default function NutritionTab({ patientId, patientName, canEdit }: Props)
     setProfile(updated);
     saveNutritionProfile(patientId, updated);
   }, [profile, patientId]);
+
+  const handleDelete = useCallback(async () => {
+    setDeleting(true);
+    const result = await deleteNutritionProfile(patientId);
+    if (!result.error) {
+      setProfile(DEFAULT_NUTRITION_PROFILE);
+      setIsNew(true);
+      setDeleteConfirm(false);
+    }
+    setDeleting(false);
+  }, [patientId]);
 
   const handleAiOptimise = useCallback(async () => {
     setAiLoading(true);
@@ -711,8 +725,32 @@ export default function NutritionTab({ patientId, patientName, canEdit }: Props)
             </button>
           )}
           {!isNew && <button onClick={handlePrint} style={{ ...BTN, background: "#fafaf8", color: "#1a1a1a" }}><Printer size={13} /> Print</button>}
+          {!isNew && canEdit && (
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              style={{ ...BTN, background: "#fef2f2", color: "#dc2626", borderColor: "#fecaca" }}
+            ><Trash2 size={13} /> Delete Plan</button>
+          )}
         </div>
       </div>
+
+      {/* Delete confirmation */}
+      {deleteConfirm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: "28px 28px 24px", maxWidth: 380, width: "90%", fontFamily: "'Outfit',sans-serif", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 600, color: "#1a1a1a", marginBottom: 10 }}>Delete Nutrition Plan?</div>
+            <div style={{ fontSize: 13.5, color: "#6b7280", lineHeight: 1.6, marginBottom: 24 }}>
+              This will permanently remove the plan, all InBody data, AI quantities, and overrides for this patient. This action cannot be undone.
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button onClick={() => setDeleteConfirm(false)} style={{ ...BTN, background: "#fafaf8", color: "#9a9590" }}>Cancel</button>
+              <button onClick={handleDelete} disabled={deleting} style={{ ...BTN, background: "#dc2626", color: "#fff", border: "none", padding: "8px 18px" }}>
+                {deleting ? "Deleting…" : <><Trash2 size={13} /> Delete Plan</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI error */}
       {aiError && (
