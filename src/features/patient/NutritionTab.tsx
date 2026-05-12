@@ -585,7 +585,7 @@ function IntakeFormCard({ profile, onSave, saving, isNew, canEdit }: {
   saving: boolean; isNew: boolean; canEdit: boolean;
 }) {
   const hasForm = !!profile.intakeForm?.completedAt;
-  const [editing, setEditing] = useState(!hasForm);
+  const [editing, setEditing] = useState(isNew && !hasForm);
   const [open,    setOpen]    = useState(true);
   const [draft,   setDraft]   = useState<IntakeForm>(profile.intakeForm ?? DEFAULT_INTAKE_FORM);
 
@@ -1062,16 +1062,16 @@ export default function NutritionTab({ patientId, patientName, canEdit }: Props)
         </div>
       )}
 
-      {/* Intake Form — entry point when new, collapsible summary when plan exists */}
+      {/* Intake Form — always visible when canEdit; auto-opens only for brand-new patients */}
       {canEdit && (
         <IntakeFormCard profile={profile} onSave={persist} saving={saving} isNew={isNew} canEdit={canEdit} />
       )}
 
-      {/* Setup & InBody — only after intake form submitted and plan document created */}
-      {!isNew && <SetupCard profile={profile} onSave={persist} saving={saving} isNew={false} />}
+      {/* Patient Variables */}
+      {(canEdit || !isNew) && <SetupCard profile={profile} onSave={persist} saving={saving} isNew={isNew} />}
 
-      {/* InBody */}
-      {!isNew && canEdit && <InBodyCard profile={profile} onSave={persist} saving={saving} />}
+      {/* InBody — visible as soon as physio opens the plan (not gated on isNew) */}
+      {canEdit && <InBodyCard profile={profile} onSave={persist} saving={saving} />}
 
       {/* Plan */}
       {!isNew && (
