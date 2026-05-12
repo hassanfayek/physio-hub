@@ -340,20 +340,6 @@ function SetupCard({ profile, onSave, saving, isNew }: {
             )}
             {fld("Goal", <select value={draft.goal} onChange={(e) => setDraft({ ...draft, goal: e.target.value as NutritionGoal })} style={SELECT_STYLE}>{(Object.entries(GOAL_LABELS) as [NutritionGoal,string][]).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select>)}
             {fld("Activity Level", <select value={draft.activityLevel} onChange={(e) => setDraft({ ...draft, activityLevel: e.target.value as ActivityLevel })} style={SELECT_STYLE}>{(Object.entries(ACT_LABELS) as [ActivityLevel,string][]).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select>)}
-            {fld("Carb Source (Meal 2)",
-              <div style={{ display: "flex", gap: 8 }}>
-                {([["rice","Rice"],["potatoes","Potatoes"]] as [CarbChoice,string][]).map(([k,v]) => (
-                  <button key={k} onClick={() => setDraft({ ...draft, carbChoice: k })} style={{ flex:1, padding:"8px 0", borderRadius:8, cursor:"pointer", fontFamily:"'Outfit',sans-serif", fontSize:13, fontWeight:500, border:"1.5px solid", borderColor: draft.carbChoice===k ? "#ea580c":"#e5e0d8", background: draft.carbChoice===k ? "#fff7ed":"#fafaf8", color: draft.carbChoice===k ? "#ea580c":"#9a9590", transition:"all 0.15s" }}>{v}</button>
-                ))}
-              </div>
-            )}
-            {fld("Protein Source (Meal 3)",
-              <div style={{ display: "flex", gap: 8 }}>
-                {([["chicken","Chicken"],["tuna","Tuna"]] as [Meal3ProteinChoice,string][]).map(([k,v]) => (
-                  <button key={k} onClick={() => setDraft({ ...draft, meal3Choice: k })} style={{ flex:1, padding:"8px 0", borderRadius:8, cursor:"pointer", fontFamily:"'Outfit',sans-serif", fontSize:13, fontWeight:500, border:"1.5px solid", borderColor: draft.meal3Choice===k ? "#0369a1":"#e5e0d8", background: draft.meal3Choice===k ? "#f0f9ff":"#fafaf8", color: draft.meal3Choice===k ? "#0369a1":"#9a9590", transition:"all 0.15s" }}>{v}</button>
-                ))}
-              </div>
-            )}
           </div>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             {!isNew && <button onClick={() => { setDraft(profile); setEditing(false); }} style={{ ...BTN, background: "#fafaf8", color: "#9a9590" }}>Cancel</button>}
@@ -364,7 +350,7 @@ function SetupCard({ profile, onSave, saving, isNew }: {
         </>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-          {([["Weight", `${profile.weight} kg`], ["Gender", profile.gender.charAt(0).toUpperCase()+profile.gender.slice(1)], ["Goal", GOAL_LABELS[profile.goal]], ["Activity", ACT_LABELS[profile.activityLevel].split(" (")[0]], ["Carbs", profile.carbChoice.charAt(0).toUpperCase()+profile.carbChoice.slice(1)], ["Meal 3", profile.meal3Choice.charAt(0).toUpperCase()+profile.meal3Choice.slice(1)]]).map(([k,v]) => (
+          {([["Weight", `${profile.weight} kg`], ["Gender", profile.gender.charAt(0).toUpperCase()+profile.gender.slice(1)], ["Goal", GOAL_LABELS[profile.goal]], ["Activity", ACT_LABELS[profile.activityLevel].split(" (")[0]]]).map(([k,v]) => (
             <div key={k} style={{ background: "#fafaf8", border: "1px solid #e5e0d8", borderRadius: 10, padding: "8px 14px" }}>
               <div style={{ fontSize: 11, color: "#9a9590", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{k}</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a", marginTop: 2 }}>{v}</div>
@@ -760,11 +746,6 @@ function IntakeFormCard({ profile, onSave, saving, isNew, canEdit }: {
               ))}
             </div>
           ))}
-
-          <div style={{ padding: "10px 14px", background: "#f8f7f4", borderRadius: 10, border: "1px solid #e5e0d8" }}>
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: "#1a1a1a", marginBottom: 2 }}>Photos (Front, Back & Side)</div>
-            <div style={{ fontSize: 12.5, color: "#6b7280" }}>Please share progress photos separately via WhatsApp or email.</div>
-          </div>
 
           {fld("Allergies or Foods You Dislike", (
             <textarea rows={2} value={draft.allergies}
