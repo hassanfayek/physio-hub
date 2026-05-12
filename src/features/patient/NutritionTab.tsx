@@ -10,9 +10,11 @@ import {
   DEFAULT_NUTRITION_PROFILE,
   DEFAULT_INBODY,
   DEFAULT_SUPPLEMENTS,
+  DEFAULT_INTAKE_FORM,
   type NutritionProfile,
   type InBodyData,
   type CustomSupplement,
+  type IntakeForm,
   type NutritionGoal,
   type ActivityLevel,
   type CarbChoice,
@@ -571,6 +573,293 @@ function GuidelineSection({ title, color, dot, items, note }: {
   );
 }
 
+// ─── IntakeFormCard ───────────────────────────────────────────────────────────
+
+const CARB_OPT    = ["Rice", "Potatoes", "Sweet Potatoes", "Pasta"];
+const PROTEIN_OPT = ["Chicken Breast", "Steak / Lean Red Meat", "Fish / Salmon", "Shrimps", "Turkey Breast"];
+const FRUIT_OPT   = ["Apple", "Blueberries", "Raspberries", "Blackberries", "Orange", "Strawberry", "Pineapple", "Banana", "Watermelon", "Grapefruit", "Mango", "Dates", "Kiwi"];
+const FAT_OPT     = ["Almonds", "Cashews", "Peanuts", "Avocados"];
+
+function IntakeFormCard({ profile, onSave, saving, isNew, canEdit }: {
+  profile: NutritionProfile; onSave: (p: NutritionProfile) => void;
+  saving: boolean; isNew: boolean; canEdit: boolean;
+}) {
+  const hasForm = !!profile.intakeForm?.completedAt;
+  const [editing, setEditing] = useState(!hasForm);
+  const [open,    setOpen]    = useState(true);
+  const [draft,   setDraft]   = useState<IntakeForm>(profile.intakeForm ?? DEFAULT_INTAKE_FORM);
+
+  useEffect(() => { setDraft(profile.intakeForm ?? DEFAULT_INTAKE_FORM); }, [profile.intakeForm]);
+
+  const tog = (arr: string[], val: string) =>
+    arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
+
+  const Chips = ({ options, selected, onChange }: { options: string[]; selected: string[]; onChange: (v: string[]) => void }) => (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+      {options.map((opt) => {
+        const on = selected.includes(opt);
+        return (
+          <button key={opt} type="button" onClick={() => onChange(tog(selected, opt))} style={{
+            padding: "5px 13px", borderRadius: 20, border: "1.5px solid",
+            fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 500, cursor: "pointer", transition: "all 0.15s",
+            borderColor: on ? "#1a1a1a" : "#e5e0d8", background: on ? "#1a1a1a" : "#fafaf8", color: on ? "#fff" : "#9a9590",
+          }}>{opt}</button>
+        );
+      })}
+    </div>
+  );
+
+  const fld = (q: string, node: React.ReactNode) => (
+    <div><div style={LABEL_SM}>{q}</div>{node}</div>
+  );
+
+  const handleSave = () => {
+    onSave({ ...profile, intakeForm: { ...draft, completedAt: draft.completedAt || new Date().toISOString().slice(0, 10) } });
+    setEditing(false);
+  };
+
+  const view = profile.intakeForm;
+
+  return (
+    <div style={{ ...CARD, borderColor: hasForm ? "#6ee7b7" : isNew ? "#6366f1" : "#e5e0d8" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: editing ? 20 : 4 }}>
+        <button
+          onClick={() => !editing && setOpen((v) => !v)}
+          style={{ flex: 1, background: "none", border: "none", cursor: editing ? "default" : "pointer", display: "flex", alignItems: "center", gap: 8, padding: 0, textAlign: "left", fontFamily: "'Outfit',sans-serif" }}
+        >
+          <div style={{ ...CARD_TITLE, display: "flex", alignItems: "center", gap: 8 }}>
+            Patient Intake Form
+            {hasForm && !editing && <span style={{ fontSize: 11, background: "#d1fae5", color: "#065f46", border: "1px solid #6ee7b7", borderRadius: 20, padding: "2px 8px", fontFamily: "'Outfit',sans-serif", fontWeight: 600 }}>Completed</span>}
+            {isNew && !hasForm && <span style={{ fontSize: 11, background: "#eef2ff", color: "#4338ca", border: "1px solid #c7d2fe", borderRadius: 20, padding: "2px 8px", fontFamily: "'Outfit',sans-serif", fontWeight: 600 }}>Fill to get started</span>}
+          </div>
+          {!editing && (open ? <ChevronUp size={16} color="#9a9590" /> : <ChevronDown size={16} color="#9a9590" />)}
+        </button>
+        {!editing && canEdit && open && (
+          <button onClick={() => setEditing(true)} style={{ ...BTN, background: "#fafaf8", color: "#1a1a1a", marginLeft: 10 }}>
+            <Edit2 size={13} /> {hasForm ? "Edit" : "Fill Form"}
+          </button>
+        )}
+      </div>
+
+      {/* View mode */}
+      {!editing && open && hasForm && view && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {([
+              ["Age",       view.age    ? `${view.age} yrs`   : null],
+              ["Height",    view.height ? `${view.height} cm` : null],
+              ["Target",    view.target || null],
+              ["Meals/day", `${view.mealsPerDay} meals`],
+              ["Training",  view.trainingLocation === "gym" ? "Gym" : "Home"],
+              ["Days/wk",   `${view.trainingDaysPerWeek} days`],
+            ] as [string, string | null][]).filter(([, v]) => v !== null).map(([k, v]) => (
+              <div key={k} style={{ background: "#fafaf8", border: "1px solid #e5e0d8", borderRadius: 10, padding: "7px 13px" }}>
+                <div style={{ fontSize: 11, color: "#9a9590", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{k}</div>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: "#1a1a1a", marginTop: 2 }}>{v}</div>
+              </div>
+            ))}
+          </div>
+          {view.carbPreferences.length > 0 && (
+            <div>
+              <div style={{ ...LABEL_SM, marginBottom: 4 }}>Carb Preferences</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {view.carbPreferences.map((c) => <span key={c} style={{ fontSize: 12, background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 20, padding: "3px 10px", color: "#ea580c" }}>{c}</span>)}
+              </div>
+            </div>
+          )}
+          {view.proteinPreferences.length > 0 && (
+            <div>
+              <div style={{ ...LABEL_SM, marginBottom: 4 }}>Protein Preferences</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {view.proteinPreferences.map((p) => <span key={p} style={{ fontSize: 12, background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 20, padding: "3px 10px", color: "#0369a1" }}>{p}</span>)}
+              </div>
+            </div>
+          )}
+          {view.fruitPreferences.length > 0 && (
+            <div>
+              <div style={{ ...LABEL_SM, marginBottom: 4 }}>Fruit Preferences</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {view.fruitPreferences.map((f) => <span key={f} style={{ fontSize: 12, background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 20, padding: "3px 10px", color: "#16a34a" }}>{f}</span>)}
+              </div>
+            </div>
+          )}
+          {view.fatPreferences.length > 0 && (
+            <div>
+              <div style={{ ...LABEL_SM, marginBottom: 4 }}>Fat Preferences</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {view.fatPreferences.map((f) => <span key={f} style={{ fontSize: 12, background: "#faf5ff", border: "1px solid #e9d5ff", borderRadius: 20, padding: "3px 10px", color: "#7c3aed" }}>{f}</span>)}
+              </div>
+            </div>
+          )}
+          {view.allergies && (
+            <div style={{ padding: "8px 12px", background: "#fef2f2", borderRadius: 8, fontSize: 13, color: "#dc2626" }}>
+              <span style={{ fontWeight: 600 }}>Allergies / Dislikes: </span>{view.allergies}
+            </div>
+          )}
+          {view.medicalCondition && (
+            <div style={{ padding: "8px 12px", background: "#fefce8", borderRadius: 8, fontSize: 13, color: "#92400e" }}>
+              <span style={{ fontWeight: 600 }}>Medical Condition: </span>{view.medicalCondition}
+            </div>
+          )}
+          {view.currentSupplements && (
+            <div style={{ padding: "8px 12px", background: "#fafaf8", borderRadius: 8, fontSize: 13, color: "#1a1a1a" }}>
+              <span style={{ fontWeight: 600 }}>Current Supplements: </span>{view.currentSupplements}
+            </div>
+          )}
+          {view.trainingHistory && (
+            <div style={{ padding: "8px 12px", background: "#fafaf8", borderRadius: 8, fontSize: 13, color: "#1a1a1a" }}>
+              <span style={{ fontWeight: 600 }}>Training History: </span>{view.trainingHistory}
+            </div>
+          )}
+          {view.dailyRoutine && (
+            <div style={{ padding: "8px 12px", background: "#fafaf8", borderRadius: 8, fontSize: 13, color: "#1a1a1a" }}>
+              <span style={{ fontWeight: 600 }}>Daily Routine: </span>{view.dailyRoutine}
+            </div>
+          )}
+          {view.comments && (
+            <div style={{ padding: "8px 12px", background: "#fafaf8", borderRadius: 8, fontSize: 13, color: "#1a1a1a" }}>
+              <span style={{ fontWeight: 600 }}>Comments: </span>{view.comments}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Edit form */}
+      {editing && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            {fld("Age", (
+              <input type="number" min={10} max={100} value={draft.age ?? ""} placeholder="e.g. 28"
+                onChange={(e) => setDraft({ ...draft, age: e.target.value ? parseInt(e.target.value) : null })}
+                style={{ ...INPUT_STYLE, boxSizing: "border-box" }} />
+            ))}
+            {fld("Height (cm)", (
+              <input type="number" min={100} max={250} value={draft.height ?? ""} placeholder="e.g. 175"
+                onChange={(e) => setDraft({ ...draft, height: e.target.value ? parseInt(e.target.value) : null })}
+                style={{ ...INPUT_STYLE, boxSizing: "border-box" }} />
+            ))}
+          </div>
+
+          {fld("Your Target / Goal", (
+            <input type="text" value={draft.target} placeholder="e.g. Lose 10 kg, build muscle, improve performance…"
+              onChange={(e) => setDraft({ ...draft, target: e.target.value })}
+              style={{ ...INPUT_STYLE, boxSizing: "border-box", width: "100%" }} />
+          ))}
+
+          {fld("Preferred Number of Meals per Day", (
+            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+              {([4, 5] as const).map((n) => (
+                <button key={n} type="button" onClick={() => setDraft({ ...draft, mealsPerDay: n })} style={{
+                  flex: 1, padding: "8px 0", borderRadius: 8, cursor: "pointer",
+                  fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, border: "1.5px solid", transition: "all 0.15s",
+                  borderColor: draft.mealsPerDay === n ? "#1a1a1a" : "#e5e0d8",
+                  background:  draft.mealsPerDay === n ? "#1a1a1a" : "#fafaf8",
+                  color:       draft.mealsPerDay === n ? "#fff"    : "#9a9590",
+                }}>{n} Meals</button>
+              ))}
+            </div>
+          ))}
+
+          <div style={{ padding: "10px 14px", background: "#f8f7f4", borderRadius: 10, border: "1px solid #e5e0d8" }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "#1a1a1a", marginBottom: 2 }}>Photos (Front, Back & Side)</div>
+            <div style={{ fontSize: 12.5, color: "#6b7280" }}>Please share progress photos separately via WhatsApp or email.</div>
+          </div>
+
+          {fld("Allergies or Foods You Dislike", (
+            <textarea rows={2} value={draft.allergies}
+              onChange={(e) => setDraft({ ...draft, allergies: e.target.value })}
+              placeholder="e.g. Lactose intolerant, dislike fish, allergic to nuts…"
+              style={{ ...INPUT_STYLE, resize: "vertical", width: "100%", boxSizing: "border-box", lineHeight: 1.5 } as React.CSSProperties} />
+          ))}
+
+          {fld("Training History — How Long & Last 3 Months Activity", (
+            <textarea rows={2} value={draft.trainingHistory}
+              onChange={(e) => setDraft({ ...draft, trainingHistory: e.target.value })}
+              placeholder="e.g. Training for 2 years, took last 3 months off, mostly strength training…"
+              style={{ ...INPUT_STYLE, resize: "vertical", width: "100%", boxSizing: "border-box", lineHeight: 1.5 } as React.CSSProperties} />
+          ))}
+
+          {fld("Current Supplements", (
+            <input type="text" value={draft.currentSupplements}
+              onChange={(e) => setDraft({ ...draft, currentSupplements: e.target.value })}
+              placeholder="e.g. Whey protein, creatine, multivitamin… or None"
+              style={{ ...INPUT_STYLE, boxSizing: "border-box", width: "100%" }} />
+          ))}
+
+          {fld("Preferred Carb Sources", (
+            <Chips options={CARB_OPT} selected={draft.carbPreferences} onChange={(v) => setDraft({ ...draft, carbPreferences: v })} />
+          ))}
+
+          {fld("Preferred Protein Sources", (
+            <Chips options={PROTEIN_OPT} selected={draft.proteinPreferences} onChange={(v) => setDraft({ ...draft, proteinPreferences: v })} />
+          ))}
+
+          {fld("Preferred Fruits", (
+            <Chips options={FRUIT_OPT} selected={draft.fruitPreferences} onChange={(v) => setDraft({ ...draft, fruitPreferences: v })} />
+          ))}
+
+          {fld("Preferred Fat Sources", (
+            <Chips options={FAT_OPT} selected={draft.fatPreferences} onChange={(v) => setDraft({ ...draft, fatPreferences: v })} />
+          ))}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            {fld("Training Location", (
+              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                {(["gym", "home"] as const).map((loc) => (
+                  <button key={loc} type="button" onClick={() => setDraft({ ...draft, trainingLocation: loc })} style={{
+                    flex: 1, padding: "8px 0", borderRadius: 8, cursor: "pointer",
+                    fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, border: "1.5px solid", transition: "all 0.15s",
+                    borderColor: draft.trainingLocation === loc ? "#1a1a1a" : "#e5e0d8",
+                    background:  draft.trainingLocation === loc ? "#1a1a1a" : "#fafaf8",
+                    color:       draft.trainingLocation === loc ? "#fff"    : "#9a9590",
+                  }}>{loc === "gym" ? "Gym" : "Home"}</button>
+                ))}
+              </div>
+            ))}
+            {fld("Training Days per Week", (
+              <input type="number" min={1} max={7} value={draft.trainingDaysPerWeek}
+                onChange={(e) => setDraft({ ...draft, trainingDaysPerWeek: Math.min(7, Math.max(1, parseInt(e.target.value) || 1)) })}
+                style={{ ...INPUT_STYLE, boxSizing: "border-box" }} />
+            ))}
+          </div>
+
+          {fld("Brief Description of Your Typical Day", (
+            <textarea rows={3} value={draft.dailyRoutine}
+              onChange={(e) => setDraft({ ...draft, dailyRoutine: e.target.value })}
+              placeholder="e.g. Office job 9–5, gym after work, sleep around midnight, active on weekends…"
+              style={{ ...INPUT_STYLE, resize: "vertical", width: "100%", boxSizing: "border-box", lineHeight: 1.5 } as React.CSSProperties} />
+          ))}
+
+          {fld("Medical Conditions", (
+            <input type="text" value={draft.medicalCondition}
+              onChange={(e) => setDraft({ ...draft, medicalCondition: e.target.value })}
+              placeholder="e.g. Type 2 diabetes, hypertension — or None"
+              style={{ ...INPUT_STYLE, boxSizing: "border-box", width: "100%" }} />
+          ))}
+
+          {fld("Additional Comments", (
+            <textarea rows={2} value={draft.comments}
+              onChange={(e) => setDraft({ ...draft, comments: e.target.value })}
+              placeholder="Anything else you'd like us to know…"
+              style={{ ...INPUT_STYLE, resize: "vertical", width: "100%", boxSizing: "border-box", lineHeight: 1.5 } as React.CSSProperties} />
+          ))}
+
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
+            {hasForm && (
+              <button onClick={() => { setDraft(profile.intakeForm ?? DEFAULT_INTAKE_FORM); setEditing(false); }}
+                style={{ ...BTN, background: "#fafaf8", color: "#9a9590" }}>Cancel</button>
+            )}
+            <button onClick={handleSave} disabled={saving} style={{ ...BTN, background: "#1a1a1a", color: "#fff", border: "none", padding: "8px 20px" }}>
+              {saving ? "Saving…" : <><Save size={13} /> {hasForm ? "Save Changes" : "Save Intake Form"}</>}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 interface Props {
@@ -773,8 +1062,13 @@ export default function NutritionTab({ patientId, patientName, canEdit }: Props)
         </div>
       )}
 
-      {/* Setup */}
-      {(canEdit || !isNew) && <SetupCard profile={profile} onSave={persist} saving={saving} isNew={isNew} />}
+      {/* Intake Form — entry point when new, collapsible summary when plan exists */}
+      {canEdit && (
+        <IntakeFormCard profile={profile} onSave={persist} saving={saving} isNew={isNew} canEdit={canEdit} />
+      )}
+
+      {/* Setup & InBody — only after intake form submitted and plan document created */}
+      {!isNew && <SetupCard profile={profile} onSave={persist} saving={saving} isNew={false} />}
 
       {/* InBody */}
       {!isNew && canEdit && <InBodyCard profile={profile} onSave={persist} saving={saving} />}

@@ -29,6 +29,26 @@ export interface CustomSupplement {
   timing: string;
 }
 
+export interface IntakeForm {
+  height:              number | null;
+  age:                 number | null;
+  target:              string;
+  mealsPerDay:         4 | 5;
+  allergies:           string;
+  trainingHistory:     string;
+  currentSupplements:  string;
+  carbPreferences:     string[];
+  proteinPreferences:  string[];
+  fruitPreferences:    string[];
+  fatPreferences:      string[];
+  trainingLocation:    "gym" | "home";
+  trainingDaysPerWeek: number;
+  dailyRoutine:        string;
+  medicalCondition:    string;
+  comments:            string;
+  completedAt:         string;
+}
+
 export interface NutritionProfile {
   weight:        number;              // kg  (self-reported; InBody weight takes precedence in calc)
   gender:        "male" | "female";
@@ -41,6 +61,7 @@ export interface NutritionProfile {
   supplements?:  CustomSupplement[];
   aiQuantities?: Record<string, number>; // last AI-optimised quantities
   aiReasoning?:  string;                 // AI explanation
+  intakeForm?:   IntakeForm;
 }
 
 export const DEFAULT_INBODY: InBodyData = {
@@ -54,6 +75,26 @@ export const DEFAULT_INBODY: InBodyData = {
   visceralFatLevel:   null,
   totalBodyWater:     null,
   notes:              "",
+};
+
+export const DEFAULT_INTAKE_FORM: IntakeForm = {
+  height:              null,
+  age:                 null,
+  target:              "",
+  mealsPerDay:         5,
+  allergies:           "",
+  trainingHistory:     "",
+  currentSupplements:  "",
+  carbPreferences:     [],
+  proteinPreferences:  [],
+  fruitPreferences:    [],
+  fatPreferences:      [],
+  trainingLocation:    "gym",
+  trainingDaysPerWeek: 3,
+  dailyRoutine:        "",
+  medicalCondition:    "",
+  comments:            "",
+  completedAt:         "",
 };
 
 export const DEFAULT_SUPPLEMENTS: CustomSupplement[] = [
@@ -94,6 +135,7 @@ export async function getNutritionProfile(
     supplements:   d.supplements   ?? DEFAULT_SUPPLEMENTS,
     aiQuantities:  d.aiQuantities  ?? undefined,
     aiReasoning:   d.aiReasoning   ?? undefined,
+    intakeForm:    d.intakeForm    ?? undefined,
   };
 }
 
