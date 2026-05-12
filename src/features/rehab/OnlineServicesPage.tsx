@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
-import OnlineRehabPage from "./OnlineRehabPage";
+import OnlineRehabPage, { REH_CSS } from "./OnlineRehabPage";
 import NutritionTab    from "../patient/NutritionTab";
 import {
   subscribeToAllPatients,
@@ -176,6 +176,7 @@ export default function OnlineServicesPage({
 
   return (
     <div style={{ fontFamily: "'Outfit', sans-serif" }}>
+      <style>{REH_CSS}</style>
       {/* Sub-tab toggle */}
       <div
         style={{

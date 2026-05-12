@@ -321,7 +321,7 @@ function ProgramCard({
 
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 
-const CSS = `
+export const REH_CSS = `
   .reh-hdr { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
   .reh-title { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 500; color: #1a1a1a; margin-bottom: 3px; }
   .reh-sub   { font-size: 13px; color: #9a9590; }
@@ -784,7 +784,7 @@ export default function OnlineRehabPage({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      <style>{CSS}</style>
+      <style>{REH_CSS}</style>
 
       {/* ══ Enrollment list ══════════════════════════════════════════════════ */}
       {view === "list" && (
