@@ -461,7 +461,7 @@ function InBodyCard({ profile, onSave, saving }: {
             ["Visceral",   data?.visceralFatLevel,    "/20"],
             ["TBW",        data?.totalBodyWater,      "L"],
           ] as [string, number|null|undefined, string][])
-            .filter(([,,, v]) => v !== null && v !== undefined, ([,v]) => v !== null && v !== undefined)
+            .filter(([, v]) => v !== null && v !== undefined)
             .filter(([, v]) => v !== null && v !== undefined)
             .map(([label, val, unit]) => (
               <div key={label} style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "8px 14px" }}>
