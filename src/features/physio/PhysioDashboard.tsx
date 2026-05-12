@@ -32,13 +32,13 @@ import { createPortal } from "react-dom";
 import ClinicBillingPage from "./ClinicBillingPage";
 import TreatmentProtocolsPage from "../protocols/TreatmentProtocolsPage";
 import DiagnosisTemplatesPage from "../diagnoses/DiagnosisTemplatesPage";
-import OnlineRehabPage from "../rehab/OnlineRehabPage";
+import OnlineServicesPage from "../rehab/OnlineServicesPage";
 import { runBackgroundScan, subscribeToPackageAlerts } from "../../services/notificationService";
 
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
-type Tab = "overview" | "patients" | "people" | "schedule" | "exercises" | "billing" | "protocols" | "rehab" | "diagnoses";
+type Tab = "overview" | "patients" | "people" | "schedule" | "exercises" | "billing" | "protocols" | "online-services" | "diagnoses";
 
 interface TabDef {
   id:    Tab;
@@ -1250,7 +1250,7 @@ export default function PhysioDashboard() {
     ...(isManager    ? [{ id: "billing"   as Tab, label: "Billing",              icon: <IconBilling /> }]   : []),
     ...(!isSecretary ? [{ id: "protocols" as Tab, label: "Protocols",            icon: <IconProtocols /> }] : []),
     ...(isManager    ? [{ id: "diagnoses" as Tab, label: "Diagnoses",            icon: <IconDiagnoses /> }] : []),
-    ...((isManager || isSenior) ? [{ id: "rehab" as Tab, label: "Online Rehab", icon: <IconRehab /> }] : []),
+    ...((isManager || isSenior) ? [{ id: "online-services" as Tab, label: "Online Services", icon: <IconRehab /> }] : []),
   ];
 
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
@@ -1715,8 +1715,8 @@ export default function PhysioDashboard() {
                 {activeTab === "diagnoses" && !isSecretary && (
                   <DiagnosisTemplatesPage physioId={physio.uid} isManager={isManager} />
                 )}
-                {activeTab === "rehab" && (isManager || isSenior) && (
-                  <OnlineRehabPage
+                {activeTab === "online-services" && (isManager || isSenior) && (
+                  <OnlineServicesPage
                     physioId={physio.uid}
                     physioName={`Dr. ${physio.firstName} ${physio.lastName}`}
                     isManager={isManager}
