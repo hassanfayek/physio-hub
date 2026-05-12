@@ -347,7 +347,7 @@ exports.generateNutritionQuantities = onCall(
     const patient   = patientSnap.exists   ? patientSnap.data()   : {};
     const nutrition = nutritionSnap.exists ? nutritionSnap.data() : {};
 
-    // ── Build context ────────────────────────────────────────────────────────
+    // ── Core profile ─────────────────────────────────────────────────────────
 
     const weight      = nutrition.weight        ?? 75;
     const gender      = nutrition.gender        ?? "male";
@@ -356,6 +356,9 @@ exports.generateNutritionQuantities = onCall(
     const carbChoice  = nutrition.carbChoice    ?? "rice";
     const meal3Choice = nutrition.meal3Choice   ?? "chicken";
     const ib          = nutrition.inBody        ?? {};
+    const intake      = nutrition.intakeForm    ?? {};
+
+    // ── InBody section ───────────────────────────────────────────────────────
 
     const inBodyLines = [];
     if (ib.weight)             inBodyLines.push(`  Measured Weight: ${ib.weight} kg`);
@@ -369,59 +372,122 @@ exports.generateNutritionQuantities = onCall(
     if (ib.notes && ib.notes.trim()) inBodyLines.push(`  Notes: ${ib.notes}`);
 
     const inBodySection = inBodyLines.length > 0
-      ? `InBody Measurement:\n${inBodyLines.join("\n")}`
-      : "InBody Measurement: Not recorded";
+      ? `InBody Measurement (from device scan):\n${inBodyLines.join("\n")}`
+      : "InBody Measurement: Not yet recorded";
 
-    const prompt = `You are a clinical nutrition specialist. Analyse the patient data below and return optimised food quantities for the 3-meal diet plan template.
+    // ── Mifflin-St Jeor estimated BMR (fallback when InBody BMR absent) ──────
 
-PATIENT:
+    let estimatedBmr = null;
+    if (!ib.bmr && intake.age && intake.height) {
+      const w = ib.weight || weight;
+      const h = intake.height;
+      const a = intake.age;
+      estimatedBmr = gender === "female"
+        ? Math.round(10 * w + 6.25 * h - 5 * a - 161)
+        : Math.round(10 * w + 6.25 * h - 5 * a + 5);
+    }
+
+    // ── Intake questionnaire section ─────────────────────────────────────────
+
+    const intakeLines = [];
+    if (intake.age)               intakeLines.push(`  Age: ${intake.age} years`);
+    if (intake.height)            intakeLines.push(`  Height: ${intake.height} cm`);
+    if (estimatedBmr)             intakeLines.push(`  Estimated BMR (Mifflin-St Jeor, no InBody): ${estimatedBmr} kcal/day`);
+    if (intake.target)            intakeLines.push(`  Patient's stated target: "${intake.target}"`);
+    if (intake.mealsPerDay)       intakeLines.push(`  Preferred meals per day: ${intake.mealsPerDay}`);
+    if (intake.trainingLocation)  intakeLines.push(`  Training location: ${intake.trainingLocation}`);
+    if (intake.trainingDaysPerWeek) intakeLines.push(`  Training days per week: ${intake.trainingDaysPerWeek}`);
+    if (intake.trainingHistory)   intakeLines.push(`  Training history: ${intake.trainingHistory}`);
+    if (intake.dailyRoutine)      intakeLines.push(`  Daily routine: ${intake.dailyRoutine}`);
+    if (intake.currentSupplements) intakeLines.push(`  Current supplements: ${intake.currentSupplements}`);
+    if (intake.medicalCondition)  intakeLines.push(`  Medical conditions: ${intake.medicalCondition}`);
+    if (intake.allergies)         intakeLines.push(`  Allergies / food dislikes: ${intake.allergies}`);
+    if ((intake.carbPreferences || []).length)    intakeLines.push(`  Preferred carbs: ${intake.carbPreferences.join(", ")}`);
+    if ((intake.proteinPreferences || []).length) intakeLines.push(`  Preferred proteins: ${intake.proteinPreferences.join(", ")}`);
+    if ((intake.fruitPreferences || []).length)   intakeLines.push(`  Preferred fruits: ${intake.fruitPreferences.join(", ")}`);
+    if ((intake.fatPreferences || []).length)     intakeLines.push(`  Preferred fats: ${intake.fatPreferences.join(", ")}`);
+    if (intake.comments)          intakeLines.push(`  Additional comments: ${intake.comments}`);
+
+    const intakeSection = intakeLines.length > 0
+      ? `Patient Intake Questionnaire:\n${intakeLines.join("\n")}`
+      : "Patient Intake Questionnaire: Not yet completed";
+
+    const prompt = `You are a clinical nutrition specialist. Analyse ALL the patient data below and return precisely optimised food quantities for the fixed 3-meal diet plan template.
+
+═══ PATIENT PROFILE ═══
   Name: ${[patient.firstName, patient.lastName].filter(Boolean).join(" ") || "Unknown"}
   Self-reported weight: ${weight} kg
   Gender: ${gender}
-  Goal: ${goal}
+  Clinic goal category: ${goal}
   Activity level: ${activity}
 
 ${inBodySection}
 
-BASE DIET PLAN TEMPLATE:
-Meal 1 (~1 PM — Lunch):
-  - Eggs: base 3 eggs
+${intakeSection}
+
+═══ FIXED DIET PLAN TEMPLATE ═══
+This is the exact plan structure — you must produce quantities for every item listed.
+
+Meal 1 (~1:00 PM — Lunch):
+  - Eggs (boiled or omelette, no oil): base 3 eggs
   - Bran bread: base 30 g
   - Fresh cheese: base 150 g
-  - Green salad: unlimited (do not quantify)
-  - Fruit: 1 piece (do not quantify)
+  - Green salad: unlimited — do NOT quantify
+  - Fruit (1 piece): fixed — do NOT quantify
 
-Meal 2 (5–7 PM):
-  - Animal protein: base 200 g (cooked weight)
-  - Carb — ${carbChoice === "rice" ? "Rice: base 100 g" : "Potatoes: base 150 g"} (cooked weight)
-  - Sautéed vegetables: base 150 g
+Meal 2 (5:00–7:00 PM):
+  - Animal protein (chicken/fish/meat, cooked weight): base 200 g
+  - ${carbChoice === "rice" ? "Rice (white or brown, cooked weight): base 100 g" : "Potatoes (boiled/grilled, cooked weight): base 150 g"}
+  - Sautéed / grilled vegetables: base 150 g
 
-Meal 3 (11 PM):
-  - ${meal3Choice === "chicken" ? "Chicken breast: base 150 g (cooked weight)" : "Tuna: 1 can (do not quantify)"}
+Meal 3 (11:00 PM):
+  - ${meal3Choice === "chicken" ? "Grilled chicken breast (cooked weight): base 150 g" : "Tuna (canned in brine): 1 can — do NOT quantify"}
   - Sweet corn: base 50 g
   - Greek yogurt: base 170 g
-  - Honey: 1 tsp (do not quantify)
+  - Natural honey (1 tsp): fixed — do NOT quantify
 
-CALCULATION RULES:
-1. If BMR is provided, compute TDEE = BMR × activity_multiplier:
-   - sedentary: ×1.20, moderate: ×1.55, active: ×1.725, athlete: ×1.90
-2. Adjust for goal:
-   - weight loss: TDEE × 0.80 (20% deficit)
-   - maintenance: TDEE × 1.00
-   - muscle gain: TDEE × 1.00 + extra 250–300 kcal (mostly protein)
-   - performance: TDEE × 1.10
-3. Protein target:
-   - If SMM known: protein_g = SMM(kg) × 3.5 (to protect muscle)
-   - Else: weight × (1.8 for weight loss, 2.0 maintenance, 2.4 muscle gain, 2.6 performance)
-4. Carbs: drive by activity — athlete gets significantly more than sedentary
-5. Water: max(4.0, weight × 0.040) L + activity bonus (sedentary: 0, moderate: +0.5, active: +1.0, athlete: +1.5), round to nearest 0.5
-6. Eggs: 1–6, integer only
-7. All gram values must be multiples of 5
-8. Apply gender factor for females: multiply all quantities by 0.85 before rounding
+═══ CALCULATION INSTRUCTIONS ═══
+Step 1 — Determine BMR:
+  • Use InBody BMR if available (most accurate).
+  • Else use Estimated BMR from Mifflin-St Jeor if age + height are known.
+  • Else estimate from weight: males weight×24, females weight×22.
 
-Return ONLY valid JSON, no markdown, no explanation outside the "reasoning" field:
+Step 2 — Compute TDEE = BMR × activity multiplier:
+  sedentary ×1.20 | moderate ×1.55 | active ×1.725 | athlete ×1.90
+  Also factor in training days/week: each extra day beyond 3 adds ~+0.05 to multiplier.
+
+Step 3 — Apply goal adjustment to TDEE:
+  weight loss −20% | maintenance ×1.00 | muscle gain +250–300 kcal | performance +10%
+
+Step 4 — Set protein target (distribute across all 3 meals):
+  • If SMM known: protein_g = SMM × 3.5 (to protect muscle mass)
+  • Else: weight × (1.8 weight_loss | 2.0 maintenance | 2.4 muscle_gain | 2.6 performance)
+  • If medical conditions affect protein (e.g. kidney issues) — reduce accordingly and note it.
+
+Step 5 — Set carb quantities:
+  • Drive carbs by activity level and training days — athletes need significantly more.
+  • Reduce carbs for weight loss and sedentary patients.
+
+Step 6 — Water:
+  • Base: max(4.0, weight × 0.040) L
+  • Add: sedentary +0 | moderate +0.5 | active +1.0 | athlete +1.5
+  • Round to nearest 0.5 L
+
+Step 7 — Rounding and gender:
+  • All gram values: nearest multiple of 5
+  • Eggs: integer 1–6
+  • Female patients: multiply all quantities by 0.85 before rounding
+  • Do NOT go below minimum safe values: protein ≥100 g/day total, eggs ≥1
+
+Step 8 — Apply clinical judgment:
+  • If allergies/dislikes conflict with any item, note it in reasoning.
+  • If medical conditions (diabetes, hypertension, etc.) affect macros, adjust and explain.
+  • Use training history and daily routine to fine-tune activity multiplier.
+
+═══ RESPONSE FORMAT ═══
+Return ONLY valid JSON (no markdown fences, no text outside JSON):
 {
-  "eggs": <1–6>,
+  "eggs": <integer 1–6>,
   "bran_bread": <grams, multiple of 5>,
   "fresh_cheese": <grams, multiple of 5>,
   "protein2": <grams, multiple of 5>,
@@ -430,15 +496,15 @@ Return ONLY valid JSON, no markdown, no explanation outside the "reasoning" fiel
   ${meal3Choice === "chicken" ? '"chicken3": <grams, multiple of 5>,' : ""}
   "sweetcorn3": <grams, multiple of 5>,
   "yogurt3": <grams, multiple of 5>,
-  "waterLiters": <number, one decimal, e.g. 3.5>,
-  "reasoning": "<2–3 sentences explaining the key decisions, referencing specific InBody values if available>"
+  "waterLiters": <number to one decimal place>,
+  "reasoning": "<3–4 sentences: state the BMR source used, TDEE calculated, key adjustments made for goal/activity/medical, and any allergy or clinical notes>"
 }`;
 
     const client = new Anthropic({ apiKey: CLAUDE_API_KEY.value() });
 
     const response = await client.messages.create({
       model:      "claude-sonnet-4-6",
-      max_tokens: 600,
+      max_tokens: 900,
       messages:   [{ role: "user", content: prompt }],
     });
 
