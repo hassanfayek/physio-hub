@@ -359,7 +359,83 @@ exports.generateNutritionQuantities = onCall(
     // also handle legacy single inBody field
     if (ibHistory.length === 0 && nutrition.inBody) ibHistory.push(nutrition.inBody);
     const ib     = ibHistory[0] ?? {};
-    const intake = nutrition.intakeForm ?? {};
+    const intake      = nutrition.intakeForm ?? {};
+    const mealsPerDay = intake.mealsPerDay ?? 3;
+
+    // ── Build meal plan template based on patient preference ─────────────────
+
+    let dietTemplate;
+    let extraResponseFields = "";
+
+    if (mealsPerDay === 5) {
+      dietTemplate = `Meal 1 — Morning (7:00–8:00 AM):
+  - Oats (cooked with water, no milk): base 50 g  [key: oats_morning]
+  - Fruit (1 piece): unlimited
+
+Meal 2 — Lunch (~12:00–1:00 PM):
+  - Eggs (boiled or omelette, no oil): base 3 eggs  [key: eggs]
+  - Bran bread: base 30 g  [key: bran_bread]
+  - Fresh cheese: base 150 g  [key: fresh_cheese]
+  - Green salad: unlimited
+
+Meal 3 — Afternoon Snack (3:00–4:00 PM):
+  - Mixed Nuts / Almonds (unsalted): base 20 g  [key: snack_nuts]
+  - Fruit (1 piece): unlimited
+
+Meal 4 — Dinner (5:00–7:00 PM):
+  - Animal protein (chicken/fish/meat, cooked weight): base 200 g  [key: protein2]
+  - Rice or Potatoes (cooked weight): base 100 g  [key: carb2]  — rice as reference; potatoes ×1.5 if preferred
+  - Sautéed / grilled vegetables: base 150 g  [key: veg2]
+
+Meal 5 — Night (9:00–10:00 PM):
+  - Grilled Chicken Breast / Tuna: base 150 g  [key: protein3]
+  - Sweet corn: base 50 g  [key: sweetcorn3]
+  - Greek yogurt: base 170 g  [key: yogurt3]
+  - Natural honey (1 tsp): fixed`;
+      extraResponseFields = `  "oats_morning": <grams, multiple of 5>,\n  "snack_nuts": <grams, multiple of 5>,\n  `;
+    } else if (mealsPerDay === 4) {
+      dietTemplate = `Meal 1 — Morning (7:00–8:00 AM):
+  - Oats (cooked with water, no milk): base 50 g  [key: oats_morning]
+  - Fruit (1 piece): unlimited
+
+Meal 2 — Lunch (12:00–1:00 PM):
+  - Eggs (boiled or omelette, no oil): base 3 eggs  [key: eggs]
+  - Bran bread: base 30 g  [key: bran_bread]
+  - Fresh cheese: base 150 g  [key: fresh_cheese]
+  - Green salad: unlimited
+  - Fruit (1 piece): unlimited
+
+Meal 3 — Post-noon (4:00–6:00 PM):
+  - Animal protein (chicken/fish/meat, cooked weight): base 200 g  [key: protein2]
+  - Rice or Potatoes (cooked weight): base 100 g  [key: carb2]  — rice as reference; potatoes ×1.5 if preferred
+  - Sautéed / grilled vegetables: base 150 g  [key: veg2]
+
+Meal 4 — Night (9:00–10:00 PM):
+  - Grilled Chicken Breast / Tuna: base 150 g  [key: protein3]
+  - Sweet corn: base 50 g  [key: sweetcorn3]
+  - Greek yogurt: base 170 g  [key: yogurt3]
+  - Natural honey (1 tsp): fixed`;
+      extraResponseFields = `  "oats_morning": <grams, multiple of 5>,\n  `;
+    } else {
+      dietTemplate = `Meal 1 (~1:00 PM — Lunch):
+  - Eggs (boiled or omelette, no oil): base 3 eggs  [key: eggs]
+  - Bran bread: base 30 g  [key: bran_bread]
+  - Fresh cheese: base 150 g  [key: fresh_cheese]
+  - Green salad: unlimited
+  - Fruit (1 piece): fixed
+
+Meal 2 (5:00–7:00 PM):
+  - Animal protein (chicken/fish/meat, cooked weight): base 200 g  [key: protein2]
+  - Rice or Potatoes (cooked weight): base 100 g  [key: carb2]  — rice as reference; potatoes ×1.5 if preferred
+  - Sautéed / grilled vegetables: base 150 g  [key: veg2]
+
+Meal 3 (11:00 PM):
+  - Grilled Chicken Breast / Tuna: base 150 g  [key: protein3]
+  - Sweet corn: base 50 g  [key: sweetcorn3]
+  - Greek yogurt: base 170 g  [key: yogurt3]
+  - Natural honey (1 tsp): fixed`;
+      extraResponseFields = "";
+    }
 
     // ── InBody section ───────────────────────────────────────────────────────
 
@@ -442,25 +518,9 @@ ${inBodySection}
 ${intakeSection}
 
 ═══ FIXED DIET PLAN TEMPLATE ═══
-This is the exact plan structure — you must produce quantities for every item listed.
+This is the patient's chosen ${mealsPerDay}-meal plan. Produce quantities for every quantifiable item (items marked "fixed" or "unlimited" need no quantity key in the response).
 
-Meal 1 (~1:00 PM — Lunch):
-  - Eggs (boiled or omelette, no oil): base 3 eggs
-  - Bran bread: base 30 g
-  - Fresh cheese: base 150 g
-  - Green salad: unlimited — do NOT quantify
-  - Fruit (1 piece): fixed — do NOT quantify
-
-Meal 2 (5:00–7:00 PM):
-  - Animal protein (chicken/fish/meat, cooked weight): base 200 g
-  - Rice or Potatoes (cooked weight): base 100 g — use rice as reference quantity; potatoes ×1.5 if preferred
-  - Sautéed / grilled vegetables: base 150 g
-
-Meal 3 (11:00 PM):
-  - Grilled Chicken Breast / Tuna (cooked weight for chicken; 1 can tuna): base 150 g for chicken
-  - Sweet corn: base 50 g
-  - Greek yogurt: base 170 g
-  - Natural honey (1 tsp): fixed — do NOT quantify
+${dietTemplate}
 
 ═══ CALCULATION INSTRUCTIONS ═══
 Step 1 — Determine BMR:
@@ -475,7 +535,7 @@ Step 2 — Compute TDEE = BMR × activity multiplier:
 Step 3 — Apply goal adjustment to TDEE:
   weight loss −20% | maintenance ×1.00 | muscle gain +250–300 kcal | performance +10%
 
-Step 4 — Set protein target (distribute across all 3 meals):
+Step 4 — Set protein target (distribute across all ${mealsPerDay} meals):
   • If SMM known: protein_g = SMM × 3.5 (to protect muscle mass)
   • Else: weight × (1.8 weight_loss | 2.0 maintenance | 2.4 muscle_gain | 2.6 performance)
   • If medical conditions affect protein (e.g. kidney issues) — reduce accordingly and note it.
@@ -503,7 +563,7 @@ Step 8 — Apply clinical judgment:
 ═══ RESPONSE FORMAT ═══
 Return ONLY valid JSON (no markdown fences, no text outside JSON):
 {
-  "eggs": <integer 1–6>,
+${extraResponseFields}  "eggs": <integer 1–6>,
   "bran_bread": <grams, multiple of 5>,
   "fresh_cheese": <grams, multiple of 5>,
   "protein2": <grams, multiple of 5>,

@@ -87,6 +87,42 @@ const MEALS: MealDef[] = [
   },
 ];
 
+// ─── 4-meal & 5-meal plan extensions ─────────────────────────────────────────
+
+const MEAL_MORNING: MealDef = {
+  id: "meal_morning", label: "Morning Meal", time: "7:00 – 8:00 AM",
+  tips: [
+    "Prepare oats with water only — no milk or sugar",
+    "A pinch of cinnamon or small drizzle of honey is allowed",
+  ],
+  items: [
+    { id: "oats_morning", label: "Oats", baseQty: 50, unit: "g", scaleType: "carb", overridable: true, note: "Cooked with water, no milk or added sugar" },
+    { id: "fruit_morning", label: "Fruit (1 piece)", baseQty: 0, unit: "1 piece", scaleType: "fixed", overridable: false, note: "See allowed fruits in guidelines" },
+  ],
+};
+
+const MEAL_SNACK: MealDef = {
+  id: "meal_snack", label: "Afternoon Snack", time: "3:00 – 4:00 PM",
+  tips: [
+    "Keep this snack light — it bridges lunch and dinner",
+    "Drink at least 500 mL water before this snack",
+  ],
+  items: [
+    { id: "snack_nuts", label: "Mixed Nuts / Almonds", baseQty: 20, unit: "g", scaleType: "fixed", overridable: true, note: "Unsalted — almonds, cashews, or peanuts" },
+    { id: "snack_fruit", label: "Fruit (1 piece)", baseQty: 0, unit: "1 piece", scaleType: "fixed", overridable: false, note: "Optional" },
+  ],
+};
+
+const MEALS_3: MealDef[] = MEALS;
+const MEALS_4: MealDef[] = [MEAL_MORNING, ...MEALS];
+const MEALS_5: MealDef[] = [MEAL_MORNING, MEALS[0], MEAL_SNACK, MEALS[1], MEALS[2]];
+
+function getMeals(mealsPerDay?: number): MealDef[] {
+  if (mealsPerDay === 4) return MEALS_4;
+  if (mealsPerDay === 5) return MEALS_5;
+  return MEALS_3;
+}
+
 const GUIDELINES = {
   freeVeg:    ["Tomatoes","Cucumber","Lettuce","Cabbage","Parsley","Rocket (Arugula)","Dill"],
   cookedVeg:  ["Beans","Spinach","Broccoli","Zucchini","Eggplant","Peas","Carrots"],
@@ -194,9 +230,11 @@ function MealCard({
   const [editVal, setEditVal] = useState("");
 
   const COLORS: Record<string, { bg: string; accent: string; border: string }> = {
-    meal1: { bg: "#f0fdf4", accent: "#16a34a", border: "#86efac" },
-    meal2: { bg: "#fff7ed", accent: "#ea580c", border: "#fed7aa" },
-    meal3: { bg: "#f0f9ff", accent: "#0369a1", border: "#bae6fd" },
+    meal1:        { bg: "#f0fdf4", accent: "#16a34a", border: "#86efac" },
+    meal2:        { bg: "#fff7ed", accent: "#ea580c", border: "#fed7aa" },
+    meal3:        { bg: "#f0f9ff", accent: "#0369a1", border: "#bae6fd" },
+    meal_morning: { bg: "#fffbeb", accent: "#d97706", border: "#fde68a" },
+    meal_snack:   { bg: "#fdf4ff", accent: "#9333ea", border: "#e9d5ff" },
   };
   const c = COLORS[meal.id] ?? COLORS.meal1;
 
@@ -218,7 +256,7 @@ function MealCard({
           <div style={{ fontSize: 12.5, color: "#9a9590", marginTop: 2 }}>{meal.time}</div>
         </div>
         <div style={{ background: c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, color: c.accent }}>
-          {meal.id === "meal1" ? "Lunch" : meal.id === "meal2" ? "Post-noon" : "Night"}
+          {meal.id === "meal_morning" ? "Morning" : meal.id === "meal_snack" ? "Snack" : meal.id === "meal1" ? "Lunch" : meal.id === "meal2" ? "Post-noon" : "Night"}
         </div>
       </div>
 
@@ -985,14 +1023,15 @@ export default function NutritionTab({ patientId, patientName, canEdit }: Props)
     }
   }, [patientId, profile]);
 
-  const waterL = calcWaterLiters(profile);
-  const hasAi  = !!profile.aiQuantities && Object.keys(profile.aiQuantities).length > 0;
+  const waterL      = calcWaterLiters(profile);
+  const hasAi       = !!profile.aiQuantities && Object.keys(profile.aiQuantities).length > 0;
   const overrideCount = Object.keys(profile.overrides).length;
+  const activeMeals   = getMeals(profile.intakeForm?.mealsPerDay);
 
   const handlePrint = () => {
     const win = window.open("", "_blank", "width=900,height=700");
     if (!win) return;
-    const mealHTML = MEALS.map((meal) => {
+    const mealHTML = activeMeals.map((meal) => {
       const rows = meal.items
         .map((item) => {
           const { value } = resolveQty(item, profile);
@@ -1108,7 +1147,7 @@ export default function NutritionTab({ patientId, patientName, canEdit }: Props)
       {/* Plan */}
       {!isNew && (
         <>
-          {MEALS.map((meal) => (
+          {activeMeals.map((meal) => (
             <MealCard key={meal.id} meal={meal} profile={profile} canEdit={canEdit} onOverride={handleOverride} onClearOverride={handleClearOverride} />
           ))}
 
