@@ -124,7 +124,7 @@ export async function getNutritionProfile(
     activityLevel: d.activityLevel ?? DEFAULT_NUTRITION_PROFILE.activityLevel,
     overrides:      d.overrides ?? {},
     // migrate legacy single inBody doc to array
-    inBodyHistory:  d.inBodyHistory ?? (d.inBody ? [d.inBody as InBodyData] : undefined),
+    inBodyHistory:  d.inBodyHistory ?? ((d as Record<string, unknown>).inBody ? [(d as Record<string, unknown>).inBody as InBodyData] : undefined),
     supplements:    d.supplements ?? DEFAULT_SUPPLEMENTS,
     aiQuantities:  d.aiQuantities  ?? undefined,
     aiReasoning:   d.aiReasoning   ?? undefined,
