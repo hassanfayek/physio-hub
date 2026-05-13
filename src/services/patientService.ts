@@ -439,13 +439,17 @@ export function subscribeToPhysioPatients(
   // Map from uid → Patient, updated by any of the 4 listeners
   const byUid = new Map<string, Patient>();
 
+  let notifyTimer: ReturnType<typeof setTimeout> | null = null;
   const notify = () => {
-    const merged = Array.from(byUid.values()).sort((a, b) => {
-      const ta = (a.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
-      const tb = (b.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
-      return tb - ta;
-    });
-    onData(merged);
+    if (notifyTimer) clearTimeout(notifyTimer);
+    notifyTimer = setTimeout(() => {
+      const merged = Array.from(byUid.values()).sort((a, b) => {
+        const ta = (a.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+        const tb = (b.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+        return tb - ta;
+      });
+      onData(merged);
+    }, 50);
   };
 
   const makeEqQ = (field: string) =>
