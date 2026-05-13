@@ -353,8 +353,13 @@ exports.generateNutritionQuantities = onCall(
     const gender   = nutrition.gender        ?? "male";
     const goal     = (nutrition.goal         ?? "maintenance").replace(/_/g, " ");
     const activity = nutrition.activityLevel ?? "moderate";
-    const ib       = nutrition.inBody        ?? {};
-    const intake   = nutrition.intakeForm    ?? {};
+    const ibHistory = [...(nutrition.inBodyHistory ?? [])].sort((a, b) =>
+      (b.measuredAt || "").localeCompare(a.measuredAt || "")
+    );
+    // also handle legacy single inBody field
+    if (ibHistory.length === 0 && nutrition.inBody) ibHistory.push(nutrition.inBody);
+    const ib     = ibHistory[0] ?? {};
+    const intake = nutrition.intakeForm ?? {};
 
     // ── InBody section ───────────────────────────────────────────────────────
 
@@ -369,8 +374,21 @@ exports.generateNutritionQuantities = onCall(
     if (ib.totalBodyWater)     inBodyLines.push(`  Total Body Water: ${ib.totalBodyWater} L`);
     if (ib.notes && ib.notes.trim()) inBodyLines.push(`  Notes: ${ib.notes}`);
 
+    // Build progression context from older readings
+    const progressionLines = [];
+    for (let i = 1; i < Math.min(ibHistory.length, 4); i++) {
+      const prev = ibHistory[i];
+      const parts = [`  ${prev.measuredAt || "unknown date"}:`];
+      if (prev.weight)          parts.push(`weight ${prev.weight} kg`);
+      if (prev.bodyFatPercent)  parts.push(`fat ${prev.bodyFatPercent}%`);
+      if (prev.skeletalMuscleMass) parts.push(`SMM ${prev.skeletalMuscleMass} kg`);
+      if (prev.bmr)             parts.push(`BMR ${prev.bmr}`);
+      progressionLines.push(parts.join(" — "));
+    }
+
     const inBodySection = inBodyLines.length > 0
-      ? `InBody Measurement (from device scan):\n${inBodyLines.join("\n")}`
+      ? `InBody Measurement — Latest (${ib.measuredAt || "date unknown"}):\n${inBodyLines.join("\n")}`
+        + (progressionLines.length > 0 ? `\n\nPrevious readings (for trend context):\n${progressionLines.join("\n")}` : "")
       : "InBody Measurement: Not yet recorded";
 
     // ── Mifflin-St Jeor estimated BMR (fallback when InBody BMR absent) ──────

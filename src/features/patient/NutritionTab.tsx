@@ -102,8 +102,14 @@ const GOAL_FACTOR:   Record<NutritionGoal, number>   = { weight_loss: 0.80, main
 const ACT_FACTOR:    Record<ActivityLevel, number>   = { sedentary: 0.80, moderate: 1.00, active: 1.20, athlete: 1.45 };
 const GENDER_FACTOR: Record<"male"|"female", number> = { male: 1.00, female: 0.82 };
 
+function latestInBody(profile: NutritionProfile): InBodyData | undefined {
+  const h = profile.inBodyHistory;
+  if (!h || h.length === 0) return undefined;
+  return [...h].sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))[0];
+}
+
 function effectiveWeight(profile: NutritionProfile): number {
-  return profile.inBody?.weight ?? profile.weight;
+  return latestInBody(profile)?.weight ?? profile.weight;
 }
 
 function calcQty(item: FoodItem, profile: NutritionProfile): number {
@@ -357,108 +363,168 @@ function SetupCard({ profile, onSave, saving, isNew }: {
 function InBodyCard({ profile, onSave, saving }: {
   profile: NutritionProfile; onSave: (p: NutritionProfile) => void; saving: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft,   setDraft]   = useState<InBodyData>(profile.inBody ?? DEFAULT_INBODY);
-  useEffect(() => { setDraft(profile.inBody ?? DEFAULT_INBODY); }, [profile.inBody]);
+  const history = [...(profile.inBodyHistory ?? [])].sort((a, b) => b.measuredAt.localeCompare(a.measuredAt));
+  const [open,     setOpen]     = useState(true);
+  const [adding,   setAdding]   = useState(false);
+  const [draft,    setDraft]    = useState<InBodyData>(DEFAULT_INBODY);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-  const data = profile.inBody;
-  const hasData = data && (data.weight || data.bmr || data.bodyFatPercent);
+  const handleSaveNew = () => {
+    const existing = profile.inBodyHistory ?? [];
+    const updated = [draft, ...existing.filter(r => r.measuredAt !== draft.measuredAt)]
+      .sort((a, b) => b.measuredAt.localeCompare(a.measuredAt));
+    onSave({ ...profile, inBodyHistory: updated });
+    setAdding(false);
+    setDraft(DEFAULT_INBODY);
+  };
 
-  const num = (label: string, key: keyof InBodyData, unit: string) => (
+  const handleDelete = (measuredAt: string) => {
+    const updated = (profile.inBodyHistory ?? []).filter(r => r.measuredAt !== measuredAt);
+    onSave({ ...profile, inBodyHistory: updated });
+  };
+
+  const numField = (label: string, key: keyof InBodyData, unit: string) => (
     <div>
       <div style={LABEL_SM}>{label}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <input
-          type="number" min={0}
-          value={draft[key] ?? ""}
+        <input type="number" min={0} value={draft[key] ?? ""} placeholder="—"
           onChange={(e) => setDraft({ ...draft, [key]: e.target.value ? parseFloat(e.target.value) : null } as InBodyData)}
-          placeholder="—"
-          style={{ ...INPUT_STYLE, boxSizing: "border-box" }}
-        />
+          style={{ ...INPUT_STYLE, boxSizing: "border-box" }} />
         {unit && <span style={{ fontSize: 12, color: "#9a9590", whiteSpace: "nowrap" }}>{unit}</span>}
       </div>
     </div>
   );
 
+  const METRICS: [string, keyof InBodyData, string][] = [
+    ["Weight",   "weight",             "kg"],
+    ["SMM",      "skeletalMuscleMass", "kg"],
+    ["Body Fat", "bodyFatPercent",     "%"],
+    ["Fat Mass", "bodyFatMass",        "kg"],
+    ["BMI",      "bmi",                ""],
+    ["BMR",      "bmr",                "kcal/d"],
+    ["Visceral", "visceralFatLevel",   "/20"],
+    ["TBW",      "totalBodyWater",     "L"],
+  ];
+
   return (
-    <div style={{ ...CARD, borderColor: hasData ? "#c4b5fd" : "#e5e0d8" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: editing ? 20 : hasData ? 14 : 4 }}>
-        <div>
+    <div style={{ ...CARD, borderColor: history.length > 0 ? "#c4b5fd" : "#e5e0d8" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: open ? 14 : 0 }}>
+        <button onClick={() => setOpen(v => !v)} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: 0, textAlign: "left", fontFamily: "'Outfit',sans-serif" }}>
           <div style={{ ...CARD_TITLE, display: "flex", alignItems: "center", gap: 8 }}>
-            InBody Measurement
-            {hasData && <span style={{ fontSize: 11, background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe", borderRadius: 20, padding: "2px 8px", fontFamily: "'Outfit',sans-serif", fontWeight: 600 }}>Active</span>}
+            InBody History
+            {history.length > 0 && (
+              <span style={{ fontSize: 11, background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe", borderRadius: 20, padding: "2px 8px", fontFamily: "'Outfit',sans-serif", fontWeight: 600 }}>
+                {history.length} reading{history.length !== 1 ? "s" : ""}
+              </span>
+            )}
           </div>
-          <div style={{ fontSize: 13, color: "#9a9590", marginTop: 2 }}>Body composition data — used by AI to optimise quantities</div>
-        </div>
-        {!editing && <button onClick={() => setEditing(true)} style={{ ...BTN, background: "#fafaf8", color: "#1a1a1a" }}><Edit2 size={13} /> {hasData ? "Edit" : "Add"}</button>}
+          {open ? <ChevronUp size={16} color="#9a9590" /> : <ChevronDown size={16} color="#9a9590" />}
+        </button>
+        {open && !adding && (
+          <button onClick={() => { setDraft(DEFAULT_INBODY); setAdding(true); }}
+            style={{ ...BTN, background: "#f5f3ff", color: "#6d28d9", borderColor: "#ddd6fe", marginLeft: 10 }}>
+            <Plus size={13} /> Add Reading
+          </button>
+        )}
       </div>
 
-      {editing ? (
+      {open && (
         <>
-          <div style={{ marginBottom: 14 }}>
-            <div style={LABEL_SM}>Date Measured</div>
-            <input type="date" value={draft.measuredAt} onChange={(e) => setDraft({ ...draft, measuredAt: e.target.value })} style={{ ...INPUT_STYLE, boxSizing: "border-box", width: "100%" }} />
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-            {num("Weight", "weight", "kg")}
-            {num("Skeletal Muscle Mass (SMM)", "skeletalMuscleMass", "kg")}
-            {num("Body Fat Mass", "bodyFatMass", "kg")}
-            {num("Body Fat %", "bodyFatPercent", "%")}
-            {num("BMI", "bmi", "")}
-            {num("BMR", "bmr", "kcal/day")}
-            {num("Visceral Fat Level", "visceralFatLevel", "/ 20")}
-            {num("Total Body Water", "totalBodyWater", "L")}
-          </div>
-          <div style={{ marginBottom: 18 }}>
-            <div style={LABEL_SM}>Notes</div>
-            <textarea
-              value={draft.notes}
-              onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
-              rows={2}
-              placeholder="Any additional notes from the InBody report…"
-              style={{ ...INPUT_STYLE, resize: "vertical", width: "100%", boxSizing: "border-box", lineHeight: 1.5 } as React.CSSProperties}
-            />
-          </div>
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button onClick={() => { setDraft(profile.inBody ?? DEFAULT_INBODY); setEditing(false); }} style={{ ...BTN, background: "#fafaf8", color: "#9a9590" }}>Cancel</button>
-            <button
-              onClick={() => { onSave({ ...profile, inBody: draft }); setEditing(false); }}
-              disabled={saving}
-              style={{ ...BTN, background: "#1a1a1a", color: "#fff", border: "none", padding: "8px 18px" }}
-            >{saving ? "Saving…" : <><Save size={13} /> Save InBody Data</>}</button>
-          </div>
-        </>
-      ) : hasData ? (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-          {([
-            ["Weight",     data?.weight,             "kg"],
-            ["SMM",        data?.skeletalMuscleMass,  "kg"],
-            ["Body Fat",   data?.bodyFatPercent,      "%"],
-            ["BMI",        data?.bmi,                 ""],
-            ["BMR",        data?.bmr,                 "kcal/d"],
-            ["Visceral",   data?.visceralFatLevel,    "/20"],
-            ["TBW",        data?.totalBodyWater,      "L"],
-          ] as [string, number|null|undefined, string][])
-            .filter(([, v]) => v !== null && v !== undefined)
-            .filter(([, v]) => v !== null && v !== undefined)
-            .map(([label, val, unit]) => (
-              <div key={label} style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "8px 14px" }}>
-                <div style={{ fontSize: 11, color: "#6d28d9", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a", marginTop: 2 }}>{val} {unit}</div>
+          {/* Add form */}
+          {adding && (
+            <div style={{ background: "#faf8ff", border: "1.5px solid #ddd6fe", borderRadius: 12, padding: "16px 16px 14px", marginBottom: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#6d28d9", marginBottom: 14 }}>New InBody Reading</div>
+              <div style={{ marginBottom: 14 }}>
+                <div style={LABEL_SM}>Date Measured</div>
+                <input type="date" value={draft.measuredAt}
+                  onChange={(e) => setDraft({ ...draft, measuredAt: e.target.value })}
+                  style={{ ...INPUT_STYLE, boxSizing: "border-box", width: "100%" }} />
               </div>
-            ))
-          }
-          {data?.measuredAt && (
-            <div style={{ background: "#fafaf8", border: "1px solid #e5e0d8", borderRadius: 10, padding: "8px 14px" }}>
-              <div style={{ fontSize: 11, color: "#9a9590", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Measured</div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: "#1a1a1a", marginTop: 2 }}>{data.measuredAt}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+                {numField("Weight", "weight", "kg")}
+                {numField("Skeletal Muscle Mass (SMM)", "skeletalMuscleMass", "kg")}
+                {numField("Body Fat Mass", "bodyFatMass", "kg")}
+                {numField("Body Fat %", "bodyFatPercent", "%")}
+                {numField("BMI", "bmi", "")}
+                {numField("BMR", "bmr", "kcal/day")}
+                {numField("Visceral Fat Level", "visceralFatLevel", "/ 20")}
+                {numField("Total Body Water", "totalBodyWater", "L")}
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <div style={LABEL_SM}>Notes</div>
+                <textarea rows={2} value={draft.notes}
+                  onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+                  placeholder="Any additional notes from the InBody report…"
+                  style={{ ...INPUT_STYLE, resize: "vertical", width: "100%", boxSizing: "border-box", lineHeight: 1.5 } as React.CSSProperties} />
+              </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <button onClick={() => setAdding(false)} style={{ ...BTN, background: "#fafaf8", color: "#9a9590" }}>Cancel</button>
+                <button onClick={handleSaveNew} disabled={saving || !draft.measuredAt}
+                  style={{ ...BTN, background: "#6d28d9", color: "#fff", border: "none", padding: "8px 18px" }}>
+                  {saving ? "Saving…" : <><Save size={13} /> Save Reading</>}
+                </button>
+              </div>
             </div>
           )}
-        </div>
-      ) : (
-        <div style={{ padding: "8px 0 4px", fontSize: 13, color: "#b4b0ab" }}>
-          No InBody data recorded yet. Add measurements to enable AI-optimised quantities.
-        </div>
+
+          {/* Empty state */}
+          {history.length === 0 && !adding && (
+            <div style={{ padding: "4px 0 6px", fontSize: 13, color: "#b4b0ab" }}>
+              No readings yet. Add a measurement to enable AI-optimised quantities and track progress.
+            </div>
+          )}
+
+          {/* Reading list */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {history.map((r, idx) => {
+              const isLatest   = idx === 0;
+              const isExpanded = expanded === r.measuredAt;
+              return (
+                <div key={r.measuredAt || idx} style={{ border: `1.5px solid ${isLatest ? "#ddd6fe" : "#e5e0d8"}`, borderRadius: 12, background: isLatest ? "#faf8ff" : "#fafaf8", overflow: "hidden" }}>
+                  {/* Row header */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px" }}>
+                    <button onClick={() => setExpanded(isExpanded ? null : r.measuredAt)}
+                      style={{ flex: 1, background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, padding: 0, textAlign: "left", fontFamily: "'Outfit',sans-serif" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 600, color: "#1a1a1a" }}>{r.measuredAt || "—"}</span>
+                          {isLatest && <span style={{ fontSize: 10, background: "#6d28d9", color: "#fff", borderRadius: 20, padding: "2px 8px", fontWeight: 600, letterSpacing: "0.04em" }}>LATEST</span>}
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                          {r.weight            && <span style={{ fontSize: 12, color: "#6b7280" }}>{r.weight} kg</span>}
+                          {r.bodyFatPercent     && <span style={{ fontSize: 12, color: "#6b7280" }}>{r.bodyFatPercent}% fat</span>}
+                          {r.skeletalMuscleMass && <span style={{ fontSize: 12, color: "#6b7280" }}>SMM {r.skeletalMuscleMass} kg</span>}
+                          {r.bmr               && <span style={{ fontSize: 12, color: "#6b7280" }}>BMR {r.bmr} kcal</span>}
+                        </div>
+                      </div>
+                      {isExpanded ? <ChevronUp size={14} color="#9a9590" /> : <ChevronDown size={14} color="#9a9590" />}
+                    </button>
+                    <button onClick={() => handleDelete(r.measuredAt)} title="Delete reading"
+                      style={{ ...BTN, padding: "5px 8px", background: "#fef2f2", color: "#dc2626", borderColor: "#fecaca", flexShrink: 0, marginLeft: 8 }}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+
+                  {/* Expanded detail */}
+                  {isExpanded && (
+                    <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0ede8" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingTop: 12 }}>
+                        {METRICS.filter(([, key]) => r[key] !== null && r[key] !== undefined).map(([label, key, unit]) => (
+                          <div key={label} style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "7px 12px" }}>
+                            <div style={{ fontSize: 10, color: "#6d28d9", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+                            <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1a1a1a", marginTop: 2 }}>{r[key]} {unit}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {r.notes && <div style={{ marginTop: 10, fontSize: 12.5, color: "#6b7280" }}><span style={{ fontWeight: 600 }}>Notes: </span>{r.notes}</div>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

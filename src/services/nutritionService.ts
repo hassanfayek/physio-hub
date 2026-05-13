@@ -53,8 +53,8 @@ export interface NutritionProfile {
   goal:          NutritionGoal;
   activityLevel: ActivityLevel;
   overrides:     Record<string, number>; // manual overrides: itemId → quantity
-  inBody?:       InBodyData;
-  supplements?:  CustomSupplement[];
+  inBodyHistory?: InBodyData[];   // array sorted newest-first; replaces old inBody field
+  supplements?:   CustomSupplement[];
   aiQuantities?: Record<string, number>; // last AI-optimised quantities
   aiReasoning?:  string;                 // AI explanation
   intakeForm?:   IntakeForm;
@@ -122,9 +122,10 @@ export async function getNutritionProfile(
     gender:        d.gender        ?? DEFAULT_NUTRITION_PROFILE.gender,
     goal:          d.goal          ?? DEFAULT_NUTRITION_PROFILE.goal,
     activityLevel: d.activityLevel ?? DEFAULT_NUTRITION_PROFILE.activityLevel,
-    overrides:     d.overrides     ?? {},
-    inBody:        d.inBody        ?? undefined,
-    supplements:   d.supplements   ?? DEFAULT_SUPPLEMENTS,
+    overrides:      d.overrides ?? {},
+    // migrate legacy single inBody doc to array
+    inBodyHistory:  d.inBodyHistory ?? (d.inBody ? [d.inBody as InBodyData] : undefined),
+    supplements:    d.supplements ?? DEFAULT_SUPPLEMENTS,
     aiQuantities:  d.aiQuantities  ?? undefined,
     aiReasoning:   d.aiReasoning   ?? undefined,
     intakeForm:    d.intakeForm    ?? undefined,
