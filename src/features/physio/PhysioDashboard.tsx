@@ -1290,7 +1290,7 @@ export default function PhysioDashboard() {
         .phd-topbar-brand-name { font-size: 15px; font-weight: 700; color: #0C3C60; line-height: 1.2; }
         .phd-topbar-brand-sub  { font-size: 11px; font-weight: 500; color: #9a9590; letter-spacing: 0.02em; }
         .phd-topbar-logo { display: none; }
-        .phd-topbar-right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+        .phd-topbar-right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; grid-column: 3; }
 
         .phd-user-chip {
           display: flex; align-items: center; gap: 9px;

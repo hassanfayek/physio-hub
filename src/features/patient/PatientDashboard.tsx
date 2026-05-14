@@ -90,7 +90,8 @@ export default function PatientDashboard() {
           display: grid;
           grid-template-columns: 1fr auto 1fr;
           align-items: center;
-          padding: 0 16px;
+          padding: 0 20px;
+          height: 56px;
           background: #fff;
           border-bottom: 1px solid #e8e4de;
           position: sticky;
