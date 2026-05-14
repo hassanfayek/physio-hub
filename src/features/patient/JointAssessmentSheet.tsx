@@ -2,7 +2,7 @@
 // Sports & Athletic Joint Assessment — printable A4 sheet
 
 import { useState, useEffect, useCallback } from "react";
-import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
 import { Printer, Save, ChevronDown, ChevronUp } from "lucide-react";
 
@@ -837,6 +837,7 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
   const [expanded,  setExpanded] = useState<Record<string, boolean>>({});
   const [history,   setHistory]  = useState<Array<{date: string; snap: AssessmentDoc}>>([]);
   const [showTrends, setShowTrends] = useState(false);
+  const [viewingDate, setViewingDate] = useState<string | null>(null);
 
   // Load from Firestore
   useEffect(() => {
@@ -902,11 +903,31 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
     }
   };
 
+  const viewingSnap: AssessmentDoc = viewingDate
+    ? (history.find((h) => h.date === viewingDate)?.snap ?? doc_data)
+    : doc_data;
+
   const handleCancel = () => { setDraft(doc_data); setEditing(false); };
+
+  const handleNewAssessment = () => {
+    setDraft(emptyDoc());
+    setEditing(true);
+    setViewingDate(null);
+  };
+
+  const handleDeleteSnapshot = async (date: string) => {
+    try {
+      await deleteDoc(doc(db, "jointAssessmentHistory", patientId, "snapshots", date));
+      setHistory((prev) => prev.filter((h) => h.date !== date));
+      if (viewingDate === date) setViewingDate(null);
+    } catch {
+      // silent
+    }
+  };
 
   // ── Print / PDF ────────────────────────────────────────────────────────────
   const handlePrint = () => {
-    const data = doc_data;
+    const data = viewingSnap;
 
     const OXFORD = [
       ["0","No contraction"],["1","Trace / flicker"],["2","Gravity eliminated"],
@@ -1342,7 +1363,7 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
     win.document.close();
   };
 
-  const d = editing ? draft : doc_data;
+  const d = editing ? draft : viewingSnap;
 
   const toggleJoint = useCallback((key: string, checked: boolean) => {
     const sel = checked
@@ -1715,6 +1736,66 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
           font-size: 16px; font-weight: 500; color: #1a1a1a; margin-bottom: 10px;
         }
 
+        /* ── Assessment History Panel ── */
+        .jas-hist-panel {
+          background: #fff; border: 1px solid #e5e0d8;
+          border-radius: 14px; padding: 14px 18px; margin-bottom: 14px;
+        }
+        .jas-hist-label {
+          font-size: 10px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.1em; color: #9a9590; margin-bottom: 10px;
+        }
+        .jas-hist-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .jas-hist-chip {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 6px 13px; border-radius: 100px;
+          border: 1.5px solid #e5e0d8; background: #fafaf8;
+          font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500;
+          color: #5a5550; cursor: pointer; transition: all 0.13s; white-space: nowrap;
+        }
+        .jas-hist-chip:hover { border-color: #B3DEF0; color: #2E8BC0; background: #EAF5FC; }
+        .jas-hist-chip.jas-hist-active { border-color: #2E8BC0; background: #EAF5FC; color: #0C3C60; font-weight: 600; }
+        .jas-hist-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+        .jas-hist-live-badge {
+          font-size: 9px; font-weight: 700; padding: 1px 6px;
+          border-radius: 100px; background: #22c55e; color: #fff;
+          letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.6;
+        }
+        .jas-hist-entry { display: inline-flex; align-items: center; gap: 3px; }
+        .jas-hist-del {
+          width: 20px; height: 20px; border-radius: 50%;
+          border: 1px solid #fca5a5; background: #fff5f5;
+          color: #ef4444; font-size: 13px; line-height: 1;
+          cursor: pointer; display: flex; align-items: center; justify-content: center;
+          transition: all 0.12s; padding: 0; flex-shrink: 0;
+        }
+        .jas-hist-del:hover { background: #ef4444; color: #fff; border-color: #ef4444; }
+        .jas-hist-btn-new {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 6px 14px; border-radius: 100px;
+          border: 1.5px dashed #2E8BC0; background: transparent;
+          font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 600;
+          color: #2E8BC0; cursor: pointer; transition: all 0.13s; white-space: nowrap;
+        }
+        .jas-hist-btn-new:hover { background: #EAF5FC; border-style: solid; }
+
+        /* ── Viewing banner ── */
+        .jas-viewing-banner {
+          display: flex; align-items: center; gap: 10px;
+          padding: 10px 16px; border-radius: 10px; margin-bottom: 14px;
+          background: #fef3c7; border: 1.5px solid #fde68a;
+          color: #92400e; font-size: 13px; font-weight: 500;
+          flex-wrap: wrap;
+        }
+        .jas-viewing-banner-back {
+          margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
+          padding: 5px 12px; border-radius: 8px;
+          border: 1.5px solid #fbbf24; background: #fff;
+          font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 600;
+          color: #92400e; cursor: pointer; transition: all 0.13s;
+        }
+        .jas-viewing-banner-back:hover { background: #fef3c7; }
+
         /* ── Empty state ── */
         .jas-empty {
           text-align: center; padding: 60px 24px;
@@ -1909,7 +1990,7 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
                 Saved
               </span>
             )}
-            {canEdit && !editing && (
+            {canEdit && !editing && viewingDate === null && (
               <button className="jas-btn jas-btn-edit" onClick={() => setEditing(true)}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 Edit Assessment
@@ -1935,6 +2016,73 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
             </button>
           </div>
         </div>
+
+        {/* ── Assessment History Panel ── */}
+        {(history.length > 0 || doc_data.date) && !editing && (
+          <div className="jas-hist-panel jas-no-print">
+            <div className="jas-hist-label">Assessment History</div>
+            <div className="jas-hist-chips">
+              {/* Latest chip */}
+              <button
+                className={`jas-hist-chip ${viewingDate === null ? "jas-hist-active" : ""}`}
+                onClick={() => setViewingDate(null)}
+              >
+                {doc_data.date || "Latest"}
+                <span className="jas-hist-live-badge">LIVE</span>
+              </button>
+
+              {/* Past snapshots — newest first, excluding the live date */}
+              {[...history].reverse()
+                .filter((h) => h.date !== doc_data.date)
+                .map(({ date }) => (
+                  <div key={date} className="jas-hist-entry">
+                    <button
+                      className={`jas-hist-chip ${viewingDate === date ? "jas-hist-active" : ""}`}
+                      onClick={() => setViewingDate(date)}
+                    >
+                      {date}
+                    </button>
+                    {canEdit && (
+                      <button
+                        className="jas-hist-del"
+                        title="Delete this snapshot"
+                        onClick={() => handleDeleteSnapshot(date)}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+              {/* New Assessment button */}
+              {canEdit && (
+                <button className="jas-hist-btn-new" onClick={handleNewAssessment}>
+                  + New Assessment
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* New Assessment button when no history yet */}
+        {history.length === 0 && !doc_data.date && canEdit && !editing && (
+          <div className="jas-no-print" style={{ marginBottom: 14 }}>
+            <button className="jas-hist-btn-new" onClick={handleNewAssessment} style={{ borderRadius: 10, padding: "8px 16px" }}>
+              + New Assessment
+            </button>
+          </div>
+        )}
+
+        {/* ── Viewing past snapshot banner ── */}
+        {viewingDate !== null && (
+          <div className="jas-viewing-banner jas-no-print">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Viewing past assessment — <strong>{viewingDate}</strong> — Read only
+            <button className="jas-viewing-banner-back" onClick={() => setViewingDate(null)}>
+              ← Back to Latest
+            </button>
+          </div>
+        )}
 
         {/* ── Info grid ── */}
         <div className="jas-info-grid">
@@ -2024,7 +2172,7 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
           .filter(({ key }) => d.selectedJoints.includes(key))
           .map(({ key, label, jointId }) => {
             const jDef   = JOINTS[jointId];
-            const jData  = (editing ? draft : doc_data).joints[key] ?? emptyJoint();
+            const jData  = (editing ? draft : viewingSnap).joints[key] ?? emptyJoint();
             const isOpen = expanded[key] !== false; // default open
             const romCount = Object.values(jData.rom).filter((r) => r.active || r.passive).length;
             const posTests = Object.values(jData.tests).filter((t) => t.result === "positive").length;
