@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import { Pencil, Trash2 } from "lucide-react";
 import { db } from "../../firebase";
 import { toDateStr, getWeekStart } from "../../services/appointmentService";
-import { setSessionPrice, deleteSessionPrice } from "../../services/priceService";
+import { setSessionPrice, deleteSessionPrice, deleteSessionPackage } from "../../services/priceService";
 import { subscribeToAllPatients } from "../../services/patientService";
 
 // ─── Local types (raw Firestore shapes) ──────────────────────────────────────
@@ -81,6 +81,16 @@ export default function ClinicBillingPage() {
     await deleteSessionPrice(id);
     setDeletingSession(false);
     setDeletingSessionId(null);
+  };
+
+  const [deletingPkgId, setDeletingPkgId] = useState<string | null>(null);
+  const [deletingPkg,   setDeletingPkg]   = useState(false);
+
+  const handleDeletePackage = async (id: string) => {
+    setDeletingPkg(true);
+    await deleteSessionPackage(id);
+    setDeletingPkg(false);
+    setDeletingPkgId(null);
   };
 
   const openEditSession = (s: RawSessionPrice) => {
@@ -622,6 +632,21 @@ export default function ClinicBillingPage() {
                           </div>
                         </div>
                         {p.notes && <div style={{ fontSize: 12, color: "#9a9590", marginTop: 8 }}>{p.notes}</div>}
+                        <div style={{ borderTop: "1px solid #f0ede8", marginTop: 10, paddingTop: 10 }}>
+                          {deletingPkgId === p.id ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ fontSize: 12, color: "#b91c1c", flex: 1 }}>Delete this package?</span>
+                              <button className="cb-del-confirm-btn" disabled={deletingPkg} onClick={() => handleDeletePackage(p.id)}>
+                                {deletingPkg ? "…" : "Confirm"}
+                              </button>
+                              <button className="cb-del-cancel-btn" onClick={() => setDeletingPkgId(null)}>Cancel</button>
+                            </div>
+                          ) : (
+                            <button className="cb-del-btn" style={{ width: "100%", borderRadius: 8, gap: 6, fontSize: 12, fontFamily: "inherit", fontWeight: 500 }} onClick={() => setDeletingPkgId(p.id)}>
+                              <Trash2 size={12} strokeWidth={2} /> Remove Package
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
