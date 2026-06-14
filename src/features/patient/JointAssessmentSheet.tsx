@@ -346,8 +346,7 @@ const JOINT_ORDER = [
   "hip","knee","ankle",
 ];
 
-const OXFORD_GRADES = ["0","1","2","3","4","5"];
-const END_FEELS      = ["","firm","soft","hard","empty","springy"];
+const END_FEELS = ["","firm","soft","hard","empty","springy"];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -515,25 +514,15 @@ function MuscleTable({
     onChange(jointKey, updated);
   };
 
-  const gradeColor = (g: string) => {
-    const n = Number(g);
-    if (!g) return "";
-    if (n <= 1) return "jas-grade-red";
-    if (n <= 3) return "jas-grade-orange";
-    if (n === 4) return "jas-grade-yellow";
-    return "jas-grade-green";
-  };
-
   return (
     <div className="jas-table-wrap">
       <table className="jas-table">
         <thead>
           <tr>
             <th className="jas-th-muscle">Muscle / Group</th>
-            <th className="jas-th-grade">Oxford Grade (0–5)</th>
-            <th className="jas-th-force">Force (N/kg) <span className="jas-device-badge">Device</span></th>
-            <th className="jas-th-val" style={{ minWidth: 90 }}>Time to Peak <span style={{ fontSize: 9, color: "#9a9590", display: "block" }}>ms</span></th>
-            <th className="jas-th-val" style={{ minWidth: 90 }}>Firing Duration <span style={{ fontSize: 9, color: "#9a9590", display: "block" }}>ms</span></th>
+            <th className="jas-th-force">Force (N) <span className="jas-device-badge">Device</span></th>
+            <th className="jas-th-val" style={{ minWidth: 90 }}>Time to Peak <span style={{ fontSize: 9, color: "#9a9590", display: "block" }}>s</span></th>
+            <th className="jas-th-val" style={{ minWidth: 90 }}>Firing Duration <span style={{ fontSize: 9, color: "#9a9590", display: "block" }}>s</span></th>
           </tr>
         </thead>
         <tbody>
@@ -542,21 +531,6 @@ function MuscleTable({
             return (
               <tr key={m.id}>
                 <td className="jas-td-muscle">{m.label}</td>
-                <td>
-                  {canEdit
-                    ? (
-                      <div className="jas-grade-btns">
-                        {OXFORD_GRADES.map((g) => (
-                          <button
-                            key={g} type="button"
-                            className={`jas-grade-btn ${mu.grade === g ? `active ${gradeColor(g)}` : ""}`}
-                            onClick={() => set(m.id, "grade", mu.grade === g ? "" : g)}
-                          >{g}</button>
-                        ))}
-                      </div>
-                    )
-                    : <span className={`jas-grade-chip ${gradeColor(mu.grade)}`}>{mu.grade || "—"}</span>}
-                </td>
                 <td>
                   {canEdit
                     ? <input className="jas-cell-input" value={mu.force} onChange={(e) => set(m.id, "force", e.target.value)} placeholder="pending device" />
@@ -929,19 +903,6 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
   const handlePrint = () => {
     const data = viewingSnap;
 
-    const OXFORD = [
-      ["0","No contraction"],["1","Trace / flicker"],["2","Gravity eliminated"],
-      ["3","Against gravity"],["4","Against resistance"],["5","Full normal power"],
-    ];
-
-    const gradeColor = (g: string) => {
-      if (g === "0" || g === "1") return "#ef4444";
-      if (g === "2" || g === "3") return "#f97316";
-      if (g === "4")              return "#eab308";
-      if (g === "5")              return "#22c55e";
-      return "#aaa";
-    };
-
     const testChip = (result: string) => {
       if (result === "positive") return `<span style="display:inline-block;font-size:9pt;font-weight:700;padding:1px 8px;border-radius:100px;background:#fee2e2;color:#b91c1c;">Positive +</span>`;
       if (result === "negative") return `<span style="display:inline-block;font-size:9pt;font-weight:700;padding:1px 8px;border-radius:100px;background:#d1fae5;color:#065f46;">Negative −</span>`;
@@ -989,19 +950,16 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
         // Muscle table — only rows with at least grade or force
         const muscleRows = jDef.muscles
           .filter((m) => {
-            const mu = jData.muscles[m.id] ?? { grade:"", force:"" };
-            return mu.grade || mu.force;
+            const mu = jData.muscles[m.id] ?? { grade:"", force:"", timeToPeak:"", firingDuration:"" };
+            return mu.force || mu.timeToPeak || mu.firingDuration;
           })
           .map((m) => {
-            const mu = jData.muscles[m.id] ?? { grade:"", force:"" };
-            const col = mu.grade ? gradeColor(mu.grade) : "#ddd";
-            const gradeCell = mu.grade
-              ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:${col};color:#fff;font-weight:700;font-size:11pt;">${mu.grade}</span>`
-              : `<span style="color:#ccc;">—</span>`;
+            const mu = jData.muscles[m.id] ?? { grade:"", force:"", timeToPeak:"", firingDuration:"" };
             return `<tr>
               <td style="font-weight:500;">${m.label}</td>
-              <td>${gradeCell}</td>
               <td style="color:#555;font-size:9pt;">${mu.force || "—"}</td>
+              <td style="color:#555;font-size:9pt;">${mu.timeToPeak || "—"}</td>
+              <td style="color:#555;font-size:9pt;">${mu.firingDuration || "—"}</td>
             </tr>`;
           }).join("");
 
@@ -1089,8 +1047,9 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
               <table class="data-table">
                 <thead><tr>
                   <th style="width:40%;">Muscle Group</th>
-                  <th style="width:30%;">Oxford Grade</th>
-                  <th style="width:30%;">Force (kg)</th>
+                  <th style="width:20%;">Force (N)</th>
+                  <th style="width:20%;">Time to Peak (s)</th>
+                  <th style="width:20%;">Firing Duration (s)</th>
                 </tr></thead>
                 <tbody>${muscleRows}</tbody>
               </table>` : ""}
@@ -1280,13 +1239,6 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
       </div>`).join("")}
   </div>
 
-  <!-- Oxford legend -->
-  ${data.selectedJoints.length > 0 ? `
-  <div class="oxford-bar">
-    <span class="oxford-bar-title">Oxford Scale</span>
-    ${OXFORD.map(([n,d])=>`<span class="oxford-item"><span class="oxford-num">${n}</span> = ${d}</span>`).join("")}
-  </div>` : ""}
-
   <!-- Joint sections -->
   ${data.selectedJoints.length === 0
     ? `<div style="text-align:center;padding:40px;color:#aaa;font-size:11pt;border:1.5px dashed #e5e0d8;border-radius:12px;">No joints assessed.</div>`
@@ -1307,23 +1259,18 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
       .filter(({ key }) => data.selectedJoints.includes(key))
       .map(({ key, label, jointId }) => {
         const charts = getJointCharts(key, jointId, history);
-        if (!charts || (charts.romSeries.length === 0 && charts.muscleSeries.length === 0)) return "";
-        const romSvg    = charts.romSeries.length > 0
-          ? `<div>${buildLineChart("Range of Motion — Active (°)", charts.dates, charts.romSeries, 0, 180)}</div>`
-          : "";
-        const muscleSvg = charts.muscleSeries.length > 0
-          ? `<div>${buildLineChart("Muscle Power — Oxford Grade (0–5)", charts.dates, charts.muscleSeries, 0, 5)}</div>`
-          : "";
+        if (!charts || charts.romSeries.length === 0) return "";
+        const romSvg = `<div>${buildLineChart("Range of Motion — Active (°)", charts.dates, charts.romSeries, 0, 180)}</div>`;
         return `<div style="margin-bottom:18px;break-inside:avoid;">
           <div style="font-size:11pt;font-weight:700;color:#0C3C60;margin-bottom:10px;padding-bottom:5px;border-bottom:1.5px solid #d0d4dc;">${label}</div>
-          <div style="display:grid;grid-template-columns:${romSvg && muscleSvg ? "1fr 1fr" : "1fr"};gap:12px;">${romSvg}${muscleSvg}</div>
+          <div>${romSvg}</div>
         </div>`;
       }).join("");
     if (!jointsHtmlTrends.trim()) return "";
     return `
     <div style="background:#fff;border:1.5px solid #d0d4dc;border-radius:12px;padding:14px 16px;margin-bottom:14px;break-before:page;">
       <div style="font-family:Georgia,serif;font-size:13pt;font-weight:600;color:#0C3C60;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #2E8BC0;">Progress Trends</div>
-      <div style="font-size:8pt;color:#9a9590;margin-bottom:10px;">Based on ${history.length} saved assessments · ROM values in degrees · Oxford scale 0–5</div>
+      <div style="font-size:8pt;color:#9a9590;margin-bottom:10px;">Based on ${history.length} saved assessments · ROM values in degrees</div>
       ${jointsHtmlTrends}
     </div>`;
   })()}
@@ -1809,19 +1756,6 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
         }
         .jas-empty-sub { font-size: 14px; color: #9a9590; }
 
-        /* ── Oxford legend ── */
-        .jas-oxford-legend {
-          display: flex; flex-wrap: wrap; gap: 6px;
-          background: #f5f3ef; border-radius: 10px; padding: 10px 14px;
-          margin-bottom: 14px;
-        }
-        .jas-oxford-item {
-          font-size: 11.5px; color: #5a5550; white-space: nowrap;
-        }
-        .jas-oxford-num {
-          font-weight: 700; color: #2E8BC0; margin-right: 3px;
-        }
-
         /* ══════════════════════════════════════════════
            PRINT STYLES — A4 layout
         ══════════════════════════════════════════════ */
@@ -1941,8 +1875,6 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
           .jas-meta-card { border: 1px solid #ccc !important; padding: 5px 7px !important; }
 
           .jas-selector-wrap { display: none !important; }
-
-          .jas-oxford-legend { padding: 5px 8px !important; margin-bottom: 8px !important; }
 
           .jas-impression-wrap {
             border: 1px solid #ccc !important;
@@ -2148,25 +2080,6 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
           </div>
         )}
 
-        {/* ── Oxford Scale Legend ── */}
-        {d.selectedJoints.length > 0 && (
-          <div className="jas-oxford-legend jas-no-print">
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#9a9590", textTransform: "uppercase", letterSpacing: "0.08em", marginRight: 8 }}>Oxford Scale</span>
-            {[
-              ["0","No contraction"],
-              ["1","Trace/flicker"],
-              ["2","Against gravity eliminated"],
-              ["3","Against gravity"],
-              ["4","Against some resistance"],
-              ["5","Full normal power"],
-            ].map(([n, desc]) => (
-              <span key={n} className="jas-oxford-item">
-                <span className="jas-oxford-num">{n}</span>= {desc}
-              </span>
-            ))}
-          </div>
-        )}
-
         {/* ── Joint sections ── */}
         {allKeys
           .filter(({ key }) => d.selectedJoints.includes(key))
@@ -2290,7 +2203,7 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
                 <div>
                   <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, fontWeight: 500, color: "#1a1a1a" }}>Progress Trends</div>
                   <div style={{ fontSize: 12, color: "#9a9590", marginTop: 2 }}>
-                    {history.length} saved assessments · ROM & Muscle Power over time
+                    {history.length} saved assessments · ROM over time
                   </div>
                 </div>
               </div>
@@ -2302,20 +2215,13 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
               <div style={{ border: "1px solid #e5e0d8", borderTop: "none", borderRadius: "0 0 16px 16px", padding: "18px 18px 20px", background: "#fff" }}>
                 {allKeys.filter(({ key }) => doc_data.selectedJoints.includes(key)).map(({ key, label, jointId }) => {
                   const charts = getJointCharts(key, jointId, history);
-                  if (!charts || (charts.romSeries.length === 0 && charts.muscleSeries.length === 0)) return null;
+                  if (!charts || charts.romSeries.length === 0) return null;
                   return (
                     <div key={key} style={{ marginBottom: 24 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#0C3C60", marginBottom: 12, paddingBottom: 6, borderBottom: "1.5px solid #e5e0d8" }}>
                         {label}
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: charts.romSeries.length > 0 && charts.muscleSeries.length > 0 ? "1fr 1fr" : "1fr", gap: 14 }}>
-                        {charts.romSeries.length > 0 && (
-                          <div dangerouslySetInnerHTML={{ __html: buildLineChart("Range of Motion — Active (°)", charts.dates, charts.romSeries, 0, 180) }} />
-                        )}
-                        {charts.muscleSeries.length > 0 && (
-                          <div dangerouslySetInnerHTML={{ __html: buildLineChart("Muscle Power — Oxford Grade (0–5)", charts.dates, charts.muscleSeries, 0, 5) }} />
-                        )}
-                      </div>
+                      <div dangerouslySetInnerHTML={{ __html: buildLineChart("Range of Motion — Active (°)", charts.dates, charts.romSeries, 0, 180) }} />
                     </div>
                   );
                 })}
