@@ -704,12 +704,10 @@ function parseRomVal(s: string): number | null {
   return m ? (isNaN(parseFloat(m[1])) ? null : parseFloat(m[1])) : null;
 }
 
-function parseGrade(s: string): number | null {
+function parseForce(s: string): number | null {
   if (!s) return null;
-  const m = s.match(/^(\d)/);
-  if (!m) return null;
-  const v = parseInt(m[1], 10);
-  return isNaN(v) ? null : Math.min(5, Math.max(0, v));
+  const m = s.match(/(\d+(?:\.\d+)?)/);
+  return m ? (isNaN(parseFloat(m[1])) ? null : parseFloat(m[1])) : null;
 }
 
 function buildLineChart(
@@ -779,7 +777,7 @@ function buildLineChart(
 function getJointCharts(
   jointKey: string, jointId: string,
   historyItems: Array<{date: string; snap: AssessmentDoc}>,
-): { dates: string[]; romSeries: ChartSeries[]; muscleSeries: ChartSeries[]; } | null {
+): { dates: string[]; romSeries: ChartSeries[]; forceSeries: ChartSeries[]; forceMax: number; } | null {
   const relevant = historyItems.filter((h) => !!h.snap.joints?.[jointKey]);
   if (relevant.length < 2) return null;
   const dates = relevant.map((h) => h.date);
@@ -791,11 +789,12 @@ function getJointCharts(
       return parseRomVal(r?.active || r?.passive || "");
     }),
   })).filter(({ values }) => values.some((v) => v !== null));
-  const muscleSeries: ChartSeries[] = jDef.muscles.map((m) => ({
+  const forceSeries: ChartSeries[] = jDef.muscles.map((m) => ({
     label: m.label,
-    values: relevant.map((h) => parseGrade(h.snap.joints?.[jointKey]?.muscles?.[m.id]?.grade || "")),
+    values: relevant.map((h) => parseForce(h.snap.joints?.[jointKey]?.muscles?.[m.id]?.force || "")),
   })).filter(({ values }) => values.some((v) => v !== null));
-  return { dates, romSeries, muscleSeries };
+  const forceMax = Math.max(...forceSeries.flatMap((s) => s.values.filter((v): v is number => v !== null)), 10);
+  return { dates, romSeries, forceSeries, forceMax };
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -1259,18 +1258,23 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
       .filter(({ key }) => data.selectedJoints.includes(key))
       .map(({ key, label, jointId }) => {
         const charts = getJointCharts(key, jointId, history);
-        if (!charts || charts.romSeries.length === 0) return "";
-        const romSvg = `<div>${buildLineChart("Range of Motion — Active (°)", charts.dates, charts.romSeries, 0, 180)}</div>`;
+        if (!charts || (charts.romSeries.length === 0 && charts.forceSeries.length === 0)) return "";
+        const romSvg   = charts.romSeries.length > 0
+          ? `<div>${buildLineChart("Range of Motion — Active (°)", charts.dates, charts.romSeries, 0, 180)}</div>`
+          : "";
+        const forceSvg = charts.forceSeries.length > 0
+          ? `<div>${buildLineChart("Muscle Force (N)", charts.dates, charts.forceSeries, 0, charts.forceMax)}</div>`
+          : "";
         return `<div style="margin-bottom:18px;break-inside:avoid;">
           <div style="font-size:11pt;font-weight:700;color:#0C3C60;margin-bottom:10px;padding-bottom:5px;border-bottom:1.5px solid #d0d4dc;">${label}</div>
-          <div>${romSvg}</div>
+          <div style="display:grid;grid-template-columns:${romSvg && forceSvg ? "1fr 1fr" : "1fr"};gap:12px;">${romSvg}${forceSvg}</div>
         </div>`;
       }).join("");
     if (!jointsHtmlTrends.trim()) return "";
     return `
     <div style="background:#fff;border:1.5px solid #d0d4dc;border-radius:12px;padding:14px 16px;margin-bottom:14px;break-before:page;">
       <div style="font-family:Georgia,serif;font-size:13pt;font-weight:600;color:#0C3C60;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #2E8BC0;">Progress Trends</div>
-      <div style="font-size:8pt;color:#9a9590;margin-bottom:10px;">Based on ${history.length} saved assessments · ROM values in degrees</div>
+      <div style="font-size:8pt;color:#9a9590;margin-bottom:10px;">Based on ${history.length} saved assessments · ROM in degrees · Force in N</div>
       ${jointsHtmlTrends}
     </div>`;
   })()}
@@ -2203,7 +2207,7 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
                 <div>
                   <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, fontWeight: 500, color: "#1a1a1a" }}>Progress Trends</div>
                   <div style={{ fontSize: 12, color: "#9a9590", marginTop: 2 }}>
-                    {history.length} saved assessments · ROM over time
+                    {history.length} saved assessments · ROM & Muscle Force over time
                   </div>
                 </div>
               </div>
@@ -2215,13 +2219,20 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
               <div style={{ border: "1px solid #e5e0d8", borderTop: "none", borderRadius: "0 0 16px 16px", padding: "18px 18px 20px", background: "#fff" }}>
                 {allKeys.filter(({ key }) => doc_data.selectedJoints.includes(key)).map(({ key, label, jointId }) => {
                   const charts = getJointCharts(key, jointId, history);
-                  if (!charts || charts.romSeries.length === 0) return null;
+                  if (!charts || (charts.romSeries.length === 0 && charts.forceSeries.length === 0)) return null;
                   return (
                     <div key={key} style={{ marginBottom: 24 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#0C3C60", marginBottom: 12, paddingBottom: 6, borderBottom: "1.5px solid #e5e0d8" }}>
                         {label}
                       </div>
-                      <div dangerouslySetInnerHTML={{ __html: buildLineChart("Range of Motion — Active (°)", charts.dates, charts.romSeries, 0, 180) }} />
+                      <div style={{ display: "grid", gridTemplateColumns: charts.romSeries.length > 0 && charts.forceSeries.length > 0 ? "1fr 1fr" : "1fr", gap: 14 }}>
+                        {charts.romSeries.length > 0 && (
+                          <div dangerouslySetInnerHTML={{ __html: buildLineChart("Range of Motion — Active (°)", charts.dates, charts.romSeries, 0, 180) }} />
+                        )}
+                        {charts.forceSeries.length > 0 && (
+                          <div dangerouslySetInnerHTML={{ __html: buildLineChart("Muscle Force (N)", charts.dates, charts.forceSeries, 0, charts.forceMax) }} />
+                        )}
+                      </div>
                     </div>
                   );
                 })}
