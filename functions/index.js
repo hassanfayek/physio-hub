@@ -83,17 +83,18 @@ function formatJointAssessment(jointDoc) {
       lines.push(...romLines);
     }
 
-    // Muscle Strength
+    // Muscle Strength / Force
     const muscleLines = Object.entries(jd.muscles || {})
-      .filter(([, m]) => m && m.grade)
+      .filter(([, m]) => m && (m.force || m.timeToPeak || m.firingDuration))
       .map(([muscleId, m]) => {
-        const parts = [`grade ${m.grade}`];
-        if (m.pain)  parts.push(`pain: ${m.pain}`);
-        if (m.notes) parts.push(m.notes);
+        const parts = [];
+        if (m.force)          parts.push(`force ${m.force} N`);
+        if (m.timeToPeak)     parts.push(`time to peak ${m.timeToPeak} s`);
+        if (m.firingDuration) parts.push(`firing duration ${m.firingDuration} s`);
         return `    ${muscleId}: ${parts.join(", ")}`;
       });
     if (muscleLines.length > 0) {
-      lines.push("  Muscle Strength (MMT):");
+      lines.push("  Muscle Force:");
       lines.push(...muscleLines);
     }
 
@@ -126,7 +127,7 @@ function formatJointAssessment(jointDoc) {
 // ─── Generate Treatment Plan ──────────────────────────────────────────────────
 
 exports.generateTreatmentPlan = onCall(
-  { secrets: [CLAUDE_API_KEY] },
+  { secrets: [CLAUDE_API_KEY], timeoutSeconds: 120 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Must be logged in.");
@@ -287,17 +288,34 @@ Progression Criteria
 Red Flags
 [specific to this patient's diagnosis and findings]`;
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2500,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    });
+    let response;
+    try {
+      response = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      });
+    } catch (aiErr) {
+      const msg = aiErr?.message || "AI service unavailable";
+      const status = aiErr?.status;
+      if (status === 529 || status === 503 || msg.includes("overloaded")) {
+        throw new HttpsError("unavailable", "The AI service is temporarily overloaded. Please try again in a moment.");
+      }
+      if (status === 429 || msg.includes("rate limit")) {
+        throw new HttpsError("resource-exhausted", "Too many requests. Please wait a few seconds and try again.");
+      }
+      throw new HttpsError("internal", `AI error: ${msg}`);
+    }
 
     const rawText = response.content
       .filter((b) => b.type === "text")
       .map((b) => b.text)
       .join("");
+
+    if (!rawText.trim()) {
+      throw new HttpsError("internal", "AI returned an empty response. Please try again.");
+    }
 
     let goals = "";
     let plan = rawText.trim();
