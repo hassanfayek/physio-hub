@@ -976,10 +976,11 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
   const [sessionFeedbackList, setSessionFeedbackList] = useState<SessionFeedback[]>([]);
 
   // ── AI Treatment Plan ─────────────────────────────────────────────────────
-  const [aiPlanLoading,  setAiPlanLoading]  = useState(false);
-  const [aiPlanResult,   setAiPlanResult]   = useState<string | null>(null);
-  const [aiPlanError,    setAiPlanError]    = useState<string | null>(null);
-  const [aiPlanNotes,    setAiPlanNotes]    = useState("");
+  const [aiPlanLoading,   setAiPlanLoading]   = useState(false);
+  const [aiPlanResult,    setAiPlanResult]    = useState<string | null>(null);
+  const [aiPlanError,     setAiPlanError]     = useState<string | null>(null);
+  const [aiPlanNotes,     setAiPlanNotes]     = useState("");
+  const [aiPlanDuration,  setAiPlanDuration]  = useState("");
 
   // ── Session history (from appointments collection) ────────────────────────
   const [sessionHistory,     setSessionHistory]     = useState<ApptRecord[]>([]);
@@ -3509,6 +3510,24 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
             </div>
 
             <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
+                Program Duration <span style={{ fontWeight: 400, color: "#9a9590" }}>(optional)</span>
+              </div>
+              <input
+                type="text"
+                value={aiPlanDuration}
+                onChange={(e) => setAiPlanDuration(e.target.value)}
+                placeholder="e.g. 6 weeks, 3 months, 12 sessions..."
+                style={{
+                  width: "100%", boxSizing: "border-box", padding: "10px 14px",
+                  border: "1.5px solid #e5e0d8", borderRadius: 10, fontSize: 13,
+                  fontFamily: "'Outfit', sans-serif", outline: "none",
+                  color: "#1a1a1a", background: "#fff",
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Additional Notes for AI (optional)</div>
               <textarea
                 value={aiPlanNotes}
@@ -3538,7 +3557,8 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
 
                   const result = await generateTreatmentPlan({
                     patientId,
-                    notes: aiPlanNotes.trim() || undefined,
+                    notes:    aiPlanNotes.trim()    || undefined,
+                    duration: aiPlanDuration.trim() || undefined,
                   });
 
                   const { goals, plan } = result.data as { goals: string; plan: string };
@@ -3549,6 +3569,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                   setTpNotes(plan);
                   setTpDate(new Date().toISOString().slice(0, 10));
                   setAiPlanNotes("");
+                  setAiPlanDuration("");
                   setAiPlanResult(plan);
                 } catch (err: unknown) {
                   setAiPlanError(err instanceof Error ? err.message : "Failed to generate plan. Try again.");

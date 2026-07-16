@@ -147,7 +147,7 @@ exports.generateTreatmentPlan = onCall(
       throw new HttpsError("permission-denied", "Only physiotherapists and managers can generate treatment plans.");
     }
 
-    const { patientId, notes } = request.data;
+    const { patientId, notes, duration } = request.data;
     if (!patientId) {
       throw new HttpsError("invalid-argument", "patientId is required.");
     }
@@ -228,6 +228,11 @@ exports.generateTreatmentPlan = onCall(
     const jointText = formatJointAssessment(jointDoc);
     if (jointText) sections.push(`Body Profile (Joint Assessment):\n${jointText}`);
 
+    // Program duration
+    if (duration && duration.trim()) {
+      sections.push(`Treatment Program Duration:\n  ${duration.trim()}`);
+    }
+
     // Clinician's extra notes
     if (notes && notes.trim()) {
       sections.push(`Additional Notes from Clinician:\n  ${notes.trim()}`);
@@ -247,14 +252,18 @@ Use plain language. Write in flowing paragraphs where appropriate, and use bulle
 Be specific and directly reference the patient's actual findings (ROM values, muscle grades, positive tests, pain scores) throughout.
 Do not be generic. Every sentence should be grounded in the data provided.`;
 
+    const durationLine = duration && duration.trim()
+      ? `The clinician has specified a total program duration of: ${duration.trim()}. Structure all phases, goals, and timelines to fit within this duration.`
+      : "";
+
     const userPrompt = `Based on the following complete clinical data, write a detailed physiotherapy treatment plan:
 
 ${clinicalSummary}
-
+${durationLine ? `\n${durationLine}` : ""}
 Format your response EXACTLY like this — no JSON, no code blocks, just plain text with these two markers:
 
 ##GOALS##
-Write 2-3 sentences covering short-term (2-4 weeks) and long-term (6-12 weeks) goals tied to this patient's specific deficits.
+Write 2-3 sentences covering short-term and long-term goals tied to this patient's specific deficits${duration ? ` within the ${duration.trim()} program` : " (2-4 weeks short-term, 6-12 weeks long-term)"}.
 
 ##PLAN##
 Write the full treatment plan covering these sections, each on its own line with a blank line between sections:
@@ -263,6 +272,7 @@ Manual Therapy
 [paragraphs describing techniques, structures targeted, frequency, rationale]
 
 Exercise Program
+${duration ? `Structure phases to span the full ${duration.trim()} program:` : ""}
 Phase 1 — Weeks 1-2:
 - exercise name — sets x reps, frequency, brief rationale
 (continue for all exercises in this phase)
