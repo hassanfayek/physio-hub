@@ -913,16 +913,20 @@ interface OverviewTabProps {
 }
 
 function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false, onViewPatient }: OverviewTabProps) {
-  const hour     = new Date().getHours();
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(tick);
+  }, []);
+
+  const hour     = now.getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
-  const [patients,     setPatients]     = useState<Patient[]>([]);
+  const [patients,        setPatients]        = useState<Patient[]>([]);
   const [patientsLoading, setPatientsLoading] = useState(true);
+  const [todayAppts,      setTodayAppts]      = useState<Appointment[]>([]);
+  const [apptLoading,     setApptLoading]     = useState(true);
 
-  const [todayAppts,  setTodayAppts]  = useState<Appointment[]>([]);
-  const [apptLoading, setApptLoading] = useState(true);
-
-  // Live patient subscription — covers all roles (physioId, seniorEditorId, etc.)
   useEffect(() => {
     setPatientsLoading(true);
     const unsub = (isManager || isSecretary)
@@ -939,14 +943,11 @@ function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false,
   }, [physio.uid, isManager, isSecretary]);
 
   const isJunior = !isManager && !isSecretary && !isSenior;
-
-  // For juniors: only show appointments for their assigned patients
   const juniorPatientIdSet = isJunior ? new Set(patients.map((p) => p.uid)) : null;
   const displayedAppts = (isJunior && juniorPatientIdSet && !patientsLoading)
     ? todayAppts.filter((a) => juniorPatientIdSet!.has(a.patientId))
     : todayAppts;
 
-  // Derive stats from live patient list
   const stats = {
     totalPatients:      patients.length,
     activePatients:     patients.filter((p) => p.status === "active").length,
@@ -957,137 +958,256 @@ function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false,
   useEffect(() => {
     setApptLoading(true);
     const today = toDateStr(new Date());
-    const unsubscribe = subscribeToAppointmentsByDay(
+    const unsub = subscribeToAppointmentsByDay(
       today,
       (isManager || isSecretary || isJunior) ? null : physio.uid,
       (data) => { setTodayAppts(data); setApptLoading(false); },
       ()     => setApptLoading(false)
     );
-    return () => unsubscribe();
+    return () => unsub();
   }, [physio.uid, isManager, isSecretary, isJunior]);
+
+  const completedCount   = displayedAppts.filter((a) => a.status === "completed").length;
+  const inProgressCount  = displayedAppts.filter((a) => a.status === "in_progress").length;
+  const upcomingCount    = displayedAppts.filter((a) => !a.status || a.status === "scheduled").length;
+  const shimmer = { borderRadius: 12, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "phShimmer 1.4s ease infinite" };
+
+  const kpiCards = [
+    { label: "Total Patients",  value: stats.totalPatients,      sub: "registered",        color: "#2E8BC0", bg: "#EAF5FC", icon: "👥" },
+    { label: "Active",          value: stats.activePatients,     sub: "in rehabilitation", color: "#16a34a", bg: "#dcfce7", icon: "✅" },
+    { label: "On Hold",         value: stats.onHoldPatients,     sub: "paused",            color: "#d97706", bg: "#fef3c7", icon: "⏸" },
+    { label: "Discharged",      value: stats.dischargedPatients, sub: "completed",         color: "#6b7280", bg: "#f3f4f6", icon: "🏁" },
+  ];
 
   return (
     <>
       <style>{`
-        .ph-ov-header { margin-bottom: 18px; }
-        .ph-ov-title {
-          font-family: 'Playfair Display', serif;
-          font-size: 24px; font-weight: 500;
-          color: #1a1a1a; letter-spacing: -0.02em; margin-bottom: 3px;
+        @keyframes phShimmer { to { background-position: -200% 0; } }
+        @keyframes phPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.5; transform:scale(1.4); } }
+
+        /* ── Welcome banner ── */
+        .ph-banner {
+          background: linear-gradient(135deg, #0C3C60 0%, #2E8BC0 100%);
+          border-radius: 18px; padding: 22px 24px; margin-bottom: 18px;
+          display: flex; align-items: center; justify-content: space-between; gap: 12px;
+          flex-wrap: wrap;
         }
-        .ph-ov-sub { font-size: 13px; color: #9a9590; }
-        .ph-ov-grid {
+        .ph-banner-greeting {
+          font-family: 'Playfair Display', serif;
+          font-size: 22px; font-weight: 500; color: #fff; margin-bottom: 3px;
+        }
+        .ph-banner-date { font-size: 12.5px; color: rgba(255,255,255,0.7); }
+        .ph-banner-clock {
+          font-family: 'Playfair Display', serif;
+          font-size: 28px; font-weight: 600; color: #fff;
+          letter-spacing: 0.02em; text-align: right;
+        }
+        .ph-banner-clock-label { font-size: 10px; color: rgba(255,255,255,0.6); text-align: right; text-transform: uppercase; letter-spacing: 0.1em; }
+
+        /* ── KPI grid ── */
+        .ph-kpi-grid {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
           gap: 10px; margin-bottom: 18px;
         }
-        @media (min-width: 600px) {
-          .ph-ov-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
-        }
-        .ph-ov-stat {
+        @media (min-width: 640px) { .ph-kpi-grid { grid-template-columns: repeat(4, 1fr); } }
+        .ph-kpi {
           background: #fff; border: 1px solid #e5e0d8;
-          border-radius: 14px; padding: 16px;
+          border-radius: 14px; padding: 16px 16px 14px;
+          position: relative; overflow: hidden;
         }
-        .ph-ov-stat.accent { border-top: 3px solid #2E8BC0; }
-        .ph-ov-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #c0bbb4; font-weight: 600; margin-bottom: 6px; }
-        .ph-ov-stat-val {
+        .ph-kpi-icon {
+          font-size: 22px; margin-bottom: 8px; display: block;
+        }
+        .ph-kpi-val {
           font-family: 'Playfair Display', serif;
-          font-size: 30px; color: #1a1a1a; line-height: 1; margin-bottom: 3px;
+          font-size: 32px; line-height: 1; font-weight: 500; margin-bottom: 3px;
         }
-        .ph-ov-stat-val.loading { font-size: 24px; color: #c0bbb4; }
-        .ph-ov-stat-sub { font-size: 11px; color: #9a9590; }
-        .ph-ov-card {
+        .ph-kpi-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #9a9590; }
+        .ph-kpi-sub   { font-size: 11px; color: #c0bbb4; margin-top: 1px; }
+        .ph-kpi-bar {
+          position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
+        }
+
+        /* ── Day summary row ── */
+        .ph-day-summary {
+          display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+          margin-bottom: 12px;
+        }
+        .ph-day-pill {
+          display: inline-flex; align-items: center; gap: 5px;
+          font-size: 12px; font-weight: 600; padding: 4px 10px;
+          border-radius: 100px;
+        }
+        .ph-day-dot {
+          width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+        }
+        .ph-day-dot.live { animation: phPulse 1.4s ease infinite; }
+
+        /* ── Section card ── */
+        .ph-sec-card {
           background: #fff; border: 1px solid #e5e0d8;
-          border-radius: 14px; padding: 16px; margin-bottom: 12px;
+          border-radius: 16px; padding: 18px; margin-bottom: 14px;
         }
-        .ph-ov-card-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #c0bbb4; font-weight: 600; margin-bottom: 12px; }
-        .ph-ov-empty {
-          text-align: center; padding: 24px; color: #c0bbb4;
-          font-size: 13px;
+        .ph-sec-title {
+          font-size: 11px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.1em; color: #9a9590; margin-bottom: 14px;
+          display: flex; align-items: center; justify-content: space-between;
         }
-        @keyframes phShimmer { to { background-position: -200% 0; } }
+        .ph-sec-empty {
+          text-align: center; padding: 28px 16px;
+          color: #c0bbb4; font-size: 13px;
+        }
+
+        /* ── Appointment row ── */
+        .ph-appt-row {
+          display: flex; align-items: center; gap: 12px;
+          padding: 12px 14px; border-radius: 12px;
+          border: 1px solid #e5e0d8; background: #fafaf8;
+          margin-bottom: 8px; flex-wrap: wrap; transition: border-color 0.15s;
+        }
+        .ph-appt-row:last-child { margin-bottom: 0; }
+        .ph-appt-row.inprogress { border-color: #86efac; background: #f0fdf4; }
+        .ph-appt-row.completed  { opacity: 0.65; }
+        .ph-appt-time {
+          min-width: 60px; text-align: center; flex-shrink: 0;
+          font-family: 'Playfair Display', serif;
+          font-size: 15px; font-weight: 600;
+        }
+        .ph-appt-info { flex: 1; min-width: 120px; }
+        .ph-appt-name { font-size: 14px; font-weight: 600; color: #1a1a1a; }
+        .ph-appt-sub  { font-size: 12px; color: #9a9590; margin-top: 1px; }
+        .ph-status-chip {
+          font-size: 11px; font-weight: 700; padding: 3px 10px;
+          border-radius: 100px; white-space: nowrap; flex-shrink: 0;
+        }
+        .ph-now-badge {
+          display: inline-flex; align-items: center; gap: 5px;
+          font-size: 10px; font-weight: 700; padding: 2px 8px;
+          border-radius: 100px; background: #16a34a; color: #fff;
+          text-transform: uppercase; letter-spacing: 0.06em; flex-shrink: 0;
+        }
+        .ph-view-btn {
+          font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 100px;
+          background: transparent; border: 1.5px solid #2E8BC0; color: #2E8BC0;
+          cursor: pointer; white-space: nowrap; flex-shrink: 0; font-family: inherit;
+          transition: all 0.13s;
+        }
+        .ph-view-btn:hover { background: #EAF5FC; }
+
+        /* ── Patient row ── */
+        .ph-pat-row {
+          display: flex; align-items: center; gap: 11px;
+          padding: 10px 12px; border-radius: 12px;
+          border: 1px solid #e5e0d8; background: #fafaf8;
+          margin-bottom: 7px; flex-wrap: wrap;
+        }
+        .ph-pat-row:last-child { margin-bottom: 0; }
+        .ph-avatar {
+          width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 13px; font-weight: 700; color: #fff;
+        }
+        .ph-pat-name  { font-size: 14px; font-weight: 600; color: #1a1a1a; }
+        .ph-pat-sub   { font-size: 12px; color: #9a9590; margin-top: 1px; }
       `}</style>
 
-      <div className="ph-ov-header">
-        <div className="ph-ov-title">
-          {greeting}, {isManager ? "Manager" : physio.firstName} 👋
+      {/* ── Welcome Banner ── */}
+      <div className="ph-banner">
+        <div>
+          <div className="ph-banner-greeting">
+            {greeting}, {isManager ? "Manager" : physio.firstName} 👋
+          </div>
+          <div className="ph-banner-date">
+            {now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          </div>
         </div>
-
-        <div className="ph-ov-sub">
-          {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+        <div>
+          <div className="ph-banner-clock">
+            {now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+          </div>
+          <div className="ph-banner-clock-label">Local time</div>
         </div>
       </div>
 
-      <div className="ph-ov-grid">
-        {[
-          { label: "Total Patients",  value: patientsLoading ? "…" : String(stats.totalPatients),      sub: "registered",       accent: true  },
-          { label: "Active Patients", value: patientsLoading ? "…" : String(stats.activePatients),     sub: "in rehabilitation", accent: false },
-          { label: "On Hold",         value: patientsLoading ? "…" : String(stats.onHoldPatients),     sub: "paused",           accent: false },
-          { label: "Discharged",      value: patientsLoading ? "…" : String(stats.dischargedPatients), sub: "completed",        accent: false },
-        ].map((s) => (
-          <div key={s.label} className={`ph-ov-stat ${s.accent ? "accent" : ""}`}>
-            <div className="ph-ov-stat-label">{s.label}</div>
-            <div className={`ph-ov-stat-val ${patientsLoading ? "loading" : ""}`}>{s.value}</div>
-            <div className="ph-ov-stat-sub">{s.sub}</div>
+      {/* ── KPI Cards ── */}
+      <div className="ph-kpi-grid">
+        {kpiCards.map((k) => (
+          <div key={k.label} className="ph-kpi">
+            <span className="ph-kpi-icon">{k.icon}</span>
+            <div className="ph-kpi-val" style={{ color: k.color }}>
+              {patientsLoading ? <span style={{ fontSize: 22, color: "#c0bbb4" }}>…</span> : k.value}
+            </div>
+            <div className="ph-kpi-label">{k.label}</div>
+            <div className="ph-kpi-sub">{k.sub}</div>
+            <div className="ph-kpi-bar" style={{ background: k.color, opacity: 0.25 }} />
           </div>
         ))}
       </div>
 
-      <div className="ph-ov-card">
-        <div className="ph-ov-card-title" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      {/* ── Today's Schedule ── */}
+      <div className="ph-sec-card">
+        <div className="ph-sec-title">
           <span>Today&#39;s Schedule</span>
-          <span style={{ fontSize: 11, color: "#c0bbb4", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
-            {new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
-          </span>
+          {!apptLoading && displayedAppts.length > 0 && (
+            <div className="ph-day-summary" style={{ margin: 0 }}>
+              {inProgressCount > 0 && (
+                <span className="ph-day-pill" style={{ background: "#dcfce7", color: "#16a34a" }}>
+                  <span className="ph-day-dot live" style={{ background: "#16a34a" }} />
+                  {inProgressCount} Live
+                </span>
+              )}
+              {upcomingCount > 0 && (
+                <span className="ph-day-pill" style={{ background: "#EAF5FC", color: "#0C3C60" }}>
+                  <span className="ph-day-dot" style={{ background: "#2E8BC0" }} />
+                  {upcomingCount} Upcoming
+                </span>
+              )}
+              {completedCount > 0 && (
+                <span className="ph-day-pill" style={{ background: "#f3f4f6", color: "#6b7280" }}>
+                  <span className="ph-day-dot" style={{ background: "#9ca3af" }} />
+                  {completedCount} Done
+                </span>
+              )}
+            </div>
+          )}
         </div>
+
         {apptLoading ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {[1,2,3].map((n) => (
-              <div key={n} style={{ height: 48, borderRadius: 10, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "phShimmer 1.4s ease infinite" }} />
-            ))}
+            {[1,2,3].map((n) => <div key={n} style={{ height: 58, ...shimmer }} />)}
           </div>
         ) : displayedAppts.length === 0 ? (
-          <div className="ph-ov-empty">No appointments scheduled for today.</div>
+          <div className="ph-sec-empty">
+            <div style={{ fontSize: 28, marginBottom: 8 }}>📅</div>
+            No appointments scheduled for today
+          </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div>
             {displayedAppts.map((a) => {
               const { label, color, textColor } = apptDisplayStatus(a.status);
+              const isLive = a.status === "in_progress";
+              const isDone = a.status === "completed";
               return (
-                <div key={a.id} style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "11px 14px", borderRadius: 10,
-                  background: "#f5f3ef", border: "1px solid #e5e0d8",
-                  flexWrap: "wrap",
-                }}>
-                  <div style={{
-                    minWidth: 58, textAlign: "center",
-                    fontFamily: "'Playfair Display', serif",
-                    fontSize: 15, fontWeight: 600, color: "#2E8BC0",
-                    flexShrink: 0,
-                  }}>
+                <div key={a.id} className={`ph-appt-row${isLive ? " inprogress" : isDone ? " completed" : ""}`}>
+                  <div className="ph-appt-time" style={{ color: isLive ? "#16a34a" : isDone ? "#9ca3af" : "#2E8BC0" }}>
                     {fmtHour12(a.hour)}
                   </div>
-                  <div style={{ flex: 1, minWidth: 120 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>{a.patientName}</div>
-                    <div style={{ fontSize: 12, color: "#9a9590" }}>
+                  <div className="ph-appt-info">
+                    <div className="ph-appt-name">{a.patientName}</div>
+                    <div className="ph-appt-sub">
                       {a.sessionType}{(isManager || isSecretary) && a.physioName ? ` · ${a.physioName}` : ""}
                     </div>
                   </div>
-                  <span style={{
-                    fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 100,
-                    background: color, color: textColor, whiteSpace: "nowrap", flexShrink: 0,
-                  }}>
-                    {label}
-                  </span>
+                  {isLive && (
+                    <span className="ph-now-badge">
+                      <span className="ph-day-dot live" style={{ background: "#fff" }} />
+                      NOW
+                    </span>
+                  )}
+                  <span className="ph-status-chip" style={{ background: color, color: textColor }}>{label}</span>
                   {a.patientId && onViewPatient && (
-                    <button
-                      onClick={() => onViewPatient(a.patientId)}
-                      style={{
-                        fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100,
-                        background: "transparent", border: "1px solid #2E8BC0", color: "#2E8BC0",
-                        cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-                      }}
-                    >
+                    <button className="ph-view-btn" onClick={() => onViewPatient(a.patientId)}>
                       View Sheet
                     </button>
                   )}
@@ -1098,88 +1218,72 @@ function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false,
         )}
       </div>
 
-      {/* My Patients — live list (hidden for manager who sees clinic-wide data) */}
-      {!isManager && !isSecretary && (
-        <div className="ph-ov-card">
-          <div className="ph-ov-card-title">
-            My Patients {!patientsLoading && patients.length > 0 && (
-              <span style={{ marginLeft: 6, fontWeight: 400, color: "#9a9590", textTransform: "none", letterSpacing: 0 }}>
-                ({patients.length})
-              </span>
-            )}
-          </div>
-          {patientsLoading ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[1,2,3].map((n) => (
-                <div key={n} style={{ height: 48, borderRadius: 10, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "phShimmer 1.4s ease infinite" }} />
-              ))}
+      {/* ── Patients panel (My Patients for physios, All Patients for managers/secretaries) ── */}
+      {(() => {
+        const title     = (isManager || isSecretary) ? "All Patients" : "My Patients";
+        const emptyMsg  = (isManager || isSecretary) ? "No patients in the clinic yet" : "No patients assigned yet";
+        const statusCfg: Record<string, { bg: string; text: string; label: string }> = {
+          active:     { bg: "#dcfce7", text: "#16a34a", label: "Active"     },
+          on_hold:    { bg: "#fef3c7", text: "#d97706", label: "On Hold"    },
+          discharged: { bg: "#f3f4f6", text: "#6b7280", label: "Discharged" },
+        };
+        const avatarColors = ["#2E8BC0","#0C3C60","#16a34a","#d97706","#7c3aed","#db2777"];
+        const sorted = [...patients].sort((a, b) => {
+          const order: Record<string, number> = { active: 0, on_hold: 1, discharged: 2 };
+          const diff = (order[a.status] ?? 3) - (order[b.status] ?? 3);
+          return diff !== 0 ? diff : `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+        });
+        return (
+          <div className="ph-sec-card">
+            <div className="ph-sec-title">
+              <span>{title}</span>
+              {!patientsLoading && patients.length > 0 && (
+                <span style={{ fontWeight: 500, color: "#9a9590", textTransform: "none", letterSpacing: 0, fontSize: 12 }}>
+                  {stats.activePatients} active · {patients.length} total
+                </span>
+              )}
             </div>
-          ) : patients.length === 0 ? (
-            <div className="ph-ov-empty">No patients assigned yet.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {[...patients]
-                .sort((a, b) => {
-                  const order = { active: 0, on_hold: 1, discharged: 2 };
-                  const diff = (order[a.status] ?? 3) - (order[b.status] ?? 3);
-                  if (diff !== 0) return diff;
-                  return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
-                })
-                .map((p) => {
-                  const statusStyle: Record<string, { bg: string; text: string; label: string }> = {
-                    active:     { bg: "#e6f4ea", text: "#2d7a3a", label: "Active" },
-                    on_hold:    { bg: "#fff3e0", text: "#b45309", label: "On Hold" },
-                    discharged: { bg: "#f0ede8", text: "#9a9590", label: "Discharged" },
-                  };
-                  const ss = statusStyle[p.status] ?? statusStyle.active;
-                  const role = p.physioId === physio.uid ? "" : p.seniorEditorId === physio.uid ? "Senior Editor" : "";
+            {patientsLoading ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {[1,2,3].map((n) => <div key={n} style={{ height: 54, ...shimmer }} />)}
+              </div>
+            ) : sorted.length === 0 ? (
+              <div className="ph-sec-empty">
+                <div style={{ fontSize: 28, marginBottom: 8 }}>🧑‍⚕️</div>
+                {emptyMsg}
+              </div>
+            ) : (
+              <div>
+                {sorted.map((p, i) => {
+                  const cfg  = statusCfg[p.status] ?? statusCfg.active;
+                  const sub  = isManager || isSecretary
+                    ? (p.seniorEditorName ? `Physio: ${p.seniorEditorName}` : p.phone || "No phone")
+                    : (p.phone || "No phone") + (p.physioId !== physio.uid && p.seniorEditorId === physio.uid ? " · Senior Editor" : "");
                   return (
-                    <div key={p.uid} style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "10px 14px", borderRadius: 10,
-                      background: "#f5f3ef", border: "1px solid #e5e0d8",
-                      flexWrap: "wrap",
-                    }}>
-                      <div style={{
-                        width: 34, height: 34, borderRadius: "50%",
-                        background: "#2E8BC0", display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 13, fontWeight: 700, color: "#fff", flexShrink: 0,
-                      }}>
+                    <div key={p.uid} className="ph-pat-row">
+                      <div className="ph-avatar" style={{ background: avatarColors[i % avatarColors.length] }}>
                         {p.firstName[0]}{p.lastName[0]}
                       </div>
                       <div style={{ flex: 1, minWidth: 120 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>
-                          {p.firstName} {p.lastName}
-                        </div>
-                        <div style={{ fontSize: 12, color: "#9a9590" }}>
-                          {p.phone || "No phone"}{role ? ` · ${role}` : ""}
-                        </div>
+                        <div className="ph-pat-name">{p.firstName} {p.lastName}</div>
+                        <div className="ph-pat-sub">{sub}</div>
                       </div>
-                      <span style={{
-                        fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 100,
-                        background: ss.bg, color: ss.text, whiteSpace: "nowrap", flexShrink: 0,
-                      }}>
-                        {ss.label}
+                      <span className="ph-status-chip" style={{ background: cfg.bg, color: cfg.text }}>
+                        {cfg.label}
                       </span>
                       {onViewPatient && (
-                        <button
-                          onClick={() => onViewPatient(p.uid)}
-                          style={{
-                            fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100,
-                            background: "transparent", border: "1px solid #2E8BC0", color: "#2E8BC0",
-                            cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-                          }}
-                        >
+                        <button className="ph-view-btn" onClick={() => onViewPatient(p.uid)}>
                           View Sheet
                         </button>
                       )}
                     </div>
                   );
                 })}
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </>
   );
 }
