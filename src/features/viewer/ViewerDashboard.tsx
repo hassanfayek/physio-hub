@@ -268,10 +268,7 @@ export default function ViewerDashboard() {
       <header className="vd-header">
         <div className="vd-logo">
           <img src={logo} alt="Physio+ Clinic" style={{ height: 36, width: "auto", objectFit: "contain", display: "block" }} />
-          <div>
-            <div className="vd-logo-name">Physio+ Clinic</div>
-            <div className="vd-logo-sub">Management Portal</div>
-          </div>
+          <div className="vd-logo-name">Physio+ Clinic</div>
         </div>
         <div className="vd-user">
           {profile && (

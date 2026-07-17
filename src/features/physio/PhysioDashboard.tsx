@@ -1656,10 +1656,7 @@ export default function PhysioDashboard() {
           <div className="phd-topbar-left">
             <div className="phd-topbar-brand">
               <img src={logo} alt="Physio+ Hub" style={{ height: 36, width: "auto", objectFit: "contain", display: "block" }} />
-              <div>
-                <div className="phd-topbar-brand-name">Physio+ Clinic</div>
-                <div className="phd-topbar-brand-sub">Management Portal</div>
-              </div>
+              <div className="phd-topbar-brand-name">Physio+ Clinic</div>
             </div>
           </div>
 
