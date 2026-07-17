@@ -73,14 +73,14 @@ function isImage(url: string) {
   return /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(url);
 }
 function youTubeThumb(url: string) {
-  const m = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/);
+  const m = url.match(/(?:v=|youtu\.be\/|shorts\/)([^&?/]+)/);
   return m ? `https://img.youtube.com/vi/${m[1]}/hqdefault.jpg` : null;
 }
 
-// Accepts a raw video ID, full youtube.com URL, or youtu.be URL — returns bare ID
+// Accepts a raw video ID, full youtube.com URL, youtu.be URL, or Shorts URL — returns bare ID
 function extractYouTubeId(raw: string): string {
   if (!raw) return "";
-  const m = raw.match(/(?:v=|youtu\.be\/|embed\/)([^&?/\s]{11})/);
+  const m = raw.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([^&?/\s]{11})/);
   if (m) return m[1];
   // If it's already an 11-char ID (no slashes/dots)
   if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
