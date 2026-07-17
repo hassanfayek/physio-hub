@@ -13,6 +13,8 @@ import SchedulePage        from "../schedule/SchedulePage";
 import ExerciseLibraryPage from "../exercises/ExerciseLibraryPage";
 import {
   subscribeToAppointmentsByDay,
+  subscribeToAppointmentsByWeek,
+  getWeekStart,
   toDateStr,
   fmtHour12,
   type Appointment,
@@ -926,6 +928,7 @@ function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false,
   const [patientsLoading, setPatientsLoading] = useState(true);
   const [todayAppts,      setTodayAppts]      = useState<Appointment[]>([]);
   const [apptLoading,     setApptLoading]     = useState(true);
+  const [weekAppts,       setWeekAppts]       = useState<Appointment[]>([]);
 
   useEffect(() => {
     setPatientsLoading(true);
@@ -948,13 +951,6 @@ function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false,
     ? todayAppts.filter((a) => juniorPatientIdSet!.has(a.patientId))
     : todayAppts;
 
-  const stats = {
-    totalPatients:      patients.length,
-    activePatients:     patients.filter((p) => p.status === "active").length,
-    onHoldPatients:     patients.filter((p) => p.status === "on_hold").length,
-    dischargedPatients: patients.filter((p) => p.status === "discharged").length,
-  };
-
   useEffect(() => {
     setApptLoading(true);
     const today = toDateStr(new Date());
@@ -967,16 +963,42 @@ function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false,
     return () => unsub();
   }, [physio.uid, isManager, isSecretary, isJunior]);
 
+  // Week subscription for "Sessions This Week" KPI
+  useEffect(() => {
+    const weekStart = getWeekStart(new Date());
+    const weekEnd   = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const unsub = subscribeToAppointmentsByWeek(
+      toDateStr(weekStart),
+      toDateStr(weekEnd),
+      (isManager || isSecretary || isJunior) ? null : physio.uid,
+      (data) => setWeekAppts(data)
+    );
+    return () => unsub();
+  }, [physio.uid, isManager, isSecretary, isJunior]);
+
   const completedCount   = displayedAppts.filter((a) => a.status === "completed").length;
   const inProgressCount  = displayedAppts.filter((a) => a.status === "in_progress").length;
   const upcomingCount    = displayedAppts.filter((a) => !a.status || a.status === "scheduled").length;
   const shimmer = { borderRadius: 12, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "phShimmer 1.4s ease infinite" };
 
+  const thisMonth    = now.getMonth();
+  const thisYear     = now.getFullYear();
+  const newThisMonth = patients.filter((p) => {
+    if (!p.createdAt) return false;
+    const d = p.createdAt.toDate();
+    return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+  }).length;
+  const sessionsThisWeek = weekAppts.filter((a) => a.status === "completed").length;
+
+  const totalPatients  = patients.length;
+  const activePatients = patients.filter((p) => p.status === "active").length;
+
   const kpiCards = [
-    { label: "Total Patients",  value: stats.totalPatients,      sub: "registered",        color: "#2E8BC0", bg: "#EAF5FC", icon: "👥" },
-    { label: "Active",          value: stats.activePatients,     sub: "in rehabilitation", color: "#16a34a", bg: "#dcfce7", icon: "✅" },
-    { label: "On Hold",         value: stats.onHoldPatients,     sub: "paused",            color: "#d97706", bg: "#fef3c7", icon: "⏸" },
-    { label: "Discharged",      value: stats.dischargedPatients, sub: "completed",         color: "#6b7280", bg: "#f3f4f6", icon: "🏁" },
+    { label: "Total Patients",      value: patientsLoading ? "…" : totalPatients,      sub: "registered",         color: "#2E8BC0", icon: "👥" },
+    { label: "Active",              value: patientsLoading ? "…" : activePatients,      sub: "in rehabilitation",  color: "#16a34a", icon: "✅" },
+    { label: "New This Month",      value: patientsLoading ? "…" : newThisMonth,        sub: "patients joined",    color: "#7c3aed", icon: "🆕" },
+    { label: "Sessions This Week",  value: sessionsThisWeek,                            sub: "completed sessions", color: "#d97706", icon: "📋" },
   ];
 
   return (
@@ -1135,8 +1157,8 @@ function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false,
         {kpiCards.map((k) => (
           <div key={k.label} className="ph-kpi">
             <span className="ph-kpi-icon">{k.icon}</span>
-            <div className="ph-kpi-val" style={{ color: k.color }}>
-              {patientsLoading ? <span style={{ fontSize: 22, color: "#c0bbb4" }}>…</span> : k.value}
+            <div className="ph-kpi-val" style={{ color: k.value === "…" ? "#c0bbb4" : k.color, fontSize: k.value === "…" ? 22 : undefined }}>
+              {k.value}
             </div>
             <div className="ph-kpi-label">{k.label}</div>
             <div className="ph-kpi-sub">{k.sub}</div>
@@ -1239,7 +1261,7 @@ function OverviewTab({ physio, isManager, isSenior = false, isSecretary = false,
               <span>{title}</span>
               {!patientsLoading && patients.length > 0 && (
                 <span style={{ fontWeight: 500, color: "#9a9590", textTransform: "none", letterSpacing: 0, fontSize: 12 }}>
-                  {stats.activePatients} active · {patients.length} total
+                  {activePatients} active · {patients.length} total
                 </span>
               )}
             </div>
