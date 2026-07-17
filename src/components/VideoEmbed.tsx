@@ -13,10 +13,16 @@ interface VideoEmbedProps {
 export function VideoEmbed({ videoId, wrapperStyle, wrapperClassName }: VideoEmbedProps) {
   const [shown, setShown] = useState(false);
 
-  const isShorts  = videoId.startsWith("shorts:");
-  const bareId    = isShorts ? videoId.slice(7) : videoId;
+  const isShortsUrl    = /youtube\.com\/shorts\//.test(videoId);
+  const isShortsPrefix = videoId.startsWith("shorts:");
+  const isShorts       = isShortsUrl || isShortsPrefix;
+  const bareId         = isShortsUrl
+    ? (videoId.match(/shorts\/([^&?/\s]{11})/)?.[1] ?? videoId)
+    : isShortsPrefix
+      ? videoId.slice(7)
+      : videoId;
   const thumbUrl  = `https://img.youtube.com/vi/${bareId}/hqdefault.jpg`;
-  const shortsUrl = `https://www.youtube.com/shorts/${bareId}`;
+  const shortsUrl = isShortsUrl ? videoId : `https://www.youtube.com/shorts/${bareId}`;
 
   // Shorts can't be embedded — open in YouTube instead
   if (isShorts) {

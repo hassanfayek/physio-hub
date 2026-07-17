@@ -73,19 +73,17 @@ function isImage(url: string) {
   return /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(url);
 }
 function youTubeThumb(raw: string) {
-  // Handle "shorts:ID" prefix stored for Shorts videos
-  const id = raw.startsWith("shorts:") ? raw.slice(7) : raw.match(/(?:v=|youtu\.be\/|shorts\/)([^&?/]+)/)?.[1] ?? null;
+  const id = raw.match(/(?:v=|youtu\.be\/|shorts\/|shorts:)([^&?/\s]{11})/)?.[1] ?? null;
   return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
 }
 
-// Returns "shorts:ID" for Shorts URLs, bare ID for regular YouTube, raw value as fallback
+// Shorts URLs are stored as-is so VideoEmbed can detect them.
+// Regular YouTube URLs are reduced to the bare 11-char ID.
 function extractYouTubeId(raw: string): string {
   if (!raw) return "";
-  if (/youtube\.com\/shorts\//.test(raw)) {
-    const m = raw.match(/shorts\/([^&?/\s]{11})/);
-    return m ? `shorts:${m[1]}` : raw;
-  }
-  const m = raw.match(/(?:v=|youtu\.be\/|embed\/)([^&?/\s]{11})/);
+  // Keep full Shorts URL — VideoEmbed handles it as a link
+  if (/youtube\.com\/shorts\//.test(raw)) return raw.split("?")[0];
+  const m = raw.match(/(?:v=|youtu\.be\/|embed\/|shorts:)([^&?/\s]{11})/);
   if (m) return m[1];
   if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
   return raw;
@@ -240,9 +238,9 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
                 onChange={set("videoId")}
                 placeholder="e.g. dQw4w9WgXcQ or https://youtube.com/watch?v=…"
               />
-              {form.videoId && extractYouTubeId(form.videoId).startsWith("shorts:") ? (
+              {form.videoId && /youtube\.com\/shorts\//.test(extractYouTubeId(form.videoId)) ? (
                 <a
-                  href={`https://www.youtube.com/shorts/${extractYouTubeId(form.videoId).slice(7)}`}
+                  href={extractYouTubeId(form.videoId)}
                   target="_blank" rel="noopener noreferrer"
                   style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, padding: "10px 14px", borderRadius: 10, background: "#f0fdf4", border: "1px solid #86efac", color: "#16a34a", fontWeight: 600, fontSize: 13, textDecoration: "none" }}
                 >
