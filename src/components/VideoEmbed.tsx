@@ -12,7 +12,53 @@ interface VideoEmbedProps {
 
 export function VideoEmbed({ videoId, wrapperStyle, wrapperClassName }: VideoEmbedProps) {
   const [shown, setShown] = useState(false);
-  const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+
+  const isShorts  = videoId.startsWith("shorts:");
+  const bareId    = isShorts ? videoId.slice(7) : videoId;
+  const thumbUrl  = `https://img.youtube.com/vi/${bareId}/hqdefault.jpg`;
+  const shortsUrl = `https://www.youtube.com/shorts/${bareId}`;
+
+  // Shorts can't be embedded — open in YouTube instead
+  if (isShorts) {
+    return (
+      <div style={wrapperStyle} className={wrapperClassName}>
+        <a
+          href={shortsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display: "block", position: "relative", borderRadius: 10, overflow: "hidden", textDecoration: "none" }}
+        >
+          <img
+            src={thumbUrl}
+            alt="Video thumbnail"
+            style={{ width: "100%", display: "block", borderRadius: 10, opacity: 0.85 }}
+          />
+          <div style={{
+            position: "absolute", inset: 0,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: 8,
+          }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: "50%",
+              background: "rgba(255,255,255,0.92)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 2px 12px rgba(0,0,0,0.25)",
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#1a1a1a">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+            </div>
+            <span style={{
+              color: "#fff", fontSize: 12, fontWeight: 600,
+              textShadow: "0 1px 4px rgba(0,0,0,0.7)", letterSpacing: 0.3,
+            }}>
+              Watch Short
+            </span>
+          </div>
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div style={wrapperStyle} className={wrapperClassName}>
@@ -21,7 +67,7 @@ export function VideoEmbed({ videoId, wrapperStyle, wrapperClassName }: VideoEmb
           <div style={{ position: "relative", paddingTop: "56.25%", borderRadius: 10, overflow: "hidden" }}>
             <iframe
               style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none", display: "block" }}
-              src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+              src={`https://www.youtube.com/embed/${bareId}?autoplay=1`}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />

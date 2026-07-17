@@ -72,17 +72,21 @@ function isYouTube(url: string) {
 function isImage(url: string) {
   return /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(url);
 }
-function youTubeThumb(url: string) {
-  const m = url.match(/(?:v=|youtu\.be\/|shorts\/)([^&?/]+)/);
-  return m ? `https://img.youtube.com/vi/${m[1]}/hqdefault.jpg` : null;
+function youTubeThumb(raw: string) {
+  // Handle "shorts:ID" prefix stored for Shorts videos
+  const id = raw.startsWith("shorts:") ? raw.slice(7) : raw.match(/(?:v=|youtu\.be\/|shorts\/)([^&?/]+)/)?.[1] ?? null;
+  return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
 }
 
-// Accepts a raw video ID, full youtube.com URL, youtu.be URL, or Shorts URL — returns bare ID
+// Returns "shorts:ID" for Shorts URLs, bare ID for regular YouTube, raw value as fallback
 function extractYouTubeId(raw: string): string {
   if (!raw) return "";
-  const m = raw.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([^&?/\s]{11})/);
+  if (/youtube\.com\/shorts\//.test(raw)) {
+    const m = raw.match(/shorts\/([^&?/\s]{11})/);
+    return m ? `shorts:${m[1]}` : raw;
+  }
+  const m = raw.match(/(?:v=|youtu\.be\/|embed\/)([^&?/\s]{11})/);
   if (m) return m[1];
-  // If it's already an 11-char ID (no slashes/dots)
   if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
   return raw;
 }
@@ -236,7 +240,15 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
                 onChange={set("videoId")}
                 placeholder="e.g. dQw4w9WgXcQ or https://youtube.com/watch?v=…"
               />
-              {form.videoId && extractYouTubeId(form.videoId) && (
+              {form.videoId && extractYouTubeId(form.videoId).startsWith("shorts:") ? (
+                <a
+                  href={`https://www.youtube.com/shorts/${extractYouTubeId(form.videoId).slice(7)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, padding: "10px 14px", borderRadius: 10, background: "#f0fdf4", border: "1px solid #86efac", color: "#16a34a", fontWeight: 600, fontSize: 13, textDecoration: "none" }}
+                >
+                  ▶ Watch Short on YouTube (opens in new tab)
+                </a>
+              ) : form.videoId && extractYouTubeId(form.videoId) ? (
                 <div style={{ marginTop: 8, borderRadius: 10, overflow: "hidden", aspectRatio: "16/9" }}>
                   <iframe
                     width="100%" height="100%"
@@ -246,7 +258,8 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
                     style={{ border: "none", display: "block" }}
                   />
                 </div>
-              )}
+              ) : null
+              }
             </div>
 
           </div>
