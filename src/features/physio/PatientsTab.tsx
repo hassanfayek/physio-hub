@@ -615,13 +615,14 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
         {!loading && (
           <div className="pt-stats">
             {[
-              { label: "Total",      value: patients.length,                                          sub: "registered",        accent: true  },
-              { label: "Active",     value: patients.filter((p) => p.status === "active").length,     sub: "in rehabilitation", accent: false },
-              { label: "Discharged", value: patients.filter((p) => p.status === "discharged").length, sub: "completed",         accent: false },
-              ...((isManager || isSecretary)
-                ? [{ label: "Unassigned", value: patients.filter((p) => !p.physioId).length, sub: "need assignment", accent: false }]
-                : []
-              ),
+              { label: "Total",          value: patients.length,                                      sub: "registered",        accent: true  },
+              { label: "Active",         value: patients.filter((p) => p.status === "active").length, sub: "in rehabilitation", accent: false },
+              { label: "New This Month", value: patients.filter((p) => {
+                  if (!p.createdAt) return false;
+                  const d = p.createdAt.toDate();
+                  const now = new Date();
+                  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                }).length, sub: "patients joined", accent: false },
             ].map((s) => (
               <div key={s.label} className={`pt-stat ${s.accent ? "accent" : ""}`}>
                 <div className="pt-stat-label">{s.label}</div>
