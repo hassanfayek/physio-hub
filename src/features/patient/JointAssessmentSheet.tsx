@@ -1000,6 +1000,19 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
         const hasRomData  = Object.values(jData.rom).some((r) => r.active || r.passive);
         const posCount    = Object.values(jData.tests).filter((t) => t.result === "positive").length;
 
+        const metaFields: [string, string][] = [["Pain (NRS 0–10)","pain"],["Swelling","swelling"],["Local Notes","notes"]];
+        const filledMeta = metaFields.filter(([,f]) => (jData as unknown as Record<string,string>)[f]);
+        const metaHtml = filledMeta.length ? `<div style="display:grid;grid-template-columns:repeat(${filledMeta.length},1fr);gap:8px;margin-bottom:12px;">
+          ${filledMeta.map(([lbl,f])=>`
+            <div style="background:#f5f7fa;border:1px solid #e5e8ef;border-radius:8px;padding:7px 10px;">
+              <div style="font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#9a9590;margin-bottom:3px;">${lbl}</div>
+              <div style="font-size:10pt;font-weight:500;color:#1a1a1a;">${(jData as unknown as Record<string,string>)[f]}</div>
+            </div>`).join("")}
+        </div>` : "";
+
+        // Skip the whole joint card if nothing was actually filled in for it
+        if (!filledMeta.length && !romRows && !muscleRows && !testCards && !balRows) return "";
+
         return `
           <div class="joint-section" style="background:#fff;border:1.5px solid #d0d4dc;border-radius:12px;margin-bottom:14px;overflow:hidden;break-inside:avoid;">
             <div style="background:linear-gradient(135deg,#0C3C60,#2E8BC0);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
@@ -1012,18 +1025,7 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
 
             <div style="padding:12px 14px;">
               <!-- Meta — only show fields with values -->
-              ${(() => {
-                const metaFields: [string, string][] = [["Pain (NRS 0–10)","pain"],["Swelling","swelling"],["Local Notes","notes"]];
-                const filledMeta = metaFields.filter(([,f]) => (jData as unknown as Record<string,string>)[f]);
-                if (!filledMeta.length) return "";
-                return `<div style="display:grid;grid-template-columns:repeat(${filledMeta.length},1fr);gap:8px;margin-bottom:12px;">
-                  ${filledMeta.map(([lbl,f])=>`
-                    <div style="background:#f5f7fa;border:1px solid #e5e8ef;border-radius:8px;padding:7px 10px;">
-                      <div style="font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#9a9590;margin-bottom:3px;">${lbl}</div>
-                      <div style="font-size:10pt;font-weight:500;color:#1a1a1a;">${(jData as unknown as Record<string,string>)[f]}</div>
-                    </div>`).join("")}
-                </div>`;
-              })()}
+              ${metaHtml}
 
               <!-- ROM — only if any rows exist -->
               ${romRows ? `
