@@ -1,5 +1,8 @@
 # Physio Hub — Claude Code Project Context
 
+## Auto-load instructions
+At the start of every conversation, read all files inside `.claude/memory/` so persistent memory is always active. No manual setup needed.
+
 ## Project
 Physiotherapy clinic management SPA. React + TypeScript (Vite), Firebase Firestore, Firebase Auth, Firebase Hosting, Firebase Cloud Functions (Node.js Gen 2), Anthropic Claude API.
 
