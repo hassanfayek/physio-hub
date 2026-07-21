@@ -309,10 +309,14 @@ Red Flags
     } catch (aiErr) {
       const msg = aiErr?.message || "AI service unavailable";
       const status = aiErr?.status;
-      if (status === 529 || status === 503 || msg.includes("overloaded")) {
+      console.error("generateTreatmentPlan Claude API error:", { status, msg, raw: aiErr?.error ?? aiErr });
+      if (status === 529 || status === 503 || msg.toLowerCase().includes("overloaded")) {
         throw new HttpsError("unavailable", "The AI service is temporarily overloaded. Please try again in a moment.");
       }
-      if (status === 429 || msg.includes("rate limit")) {
+      if (/credit balance|spend limit|usage limit|billing/i.test(msg)) {
+        throw new HttpsError("resource-exhausted", "The clinic's AI account has hit its usage/credit limit. Please check the Anthropic Console billing page to top up or raise the limit.");
+      }
+      if (status === 429 || msg.toLowerCase().includes("rate limit")) {
         throw new HttpsError("resource-exhausted", "Too many requests. Please wait a few seconds and try again.");
       }
       throw new HttpsError("internal", `AI error: ${msg}`);
