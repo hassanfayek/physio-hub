@@ -927,40 +927,53 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
         if (!data.selectedJoints.includes(key)) return "";
         const jData = data.joints[key] ?? emptyJoint();
 
-        // ROM table — only rows with at least one value entered
-        const romRows = jDef.motions
-          .filter((m) => {
-            const r = jData.rom[m.id] ?? { active:"", passive:"", endFeel:"", pain:"" };
-            return r.active || r.passive || r.endFeel || r.pain === "yes";
-          })
-          .map((m) => {
-            const r = jData.rom[m.id] ?? { active:"", passive:"", endFeel:"", pain:"" };
-            const painBg = r.pain === "yes" ? "background:#fff0f0;" : "";
-            return `<tr>
-              <td style="font-weight:500;${painBg}">${m.label}</td>
-              <td style="color:#888;font-style:italic;font-size:8pt;">${m.normal}</td>
-              <td>${cell(r.active)}</td>
-              <td>${cell(r.passive)}</td>
-              <td>${cell(r.endFeel)}</td>
-              <td style="text-align:center;">${r.pain === "yes" ? '<span style="color:#b91c1c;font-weight:700;">✓</span>' : "—"}</td>
-            </tr>`;
-          }).join("");
+        // ROM table — only rows with at least one value entered, and only columns
+        // where at least one of those rows actually has a value in them
+        const romEntries = jDef.motions
+          .map((m) => ({ m, r: jData.rom[m.id] ?? { active:"", passive:"", endFeel:"", pain:"" } }))
+          .filter(({ r }) => r.active || r.passive || r.endFeel || r.pain === "yes");
+        const romHasActive  = romEntries.some(({ r }) => r.active);
+        const romHasPassive = romEntries.some(({ r }) => r.passive);
+        const romHasEndFeel = romEntries.some(({ r }) => r.endFeel);
+        const romHasPain    = romEntries.some(({ r }) => r.pain === "yes");
+        const romHeaderCells =
+          `<th style="width:28%;">Motion</th>` +
+          `<th style="width:16%;color:#888;font-style:italic;">Normal</th>` +
+          (romHasActive  ? `<th>Active ROM</th>`  : "") +
+          (romHasPassive ? `<th>Passive ROM</th>` : "") +
+          (romHasEndFeel ? `<th>End Feel</th>`    : "") +
+          (romHasPain    ? `<th style="text-align:center;">Pain</th>` : "");
+        const romRows = romEntries.map(({ m, r }) => {
+          const painBg = r.pain === "yes" ? "background:#fff0f0;" : "";
+          return `<tr>
+            <td style="font-weight:500;${painBg}">${m.label}</td>
+            <td style="color:#888;font-style:italic;font-size:8pt;">${m.normal}</td>
+            ${romHasActive  ? `<td>${cell(r.active)}</td>` : ""}
+            ${romHasPassive ? `<td>${cell(r.passive)}</td>` : ""}
+            ${romHasEndFeel ? `<td>${cell(r.endFeel)}</td>` : ""}
+            ${romHasPain    ? `<td style="text-align:center;">${r.pain === "yes" ? '<span style="color:#b91c1c;font-weight:700;">✓</span>' : "—"}</td>` : ""}
+          </tr>`;
+        }).join("");
 
-        // Muscle table — only rows with at least grade or force
-        const muscleRows = jDef.muscles
-          .filter((m) => {
-            const mu = jData.muscles[m.id] ?? { grade:"", force:"", timeToPeak:"", firingDuration:"" };
-            return mu.force || mu.timeToPeak || mu.firingDuration;
-          })
-          .map((m) => {
-            const mu = jData.muscles[m.id] ?? { grade:"", force:"", timeToPeak:"", firingDuration:"" };
-            return `<tr>
-              <td style="font-weight:500;">${m.label}</td>
-              <td style="color:#555;font-size:9pt;">${mu.force || "—"}</td>
-              <td style="color:#555;font-size:9pt;">${mu.timeToPeak || "—"}</td>
-              <td style="color:#555;font-size:9pt;">${mu.firingDuration || "—"}</td>
-            </tr>`;
-          }).join("");
+        // Muscle table — only rows with at least force/time-to-peak/firing-duration,
+        // and only columns where at least one of those rows has a value
+        const muscleEntries = jDef.muscles
+          .map((m) => ({ m, mu: jData.muscles[m.id] ?? { grade:"", force:"", timeToPeak:"", firingDuration:"" } }))
+          .filter(({ mu }) => mu.force || mu.timeToPeak || mu.firingDuration);
+        const musHasForce = muscleEntries.some(({ mu }) => mu.force);
+        const musHasTTP   = muscleEntries.some(({ mu }) => mu.timeToPeak);
+        const musHasFD    = muscleEntries.some(({ mu }) => mu.firingDuration);
+        const muscleHeaderCells =
+          `<th style="width:40%;">Muscle Group</th>` +
+          (musHasForce ? `<th>Force (N)</th>`            : "") +
+          (musHasTTP   ? `<th>Time to Peak (s)</th>`     : "") +
+          (musHasFD    ? `<th>Firing Duration (s)</th>`  : "");
+        const muscleRows = muscleEntries.map(({ m, mu }) => `<tr>
+            <td style="font-weight:500;">${m.label}</td>
+            ${musHasForce ? `<td style="color:#555;font-size:9pt;">${mu.force || "—"}</td>` : ""}
+            ${musHasTTP   ? `<td style="color:#555;font-size:9pt;">${mu.timeToPeak || "—"}</td>` : ""}
+            ${musHasFD    ? `<td style="color:#555;font-size:9pt;">${mu.firingDuration || "—"}</td>` : ""}
+          </tr>`).join("");
 
         // Special tests — only cards where a result was recorded
         const testCards = jDef.specialTests
@@ -980,22 +993,27 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
             </div>`;
           }).join("");
 
-        // Balance table — only rows with a value or result entered
-        const balRows = jDef.balanceTests
-          .filter((t) => {
-            const be = jData.balance[t.id] ?? { value:"", result:"", notes:"" };
-            return be.value || be.result || be.notes;
-          })
-          .map((t) => {
-            const be = jData.balance[t.id] ?? { value:"", result:"", notes:"" };
-            return `<tr>
-              <td style="font-weight:500;">${t.label}</td>
-              <td style="color:#888;font-size:8pt;">${t.unit}</td>
-              <td>${cell(be.value)}</td>
-              <td>${balChip(be.result)}</td>
-              <td style="color:#555;font-size:9pt;">${be.notes || "—"}</td>
-            </tr>`;
-          }).join("");
+        // Balance table — only rows with a value/result/notes entered, and only
+        // columns where at least one of those rows has a value
+        const balEntries = jDef.balanceTests
+          .map((t) => ({ t, be: jData.balance[t.id] ?? { value:"", result:"", notes:"" } }))
+          .filter(({ be }) => be.value || be.result || be.notes);
+        const balHasValue  = balEntries.some(({ be }) => be.value);
+        const balHasResult = balEntries.some(({ be }) => be.result);
+        const balHasNotes  = balEntries.some(({ be }) => be.notes);
+        const balHeaderCells =
+          `<th style="width:28%;">Test</th>` +
+          `<th style="width:14%;">Unit</th>` +
+          (balHasValue  ? `<th>Value</th>`  : "") +
+          (balHasResult ? `<th>Result</th>` : "") +
+          (balHasNotes  ? `<th>Notes</th>`  : "");
+        const balRows = balEntries.map(({ t, be }) => `<tr>
+            <td style="font-weight:500;">${t.label}</td>
+            <td style="color:#888;font-size:8pt;">${t.unit}</td>
+            ${balHasValue  ? `<td>${cell(be.value)}</td>` : ""}
+            ${balHasResult ? `<td>${balChip(be.result)}</td>` : ""}
+            ${balHasNotes  ? `<td style="color:#555;font-size:9pt;">${be.notes || "—"}</td>` : ""}
+          </tr>`).join("");
 
         const hasRomData  = Object.values(jData.rom).some((r) => r.active || r.passive);
         const posCount    = Object.values(jData.tests).filter((t) => t.result === "positive").length;
@@ -1027,31 +1045,19 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
               <!-- Meta — only show fields with values -->
               ${metaHtml}
 
-              <!-- ROM — only if any rows exist -->
+              <!-- ROM — only if any rows exist; columns with no data anywhere are omitted -->
               ${romRows ? `
               <div class="subsection-label">Range of Motion</div>
               <table class="data-table">
-                <thead><tr>
-                  <th style="width:28%;">Motion</th>
-                  <th style="width:16%;color:#888;font-style:italic;">Normal</th>
-                  <th style="width:13%;">Active ROM</th>
-                  <th style="width:13%;">Passive ROM</th>
-                  <th style="width:12%;">End Feel</th>
-                  <th style="width:8%;text-align:center;">Pain</th>
-                </tr></thead>
+                <thead><tr>${romHeaderCells}</tr></thead>
                 <tbody>${romRows}</tbody>
               </table>` : ""}
 
-              <!-- Muscle Power — only if any rows exist -->
+              <!-- Muscle Power — only if any rows exist; columns with no data anywhere are omitted -->
               ${muscleRows ? `
               <div class="subsection-label" style="margin-top:10px;">Muscle Power</div>
               <table class="data-table">
-                <thead><tr>
-                  <th style="width:40%;">Muscle Group</th>
-                  <th style="width:20%;">Force (N)</th>
-                  <th style="width:20%;">Time to Peak (s)</th>
-                  <th style="width:20%;">Firing Duration (s)</th>
-                </tr></thead>
+                <thead><tr>${muscleHeaderCells}</tr></thead>
                 <tbody>${muscleRows}</tbody>
               </table>` : ""}
 
@@ -1060,17 +1066,11 @@ export default function JointAssessmentSheet({ patientId, patientName = "Patient
               <div class="subsection-label" style="margin-top:10px;">Special Tests</div>
               <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;">${testCards}</div>` : ""}
 
-              <!-- Balance — only if any rows exist -->
+              <!-- Balance — only if any rows exist; columns with no data anywhere are omitted -->
               ${balRows ? `
               <div class="subsection-label" style="margin-top:10px;">Balance & Proprioception</div>
               <table class="data-table">
-                <thead><tr>
-                  <th style="width:28%;">Test</th>
-                  <th style="width:14%;">Unit</th>
-                  <th style="width:13%;">Value</th>
-                  <th style="width:15%;">Result</th>
-                  <th style="width:30%;">Notes</th>
-                </tr></thead>
+                <thead><tr>${balHeaderCells}</tr></thead>
                 <tbody>${balRows}</tbody>
               </table>` : ""}
             </div>
