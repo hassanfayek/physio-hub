@@ -251,9 +251,11 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
   const filteredPatients = patients.filter((p) => {
     const q = searchQuery.toLowerCase().trim();
     if (q) {
+      const fullName = `${p.firstName ?? ""} ${p.lastName ?? ""}`.toLowerCase().trim();
       const matches =
         p.firstName?.toLowerCase().includes(q) ||
         p.lastName?.toLowerCase().includes(q)  ||
+        fullName.includes(q)                   ||
         p.email?.toLowerCase().includes(q);
       if (!matches) return false;
     }
