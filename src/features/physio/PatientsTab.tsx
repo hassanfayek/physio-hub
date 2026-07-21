@@ -615,7 +615,6 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
             {[
               { label: "Total",      value: patients.length,                                          sub: "registered",        accent: true  },
               { label: "Active",     value: patients.filter((p) => p.status === "active").length,     sub: "in rehabilitation", accent: false },
-              { label: "On Hold",    value: patients.filter((p) => p.status === "on_hold").length,    sub: "paused",            accent: false },
               { label: "Discharged", value: patients.filter((p) => p.status === "discharged").length, sub: "completed",         accent: false },
               ...((isManager || isSecretary)
                 ? [{ label: "Unassigned", value: patients.filter((p) => !p.physioId).length, sub: "need assignment", accent: false }]
