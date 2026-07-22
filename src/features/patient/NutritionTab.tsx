@@ -119,8 +119,8 @@ const MEALS_5: MealDef[] = [MEAL_MORNING, MEALS[0], MEAL_SNACK, MEALS[1], MEALS[
 
 function getMeals(mealsPerDay?: number): MealDef[] {
   if (mealsPerDay === 4) return MEALS_4;
-  if (mealsPerDay === 5) return MEALS_5;
-  return MEALS_3;
+  if (mealsPerDay === 3) return MEALS_3;
+  return MEALS_5; // intake form only offers 4 or 5, and defaults to 5 — never leave a patient on the unreachable 3-meal template
 }
 
 const GUIDELINES = {

@@ -392,7 +392,9 @@ exports.generateNutritionQuantities = onCall(
     if (ibHistory.length === 0 && nutrition.inBody) ibHistory.push(nutrition.inBody);
     const ib     = ibHistory[0] ?? {};
     const intake      = nutrition.intakeForm ?? {};
-    const mealsPerDay = intake.mealsPerDay ?? 3;
+    // Intake form only ever offers 4 or 5 meals and defaults to 5 — mirror that here
+    // instead of silently falling back to the unreachable 3-meal template.
+    const mealsPerDay = intake.mealsPerDay === 4 ? 4 : 5;
 
     // ── Build meal plan template based on patient preference ─────────────────
 
