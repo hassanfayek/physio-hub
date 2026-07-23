@@ -3553,7 +3553,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                   const { getFunctions, httpsCallable } = await import("firebase/functions");
                   const firebaseApp = await import("../../firebase");
                   const functions = getFunctions(firebaseApp.default);
-                  const generateTreatmentPlan = httpsCallable(functions, "generateTreatmentPlan");
+                  const generateTreatmentPlan = httpsCallable(functions, "generateTreatmentPlan", { timeout: 120000 });
 
                   const result = await generateTreatmentPlan({
                     patientId,

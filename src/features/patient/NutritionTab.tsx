@@ -1009,7 +1009,7 @@ export default function NutritionTab({ patientId, patientName, canEdit }: Props)
     try {
       const { getFunctions, httpsCallable } = await import("firebase/functions");
       const { default: app } = await import("../../firebase");
-      const fn = httpsCallable(getFunctions(app), "generateNutritionQuantities");
+      const fn = httpsCallable(getFunctions(app), "generateNutritionQuantities", { timeout: 120000 });
       const result = await fn({ patientId });
       const { quantities, reasoning } = result.data as { quantities: Record<string, number>; reasoning: string };
       const updated = { ...profile, aiQuantities: quantities, aiReasoning: reasoning };

@@ -353,7 +353,7 @@ Red Flags
 // ─── Generate Nutrition Quantities ───────────────────────────────────────────
 
 exports.generateNutritionQuantities = onCall(
-  { secrets: [CLAUDE_API_KEY] },
+  { secrets: [CLAUDE_API_KEY], timeoutSeconds: 120 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Must be logged in.");
