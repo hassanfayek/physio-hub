@@ -350,6 +350,198 @@ Red Flags
   }
 );
 
+// ─── Generate Exercise Program ────────────────────────────────────────────────
+
+const PROGRAM_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+
+exports.generateExerciseProgram = onCall(
+  { secrets: [CLAUDE_API_KEY], timeoutSeconds: 120 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be logged in.");
+    }
+
+    const callerDoc = await admin.firestore()
+      .collection("users")
+      .doc(request.auth.uid)
+      .get();
+
+    if (!callerDoc.exists) {
+      throw new HttpsError("permission-denied", "User not found.");
+    }
+
+    const role = callerDoc.data().role;
+    if (role !== "clinic_manager" && role !== "physiotherapist") {
+      throw new HttpsError("permission-denied", "Only physiotherapists and managers can generate exercise programs.");
+    }
+
+    const { patientId, diagnosisGoal, weeks } = request.data;
+    if (!patientId) {
+      throw new HttpsError("invalid-argument", "patientId is required.");
+    }
+    if (!diagnosisGoal || !String(diagnosisGoal).trim()) {
+      throw new HttpsError("invalid-argument", "diagnosisGoal is required.");
+    }
+    const weekCount = Math.min(12, Math.max(1, parseInt(weeks, 10) || 1));
+
+    const db = admin.firestore();
+
+    const [patientSnap, diagSnap, assessSnap, jointSnap] = await Promise.all([
+      db.collection("patients").doc(patientId).get(),
+      db.collection("patientDiagnosis").doc(patientId).get(),
+      db.collection("patientAssessments").doc(patientId).get(),
+      db.collection("jointAssessments").doc(patientId).get(),
+    ]);
+
+    const patient  = patientSnap.exists  ? patientSnap.data()  : {};
+    const diag     = diagSnap.exists     ? diagSnap.data()     : {};
+    const assess   = assessSnap.exists   ? assessSnap.data()   : {};
+    const jointDoc = jointSnap.exists    ? jointSnap.data()    : null;
+
+    const sections = [];
+
+    const patientSection = formatSection("Patient", [
+      ["Name",       [patient.firstName, patient.lastName].filter(Boolean).join(" ")],
+      ["Age",        patient.age],
+      ["Occupation", patient.occupation],
+    ]);
+    if (patientSection) sections.push(patientSection);
+
+    const diagSection = formatSection("Diagnosis", [
+      ["Primary Diagnosis",   diag.primaryDiagnosis],
+      ["ICD-10 Code",         diag.icdCode],
+      ["Onset Date",          diag.onsetDate],
+      ["Mechanism of Injury", diag.mechanism],
+      ["Surgery Date",        diag.surgeryDate],
+      ["Contraindications",   diag.contraindications],
+    ]);
+    if (diagSection) sections.push(diagSection);
+
+    const assessSection = formatSection("PT Assessment", [
+      ["Chief Complaints",     assess.subjectiveComplaints],
+      ["Pain Location",        assess.painLocation],
+      ["Pain Score (NRS)",     assess.painScore],
+      ["Functional Limitations", assess.functionalLimits],
+      ["Precautions",          assess.precautions],
+    ]);
+    if (assessSection) sections.push(assessSection);
+
+    const jointText = formatJointAssessment(jointDoc);
+    if (jointText) sections.push(`Body Profile (Joint Assessment):\n${jointText}`);
+
+    const clinicalSummary = sections.length > 0
+      ? sections.join("\n\n")
+      : "No clinical data recorded yet.";
+
+    const client = new Anthropic({ apiKey: CLAUDE_API_KEY.value() });
+
+    const systemPrompt = `You are a senior physiotherapist designing a remote/home exercise program for a patient.
+Be specific and ground exercise selection in the diagnosis and goal provided. Progress difficulty/load across
+the weeks (early weeks: mobility, activation, low load; later weeks: strengthening, functional, higher load) —
+unless the goal/diagnosis calls for a different progression. Include rest days where appropriate (not every
+day needs to be a training day). Name real, well-known physiotherapy/rehab exercises — do not invent exercises
+that don't exist. Return ONLY valid JSON, no markdown fences, no text outside the JSON.`;
+
+    const userPrompt = `Design a ${weekCount}-week home/online exercise program for this patient.
+
+═══ CLINICAL CONTEXT ═══
+${clinicalSummary}
+
+═══ CLINICIAN'S GOAL / DIAGNOSIS NOTES ═══
+${String(diagnosisGoal).trim()}
+
+═══ RESPONSE FORMAT ═══
+Return JSON exactly in this shape:
+{
+  "weeks": [
+    {
+      "weekLabel": "Week 1",
+      "days": [
+        { "day": "monday",    "isRest": false, "exercises": [ { "name": "...", "sets": "3", "reps": "10-12", "duration": "", "rest": "60 sec", "notes": "..." } ] },
+        { "day": "tuesday",   "isRest": false, "exercises": [ ... ] },
+        { "day": "wednesday", "isRest": false, "exercises": [ ... ] },
+        { "day": "thursday",  "isRest": false, "exercises": [ ... ] },
+        { "day": "friday",    "isRest": false, "exercises": [ ... ] },
+        { "day": "saturday",  "isRest": true,  "exercises": [] },
+        { "day": "sunday",    "isRest": true,  "exercises": [] }
+      ]
+    }
+    // one entry per week, weekLabel as "Week 1", "Week 2", etc.
+  ]
+}
+Rules:
+  - Every week must include all 7 days in the exact order shown (monday..sunday).
+  - Rest days ("isRest": true) must have an empty exercises array.
+  - "duration" is only for timed exercises (e.g. plank "30 sec"); leave "" for rep-based exercises.
+  - "notes" should briefly explain form cues or why the exercise was chosen for this patient — keep to one short sentence.
+  - Keep exercises realistic in count per day (2-6 exercises for a training day).`;
+
+    let response;
+    try {
+      response = await client.messages.create({
+        model:      "claude-sonnet-4-6",
+        max_tokens: Math.min(8192, 1200 + weekCount * 500),
+        system:     systemPrompt,
+        messages:   [{ role: "user", content: userPrompt }],
+      });
+    } catch (aiErr) {
+      const msg = aiErr?.message || "AI service unavailable";
+      const status = aiErr?.status;
+      if (status === 529 || status === 503 || msg.includes("overloaded")) {
+        throw new HttpsError("unavailable", "The AI service is temporarily overloaded. Please try again in a moment.");
+      }
+      if (status === 429 || msg.includes("rate limit")) {
+        throw new HttpsError("resource-exhausted", "Too many requests. Please wait a few seconds and try again.");
+      }
+      throw new HttpsError("internal", `AI error: ${msg}`);
+    }
+
+    const raw = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+
+    const jsonStr = raw.replace(/^```[a-z]*\n?/i, "").replace(/```$/, "").trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      throw new HttpsError("internal", "AI returned invalid JSON. Please try again.");
+    }
+
+    const weeksOut = Array.isArray(parsed.weeks) ? parsed.weeks : [];
+    if (weeksOut.length === 0) {
+      throw new HttpsError("internal", "AI returned no weeks. Please try again.");
+    }
+
+    // Normalise so the frontend always gets a predictable shape, regardless of
+    // minor deviations in what the model returned.
+    const normalised = weeksOut.map((w, i) => {
+      const dayMap = new Map((Array.isArray(w.days) ? w.days : []).map((d) => [d.day, d]));
+      return {
+        weekLabel: String(w.weekLabel || `Week ${i + 1}`),
+        days: PROGRAM_DAYS.map((dayKey) => {
+          const d = dayMap.get(dayKey) ?? {};
+          const isRest = !!d.isRest;
+          const exercises = isRest ? [] : (Array.isArray(d.exercises) ? d.exercises : []).map((ex) => ({
+            name:     String(ex.name     ?? ""),
+            sets:     String(ex.sets     ?? ""),
+            reps:     String(ex.reps     ?? ""),
+            duration: String(ex.duration ?? ""),
+            rest:     String(ex.rest     ?? ""),
+            notes:    String(ex.notes    ?? ""),
+          })).filter((ex) => ex.name);
+          return { day: dayKey, isRest, exercises };
+        }),
+      };
+    });
+
+    return { weeks: normalised };
+  }
+);
+
 // ─── Generate Nutrition Quantities ───────────────────────────────────────────
 
 exports.generateNutritionQuantities = onCall(

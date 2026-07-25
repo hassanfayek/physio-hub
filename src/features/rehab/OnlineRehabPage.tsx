@@ -2,7 +2,7 @@
 // Online rehabilitation — assign patients, build & print weekly exercise programs.
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, Plus, Trash2, Printer, ChevronDown, Pencil, X } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Printer, ChevronDown, Pencil, X, Sparkles } from "lucide-react";
 import {
   subscribeToEnrollments, enrollPatient, deleteEnrollment, updateEnrollmentStatus,
   subscribeToPatientPrograms, createProgram, updateProgram, deleteProgram,
@@ -673,6 +673,14 @@ export default function OnlineRehabPage({
   const [pickerOpen,   setPickerOpen]   = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
 
+  // ── AI program generation ─────────────────────────────────────────────────
+  const [showAiProg,    setShowAiProg]    = useState(false);
+  const [aiGoal,        setAiGoal]        = useState("");
+  const [aiWeeks,       setAiWeeks]       = useState(4);
+  const [aiStartDate,   setAiStartDate]   = useState("");
+  const [aiProgLoading, setAiProgLoading] = useState(false);
+  const [aiProgErr,     setAiProgErr]     = useState<string | null>(null);
+
   // ── Subscriptions ─────────────────────────────────────────────────────────
   useEffect(() => subscribeToEnrollments(setEnrollments), []);
   useEffect(() => subscribeToExerciseLibrary(setLibrary), []);
@@ -779,6 +787,60 @@ export default function OnlineRehabPage({
     setProgSaving(false);
   };
 
+  // ── AI program generation ─────────────────────────────────────────────────
+  const openAiProg = () => {
+    setAiGoal(""); setAiWeeks(4); setAiStartDate(""); setAiProgErr(null);
+    setShowAiProg(true);
+  };
+
+  const handleGenerateAiProg = async () => {
+    if (!selected) return;
+    if (!aiGoal.trim())    { setAiProgErr("Diagnosis / goal is required.");   return; }
+    if (!aiStartDate)      { setAiProgErr("Start date is required.");        return; }
+    setAiProgLoading(true); setAiProgErr(null);
+    try {
+      const { getFunctions, httpsCallable } = await import("firebase/functions");
+      const { default: app } = await import("../../firebase");
+      const fn = httpsCallable(getFunctions(app), "generateExerciseProgram", { timeout: 120000 });
+      const result = await fn({ patientId: selected.patientId, diagnosisGoal: aiGoal.trim(), weeks: aiWeeks });
+      const { weeks: aiWeeksOut } = result.data as {
+        weeks: { weekLabel: string; days: { day: DayKey; isRest: boolean; exercises: Omit<RehabExercise, "id">[] }[] }[];
+      };
+
+      for (let i = 0; i < aiWeeksOut.length; i++) {
+        const w = aiWeeksOut[i];
+        const start = new Date(aiStartDate + "T00:00:00");
+        start.setDate(start.getDate() + i * 7);
+        const startIso = start.toISOString().slice(0, 10);
+        const payload = {
+          patientId:     selected.patientId,
+          weekLabel:     w.weekLabel,
+          weekStart:     startIso,
+          weekEnd:       weekEnd(startIso),
+          createdBy:     physioId,
+          createdByName: physioName,
+          days: w.days.map((d) => ({
+            day:       d.day,
+            isRest:    d.isRest,
+            exercises: d.exercises.map((ex) => ({ ...ex, id: uid() })),
+          })),
+        };
+        const result2 = await createProgram(payload);
+        if ("error" in result2 && result2.error) {
+          setAiProgErr(`Saved ${i} of ${aiWeeksOut.length} weeks, then failed: ${result2.error}`);
+          setAiProgLoading(false);
+          return;
+        }
+      }
+
+      setShowAiProg(false);
+    } catch (err) {
+      setAiProgErr(err instanceof Error ? err.message : "AI generation failed. Try again.");
+    } finally {
+      setAiProgLoading(false);
+    }
+  };
+
   const curDay = form.days[activeDay];
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -882,9 +944,18 @@ export default function OnlineRehabPage({
           {/* Programs */}
           <div className="reh-prog-section-hdr">
             <div className="reh-prog-section-title">Weekly Programs ({programs.length})</div>
-            <button className="reh-enroll-btn" onClick={openCreate}>
-              <Plus size={14} strokeWidth={2.5} /> New Week Plan
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="reh-enroll-btn"
+                style={{ background: "#6d28d9" }}
+                onClick={openAiProg}
+              >
+                <Sparkles size={14} strokeWidth={2.5} /> Generate with AI
+              </button>
+              <button className="reh-enroll-btn" onClick={openCreate}>
+                <Plus size={14} strokeWidth={2.5} /> New Week Plan
+              </button>
+            </div>
           </div>
 
           {programs.length === 0 ? (
@@ -971,6 +1042,65 @@ export default function OnlineRehabPage({
                 onClick={handleEnroll}
               >
                 {enrollSaving ? "Enrolling…" : "Enroll Patient"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ AI program modal ═════════════════════════════════════════════════ */}
+      {showAiProg && (
+        <div className="reh-overlay" onClick={() => !aiProgLoading && setShowAiProg(false)}>
+          <div className="reh-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="reh-modal-title">Generate Exercise Program with AI</div>
+            <div className="reh-modal-sub">
+              {selected?.patientName} — describe the diagnosis/goal and choose a timeframe; AI will draft a
+              progressive week-by-week program you can review and edit before it's saved.
+            </div>
+
+            <div className="reh-field">
+              <label className="reh-label">Diagnosis / Goal</label>
+              <textarea
+                className="reh-input"
+                rows={4}
+                value={aiGoal}
+                onChange={(e) => setAiGoal(e.target.value)}
+                placeholder="e.g. ACL reconstruction 6 weeks post-op, goal is return to running and gradual return to football training…"
+                style={{ resize: "vertical" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 14 }}>
+              <div className="reh-field" style={{ flex: 1 }}>
+                <label className="reh-label">Program Length (weeks)</label>
+                <input
+                  className="reh-input"
+                  type="number" min={1} max={12}
+                  value={aiWeeks}
+                  onChange={(e) => setAiWeeks(Math.min(12, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+                />
+              </div>
+              <div className="reh-field" style={{ flex: 1 }}>
+                <label className="reh-label">Start Date</label>
+                <input
+                  className="reh-input"
+                  type="date"
+                  value={aiStartDate}
+                  onChange={(e) => setAiStartDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {aiProgErr && <div className="reh-error">{aiProgErr}</div>}
+            <div className="reh-modal-acts">
+              <button className="reh-cancel-btn" onClick={() => setShowAiProg(false)} disabled={aiProgLoading}>Cancel</button>
+              <button
+                className="reh-save-btn"
+                style={{ background: aiProgLoading ? "#c4b5fd" : "#6d28d9" }}
+                disabled={aiProgLoading}
+                onClick={handleGenerateAiProg}
+              >
+                {aiProgLoading ? "Generating…" : `Generate ${aiWeeks}-Week Program`}
               </button>
             </div>
           </div>
