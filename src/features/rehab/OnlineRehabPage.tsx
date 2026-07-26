@@ -45,6 +45,21 @@ function blankForm() {
   return { weekLabel: "", weekStart: "", days: DAYS.map(blankDayPlan) };
 }
 
+interface DaySplitEntry { day: DayKey; isRest: boolean; focus: string; }
+
+const FOCUS_SUGGESTIONS = [
+  "Full Body", "Upper Body", "Lower Body", "Chest", "Back", "Shoulders",
+  "Arms", "Legs", "Core", "Cardio / Conditioning", "Mobility / Recovery",
+];
+
+function defaultDaySplit(): DaySplitEntry[] {
+  return DAYS.map((day) => ({
+    day,
+    isRest: day === "saturday" || day === "sunday",
+    focus:  "Full Body",
+  }));
+}
+
 function weekEnd(start: string): string {
   if (!start) return "";
   const d = new Date(start + "T00:00:00");
@@ -678,6 +693,7 @@ export default function OnlineRehabPage({
   const [aiGoal,        setAiGoal]        = useState("");
   const [aiWeeks,       setAiWeeks]       = useState(4);
   const [aiStartDate,   setAiStartDate]   = useState("");
+  const [aiDaySplit,    setAiDaySplit]    = useState<DaySplitEntry[]>(defaultDaySplit());
   const [aiProgLoading, setAiProgLoading] = useState(false);
   const [aiProgErr,     setAiProgErr]     = useState<string | null>(null);
 
@@ -789,22 +805,34 @@ export default function OnlineRehabPage({
 
   // ── AI program generation ─────────────────────────────────────────────────
   const openAiProg = () => {
-    setAiGoal(""); setAiWeeks(4); setAiStartDate(""); setAiProgErr(null);
+    setAiGoal(""); setAiWeeks(4); setAiStartDate(""); setAiDaySplit(defaultDaySplit()); setAiProgErr(null);
     setShowAiProg(true);
   };
+
+  const toggleAiDayRest = (day: DayKey) =>
+    setAiDaySplit((split) => split.map((d) => d.day === day ? { ...d, isRest: !d.isRest } : d));
+
+  const setAiDayFocus = (day: DayKey, focus: string) =>
+    setAiDaySplit((split) => split.map((d) => d.day === day ? { ...d, focus } : d));
 
   const handleGenerateAiProg = async () => {
     if (!selected) return;
     if (!aiGoal.trim())    { setAiProgErr("Diagnosis / goal is required.");   return; }
     if (!aiStartDate)      { setAiProgErr("Start date is required.");        return; }
+    if (aiDaySplit.every((d) => d.isRest)) { setAiProgErr("At least one training day is required."); return; }
     setAiProgLoading(true); setAiProgErr(null);
     try {
       const { getFunctions, httpsCallable } = await import("firebase/functions");
       const { default: app } = await import("../../firebase");
       const fn = httpsCallable(getFunctions(app), "generateExerciseProgram", { timeout: 120000 });
-      const result = await fn({ patientId: selected.patientId, diagnosisGoal: aiGoal.trim(), weeks: aiWeeks });
+      const result = await fn({
+        patientId:     selected.patientId,
+        diagnosisGoal: aiGoal.trim(),
+        weeks:         aiWeeks,
+        daySplit:      aiDaySplit,
+      });
       const { weeks: aiWeeksOut } = result.data as {
-        weeks: { weekLabel: string; days: { day: DayKey; isRest: boolean; exercises: Omit<RehabExercise, "id">[] }[] }[];
+        weeks: { weekLabel: string; trainingDays: { day: DayKey; exercises: Omit<RehabExercise, "id">[] }[] }[];
       };
 
       for (let i = 0; i < aiWeeksOut.length; i++) {
@@ -812,6 +840,7 @@ export default function OnlineRehabPage({
         const start = new Date(aiStartDate + "T00:00:00");
         start.setDate(start.getDate() + i * 7);
         const startIso = start.toISOString().slice(0, 10);
+        const trainingByDay = new Map(w.trainingDays.map((td) => [td.day, td.exercises]));
         const payload = {
           patientId:     selected.patientId,
           weekLabel:     w.weekLabel,
@@ -819,10 +848,10 @@ export default function OnlineRehabPage({
           weekEnd:       weekEnd(startIso),
           createdBy:     physioId,
           createdByName: physioName,
-          days: w.days.map((d) => ({
-            day:       d.day,
-            isRest:    d.isRest,
-            exercises: d.exercises.map((ex) => ({ ...ex, id: uid() })),
+          days: aiDaySplit.map((split) => ({
+            day:       split.day,
+            isRest:    split.isRest,
+            exercises: split.isRest ? [] : (trainingByDay.get(split.day) ?? []).map((ex) => ({ ...ex, id: uid() })),
           })),
         };
         const result2 = await createProgram(payload);
@@ -1051,7 +1080,7 @@ export default function OnlineRehabPage({
       {/* ══ AI program modal ═════════════════════════════════════════════════ */}
       {showAiProg && (
         <div className="reh-overlay" onClick={() => !aiProgLoading && setShowAiProg(false)}>
-          <div className="reh-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="reh-modal reh-prog-modal" onClick={(e) => e.stopPropagation()}>
             <div className="reh-modal-title">Generate Exercise Program with AI</div>
             <div className="reh-modal-sub">
               {selected?.patientName} — describe the diagnosis/goal and choose a timeframe; AI will draft a
@@ -1088,6 +1117,47 @@ export default function OnlineRehabPage({
                   value={aiStartDate}
                   onChange={(e) => setAiStartDate(e.target.value)}
                 />
+              </div>
+            </div>
+
+            <div className="reh-field">
+              <label className="reh-label">
+                Weekly Split — {aiDaySplit.filter((d) => !d.isRest).length} training day
+                {aiDaySplit.filter((d) => !d.isRest).length === 1 ? "" : "s"} / week
+              </label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                {aiDaySplit.map((d) => (
+                  <div key={d.day} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <button
+                      type="button"
+                      onClick={() => toggleAiDayRest(d.day)}
+                      style={{
+                        width: 90, flexShrink: 0, padding: "7px 0", borderRadius: 8, cursor: "pointer",
+                        fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 600, border: "1.5px solid",
+                        borderColor: d.isRest ? "#e5e0d8" : "#6d28d9",
+                        background:  d.isRest ? "#fafaf8" : "#f5f3ff",
+                        color:       d.isRest ? "#9a9590" : "#6d28d9",
+                      }}
+                    >
+                      {DAY_SHORT[d.day]}
+                    </button>
+                    {d.isRest ? (
+                      <span style={{ fontSize: 12.5, color: "#9a9590", fontStyle: "italic" }}>Rest day</span>
+                    ) : (
+                      <input
+                        className="reh-input"
+                        style={{ flex: 1 }}
+                        list="reh-focus-suggestions"
+                        value={d.focus}
+                        onChange={(e) => setAiDayFocus(d.day, e.target.value)}
+                        placeholder="Focus, e.g. Chest, Lower Body, Balance…"
+                      />
+                    )}
+                  </div>
+                ))}
+                <datalist id="reh-focus-suggestions">
+                  {FOCUS_SUGGESTIONS.map((f) => <option key={f} value={f} />)}
+                </datalist>
               </div>
             </div>
 

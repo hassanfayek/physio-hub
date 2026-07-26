@@ -375,7 +375,7 @@ exports.generateExerciseProgram = onCall(
       throw new HttpsError("permission-denied", "Only physiotherapists and managers can generate exercise programs.");
     }
 
-    const { patientId, diagnosisGoal, weeks } = request.data;
+    const { patientId, diagnosisGoal, weeks, daySplit } = request.data;
     if (!patientId) {
       throw new HttpsError("invalid-argument", "patientId is required.");
     }
@@ -383,6 +383,13 @@ exports.generateExerciseProgram = onCall(
       throw new HttpsError("invalid-argument", "diagnosisGoal is required.");
     }
     const weekCount = Math.min(8, Math.max(1, parseInt(weeks, 10) || 1));
+
+    const trainingDays = (Array.isArray(daySplit) ? daySplit : [])
+      .filter((d) => d && PROGRAM_DAYS.includes(d.day) && !d.isRest)
+      .map((d) => ({ day: d.day, focus: String(d.focus || "Full Body").trim() || "Full Body" }));
+    if (trainingDays.length === 0) {
+      throw new HttpsError("invalid-argument", "At least one training day is required.");
+    }
 
     const db = admin.firestore();
 
@@ -438,9 +445,12 @@ exports.generateExerciseProgram = onCall(
     const systemPrompt = `You are a senior physiotherapist designing a remote/home exercise program for a patient.
 Be specific and ground exercise selection in the diagnosis and goal provided. Progress difficulty/load across
 the weeks (early weeks: mobility, activation, low load; later weeks: strengthening, functional, higher load) —
-unless the goal/diagnosis calls for a different progression. Include rest days where appropriate (not every
-day needs to be a training day). Name real, well-known physiotherapy/rehab exercises — do not invent exercises
-that don't exist. Return ONLY valid JSON, no markdown fences, no text outside the JSON.`;
+unless the goal/diagnosis calls for a different progression. The clinician has already fixed which days are
+training days and what each day's focus/split is — do not change that, and do not include rest days in your
+response at all. Name real, well-known physiotherapy/rehab exercises — do not invent exercises that don't exist.
+Be concise: short exercise names, brief notes. Return ONLY valid JSON, no markdown fences, no text outside the JSON.`;
+
+    const trainingDaysList = trainingDays.map((d) => `  - ${d.day}: focus = "${d.focus}"`).join("\n");
 
     const userPrompt = `Design a ${weekCount}-week home/online exercise program for this patient.
 
@@ -450,37 +460,35 @@ ${clinicalSummary}
 ═══ CLINICIAN'S GOAL / DIAGNOSIS NOTES ═══
 ${String(diagnosisGoal).trim()}
 
+═══ FIXED TRAINING SCHEDULE (do not add, remove, or change days) ═══
+${trainingDaysList}
+
 ═══ RESPONSE FORMAT ═══
-Return JSON exactly in this shape:
+Return JSON exactly in this shape — ONLY the training days listed above, one entry per week:
 {
   "weeks": [
     {
       "weekLabel": "Week 1",
-      "days": [
-        { "day": "monday",    "isRest": false, "exercises": [ { "name": "...", "sets": "3", "reps": "10-12", "duration": "", "rest": "60 sec", "notes": "..." } ] },
-        { "day": "tuesday",   "isRest": false, "exercises": [ ... ] },
-        { "day": "wednesday", "isRest": false, "exercises": [ ... ] },
-        { "day": "thursday",  "isRest": false, "exercises": [ ... ] },
-        { "day": "friday",    "isRest": false, "exercises": [ ... ] },
-        { "day": "saturday",  "isRest": true,  "exercises": [] },
-        { "day": "sunday",    "isRest": true,  "exercises": [] }
+      "trainingDays": [
+        { "day": "${trainingDays[0].day}", "exercises": [ { "name": "...", "sets": "3", "reps": "10-12", "duration": "", "rest": "60 sec", "notes": "..." } ] }
+        // one entry per training day listed above, same day keys, same order
       ]
     }
     // one entry per week, weekLabel as "Week 1", "Week 2", etc.
   ]
 }
 Rules:
-  - Every week must include all 7 days in the exact order shown (monday..sunday).
-  - Rest days ("isRest": true) must have an empty exercises array.
+  - Only include the ${trainingDays.length} training day(s) listed above, using their exact "day" keys. Do not include rest days.
+  - Exercises must match each day's stated focus (e.g. a "Chest" day gets chest exercises, a "Post-op Knee" day gets knee-appropriate exercises).
   - "duration" is only for timed exercises (e.g. plank "30 sec"); leave "" for rep-based exercises.
-  - "notes" should briefly explain form cues or why the exercise was chosen for this patient — keep to one short sentence.
-  - Keep exercises realistic in count per day (2-6 exercises for a training day).`;
+  - "notes" should be a brief phrase (form cue or why it was chosen) — a few words, not a full sentence.
+  - Keep exercises realistic in count per day (2-5 exercises).`;
 
     let response;
     try {
       response = await client.messages.create({
         model:      "claude-sonnet-4-6",
-        max_tokens: Math.min(8192, 1500 + weekCount * 900),
+        max_tokens: Math.min(8192, 1000 + weekCount * trainingDays.length * 260),
         system:     systemPrompt,
         messages:   [{ role: "user", content: userPrompt }],
       });
@@ -526,15 +534,16 @@ Rules:
     }
 
     // Normalise so the frontend always gets a predictable shape, regardless of
-    // minor deviations in what the model returned.
+    // minor deviations in what the model returned. Only the fixed training days
+    // are expected back — rest days are already known client-side.
+    const trainingDayKeys = new Set(trainingDays.map((d) => d.day));
     const normalised = weeksOut.map((w, i) => {
-      const dayMap = new Map((Array.isArray(w.days) ? w.days : []).map((d) => [d.day, d]));
+      const dayMap = new Map((Array.isArray(w.trainingDays) ? w.trainingDays : []).map((d) => [d.day, d]));
       return {
         weekLabel: String(w.weekLabel || `Week ${i + 1}`),
-        days: PROGRAM_DAYS.map((dayKey) => {
-          const d = dayMap.get(dayKey) ?? {};
-          const isRest = !!d.isRest;
-          const exercises = isRest ? [] : (Array.isArray(d.exercises) ? d.exercises : []).map((ex) => ({
+        trainingDays: trainingDays.map(({ day: dayKey }) => {
+          const d = trainingDayKeys.has(dayKey) ? (dayMap.get(dayKey) ?? {}) : {};
+          const exercises = (Array.isArray(d.exercises) ? d.exercises : []).map((ex) => ({
             name:     String(ex.name     ?? ""),
             sets:     String(ex.sets     ?? ""),
             reps:     String(ex.reps     ?? ""),
@@ -542,7 +551,7 @@ Rules:
             rest:     String(ex.rest     ?? ""),
             notes:    String(ex.notes    ?? ""),
           })).filter((ex) => ex.name);
-          return { day: dayKey, isRest, exercises };
+          return { day: dayKey, exercises };
         }),
       };
     });
