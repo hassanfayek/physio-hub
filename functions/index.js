@@ -382,7 +382,7 @@ exports.generateExerciseProgram = onCall(
     if (!diagnosisGoal || !String(diagnosisGoal).trim()) {
       throw new HttpsError("invalid-argument", "diagnosisGoal is required.");
     }
-    const weekCount = Math.min(12, Math.max(1, parseInt(weeks, 10) || 1));
+    const weekCount = Math.min(8, Math.max(1, parseInt(weeks, 10) || 1));
 
     const db = admin.firestore();
 
@@ -480,7 +480,7 @@ Rules:
     try {
       response = await client.messages.create({
         model:      "claude-sonnet-4-6",
-        max_tokens: Math.min(8192, 1200 + weekCount * 500),
+        max_tokens: Math.min(8192, 1500 + weekCount * 900),
         system:     systemPrompt,
         messages:   [{ role: "user", content: userPrompt }],
       });
@@ -502,12 +502,21 @@ Rules:
       .join("")
       .trim();
 
-    const jsonStr = raw.replace(/^```[a-z]*\n?/i, "").replace(/```$/, "").trim();
+    if (response.stop_reason === "max_tokens") {
+      console.error("generateExerciseProgram: response truncated at max_tokens", { weekCount, rawLength: raw.length });
+      throw new HttpsError("internal", "The program was too long to generate in one go. Try a shorter timeframe (fewer weeks) and add more weeks afterward.");
+    }
+
+    // Extract the JSON object even if the model added stray text/fences around it.
+    const firstBrace = raw.indexOf("{");
+    const lastBrace  = raw.lastIndexOf("}");
+    const jsonStr = firstBrace !== -1 && lastBrace !== -1 ? raw.slice(firstBrace, lastBrace + 1) : raw;
 
     let parsed;
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
+      console.error("generateExerciseProgram: failed to parse AI JSON", { rawLength: raw.length, preview: raw.slice(0, 300) });
       throw new HttpsError("internal", "AI returned invalid JSON. Please try again.");
     }
 

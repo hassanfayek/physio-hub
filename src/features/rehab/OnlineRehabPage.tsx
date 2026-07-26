@@ -1075,9 +1075,9 @@ export default function OnlineRehabPage({
                 <label className="reh-label">Program Length (weeks)</label>
                 <input
                   className="reh-input"
-                  type="number" min={1} max={12}
+                  type="number" min={1} max={8}
                   value={aiWeeks}
-                  onChange={(e) => setAiWeeks(Math.min(12, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+                  onChange={(e) => setAiWeeks(Math.min(8, Math.max(1, parseInt(e.target.value, 10) || 1)))}
                 />
               </div>
               <div className="reh-field" style={{ flex: 1 }}>
