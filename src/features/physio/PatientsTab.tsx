@@ -251,12 +251,15 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
   const filteredPatients = patients.filter((p) => {
     const q = searchQuery.toLowerCase().trim();
     if (q) {
-      const fullName = `${p.firstName ?? ""} ${p.lastName ?? ""}`.toLowerCase().trim();
+      const fullName   = `${p.firstName ?? ""} ${p.lastName ?? ""}`.toLowerCase().trim();
+      const qDigits    = q.replace(/\D/g, "");
+      const phoneDigits = (p.phone ?? "").replace(/\D/g, "");
       const matches =
         p.firstName?.toLowerCase().includes(q) ||
         p.lastName?.toLowerCase().includes(q)  ||
         fullName.includes(q)                   ||
-        p.email?.toLowerCase().includes(q);
+        p.email?.toLowerCase().includes(q)     ||
+        (qDigits.length > 0 && phoneDigits.includes(qDigits));
       if (!matches) return false;
     }
     if (referralFilter) {
@@ -651,7 +654,7 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
               <input
                 type="text"
                 className="pt-search-input"
-                placeholder="Search patients by name or email..."
+                placeholder="Search patients by name, email, or phone..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
