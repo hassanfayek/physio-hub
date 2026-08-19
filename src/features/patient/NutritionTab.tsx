@@ -7,12 +7,19 @@ import {
   getNutritionProfile,
   saveNutritionProfile,
   deleteNutritionProfile,
+  getNutritionHistory,
+  saveNutritionSnapshot,
+  deleteNutritionSnapshot,
+  getNextDueDate,
   DEFAULT_NUTRITION_PROFILE,
   DEFAULT_INBODY,
+  DEFAULT_CIRCUMFERENCE,
   DEFAULT_SUPPLEMENTS,
   DEFAULT_INTAKE_FORM,
   type NutritionProfile,
   type InBodyData,
+  type BodyCircumference,
+  type NutritionAssessmentSnapshot,
   type CustomSupplement,
   type IntakeForm,
   type NutritionGoal,
@@ -396,73 +403,160 @@ function SetupCard({ profile, onSave, saving, isNew }: {
   );
 }
 
-// ─── InBodyCard ───────────────────────────────────────────────────────────────
+// ─── AssessmentCard ───────────────────────────────────────────────────────────
+// Single entry point for baseline + biweekly reassessments: InBody + body
+// circumference + a frozen snapshot of the diet plan, captured together per
+// visit and written to nutritionAssessmentHistory. Legacy InBody-only entries
+// from the old standalone flow (profile.inBodyHistory) are still shown for
+// continuity, but all NEW entries go through this one form — there is no
+// second "add a reading" flow anywhere else in this tab.
 
-function InBodyCard({ profile, onSave, saving }: {
-  profile: NutritionProfile; onSave: (p: NutritionProfile) => void; saving: boolean;
+type NumericInBodyKey        = Exclude<keyof InBodyData, "measuredAt" | "notes">;
+type NumericCircumferenceKey = Exclude<keyof BodyCircumference, "measuredAt" | "notes">;
+
+const INBODY_METRICS: [string, NumericInBodyKey, string][] = [
+  ["Weight",   "weight",             "kg"],
+  ["SMM",      "skeletalMuscleMass", "kg"],
+  ["Body Fat", "bodyFatPercent",     "%"],
+  ["Fat Mass", "bodyFatMass",        "kg"],
+  ["BMI",      "bmi",                ""],
+  ["BMR",      "bmr",                "kcal/d"],
+  ["Visceral", "visceralFatLevel",   "/20"],
+  ["TBW",      "totalBodyWater",     "L"],
+];
+
+const CIRCUMFERENCE_METRICS: [string, NumericCircumferenceKey, string][] = [
+  ["Neck",  "neck",  "cm"],
+  ["Chest", "chest", "cm"],
+  ["Waist", "waist", "cm"],
+  ["Hip",   "hip",   "cm"],
+  ["Arm",   "arm",   "cm"],
+  ["Thigh", "thigh", "cm"],
+];
+
+interface AssessmentDraft {
+  date:          string;
+  inBody:        InBodyData;
+  circumference: BodyCircumference;
+  notes:         string;
+}
+
+function emptyAssessmentDraft(): AssessmentDraft {
+  return { date: "", inBody: DEFAULT_INBODY, circumference: DEFAULT_CIRCUMFERENCE, notes: "" };
+}
+
+function AssessmentCard({ patientId, profile, onSave, saving }: {
+  patientId: string; profile: NutritionProfile; onSave: (p: NutritionProfile) => void; saving: boolean;
 }) {
-  const history = [...(profile.inBodyHistory ?? [])].sort((a, b) => b.measuredAt.localeCompare(a.measuredAt));
+  const [history,        setHistory]        = useState<NutritionAssessmentSnapshot[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [open,     setOpen]     = useState(true);
   const [adding,   setAdding]   = useState(false);
-  const [draft,    setDraft]    = useState<InBodyData>(DEFAULT_INBODY);
+  const [draft,    setDraft]    = useState<AssessmentDraft>(emptyAssessmentDraft());
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const handleSaveNew = () => {
-    const existing = profile.inBodyHistory ?? [];
-    const updated = [draft, ...existing.filter(r => r.measuredAt !== draft.measuredAt)]
-      .sort((a, b) => b.measuredAt.localeCompare(a.measuredAt));
-    onSave({ ...profile, inBodyHistory: updated });
-    setAdding(false);
-    setDraft(DEFAULT_INBODY);
+  useEffect(() => {
+    setHistoryLoading(true);
+    getNutritionHistory(patientId)
+      .then(setHistory)
+      .finally(() => setHistoryLoading(false));
+  }, [patientId]);
+
+  // Legacy InBody-only readings from before this feature (not in the snapshot
+  // history) — shown read-only so nothing recorded previously disappears.
+  const legacyOnly = (profile.inBodyHistory ?? [])
+    .filter((r) => !history.some((h) => h.date === r.measuredAt));
+
+  const dueDate = getNextDueDate(history);
+  const isOverdue = !!dueDate && dueDate < new Date().toISOString().slice(0, 10);
+
+  const handleSaveNew = async () => {
+    if (!draft.date) return;
+    const snapshot: NutritionAssessmentSnapshot = {
+      date:          draft.date,
+      type:          history.length === 0 ? "baseline" : "reassessment",
+      inBody:        { ...draft.inBody, measuredAt: draft.date },
+      circumference: { ...draft.circumference, measuredAt: draft.date },
+      dietPlan: {
+        mealsPerDay: profile.intakeForm?.mealsPerDay ?? 5,
+        quantities:  { ...(profile.aiQuantities ?? {}), ...profile.overrides },
+        reasoning:   profile.aiReasoning,
+      },
+      notes: draft.notes,
+    };
+    const result = await saveNutritionSnapshot(patientId, snapshot);
+    if (!result.error) {
+      setHistory((prev) => [...prev.filter((h) => h.date !== snapshot.date), snapshot]
+        .sort((a, b) => a.date.localeCompare(b.date)));
+      // Keep inBodyHistory in sync — meal-quantity scaling reads the latest
+      // entry there (see effectiveWeight/latestInBody below).
+      const existingInBody = profile.inBodyHistory ?? [];
+      const updatedInBody = [snapshot.inBody, ...existingInBody.filter((r) => r.measuredAt !== snapshot.date)]
+        .sort((a, b) => b.measuredAt.localeCompare(a.measuredAt));
+      onSave({ ...profile, inBodyHistory: updatedInBody });
+      setAdding(false);
+      setDraft(emptyAssessmentDraft());
+    }
   };
 
-  const handleDelete = (measuredAt: string) => {
-    const updated = (profile.inBodyHistory ?? []).filter(r => r.measuredAt !== measuredAt);
+  const handleDelete = async (date: string) => {
+    await deleteNutritionSnapshot(patientId, date);
+    setHistory((prev) => prev.filter((h) => h.date !== date));
+    const updatedInBody = (profile.inBodyHistory ?? []).filter((r) => r.measuredAt !== date);
+    onSave({ ...profile, inBodyHistory: updatedInBody });
+  };
+
+  const handleDeleteLegacy = (measuredAt: string) => {
+    const updated = (profile.inBodyHistory ?? []).filter((r) => r.measuredAt !== measuredAt);
     onSave({ ...profile, inBodyHistory: updated });
   };
 
-  const numField = (label: string, key: keyof InBodyData, unit: string) => (
+  const numField = (
+    label: string, unit: string, value: number | null,
+    onChange: (v: number | null) => void,
+  ) => (
     <div>
       <div style={LABEL_SM}>{label}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <input type="number" min={0} value={draft[key] ?? ""} placeholder="—"
-          onChange={(e) => setDraft({ ...draft, [key]: e.target.value ? parseFloat(e.target.value) : null } as InBodyData)}
+        <input type="number" min={0} value={value ?? ""} placeholder="—"
+          onChange={(e) => onChange(e.target.value ? parseFloat(e.target.value) : null)}
           style={{ ...INPUT_STYLE, boxSizing: "border-box" }} />
         {unit && <span style={{ fontSize: 12, color: "#9a9590", whiteSpace: "nowrap" }}>{unit}</span>}
       </div>
     </div>
   );
 
-  const METRICS: [string, keyof InBodyData, string][] = [
-    ["Weight",   "weight",             "kg"],
-    ["SMM",      "skeletalMuscleMass", "kg"],
-    ["Body Fat", "bodyFatPercent",     "%"],
-    ["Fat Mass", "bodyFatMass",        "kg"],
-    ["BMI",      "bmi",                ""],
-    ["BMR",      "bmr",                "kcal/d"],
-    ["Visceral", "visceralFatLevel",   "/20"],
-    ["TBW",      "totalBodyWater",     "L"],
-  ];
+  const totalCount = history.length + legacyOnly.length;
 
   return (
-    <div style={{ ...CARD, borderColor: history.length > 0 ? "#c4b5fd" : "#e5e0d8" }}>
+    <div style={{ ...CARD, borderColor: totalCount > 0 ? "#c4b5fd" : "#e5e0d8" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: open ? 14 : 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: open ? 14 : 0, flexWrap: "wrap", gap: 10 }}>
         <button onClick={() => setOpen(v => !v)} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: 0, textAlign: "left", fontFamily: "'Outfit',sans-serif" }}>
-          <div style={{ ...CARD_TITLE, display: "flex", alignItems: "center", gap: 8 }}>
-            InBody History
-            {history.length > 0 && (
+          <div style={{ ...CARD_TITLE, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            Assessment History
+            {totalCount > 0 && (
               <span style={{ fontSize: 11, background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe", borderRadius: 20, padding: "2px 8px", fontFamily: "'Outfit',sans-serif", fontWeight: 600 }}>
-                {history.length} reading{history.length !== 1 ? "s" : ""}
+                {totalCount} assessment{totalCount !== 1 ? "s" : ""}
+              </span>
+            )}
+            {dueDate && (
+              <span style={{
+                fontSize: 11, borderRadius: 20, padding: "2px 8px", fontWeight: 600, fontFamily: "'Outfit',sans-serif",
+                background: isOverdue ? "#fef2f2" : "#f0fdf4",
+                color:      isOverdue ? "#dc2626" : "#16a34a",
+                border:     `1px solid ${isOverdue ? "#fecaca" : "#bbf7d0"}`,
+              }}>
+                {isOverdue ? "Reassessment overdue — was due" : "Next reassessment due"} {dueDate}
               </span>
             )}
           </div>
           {open ? <ChevronUp size={16} color="#9a9590" /> : <ChevronDown size={16} color="#9a9590" />}
         </button>
         {open && !adding && (
-          <button onClick={() => { setDraft(DEFAULT_INBODY); setAdding(true); }}
+          <button onClick={() => { setDraft({ ...emptyAssessmentDraft(), date: new Date().toISOString().slice(0, 10) }); setAdding(true); }}
             style={{ ...BTN, background: "#f5f3ff", color: "#6d28d9", borderColor: "#ddd6fe", marginLeft: 10 }}>
-            <Plus size={13} /> Add Reading
+            <Plus size={13} /> New Assessment
           </button>
         )}
       </div>
@@ -472,83 +566,146 @@ function InBodyCard({ profile, onSave, saving }: {
           {/* Add form */}
           {adding && (
             <div style={{ background: "#faf8ff", border: "1.5px solid #ddd6fe", borderRadius: 12, padding: "16px 16px 14px", marginBottom: 14 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#6d28d9", marginBottom: 14 }}>New InBody Reading</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#6d28d9", marginBottom: 14 }}>
+                New {history.length === 0 ? "Baseline" : "Reassessment"}
+              </div>
               <div style={{ marginBottom: 14 }}>
-                <div style={LABEL_SM}>Date Measured</div>
-                <input type="date" value={draft.measuredAt}
-                  onChange={(e) => setDraft({ ...draft, measuredAt: e.target.value })}
+                <div style={LABEL_SM}>Date</div>
+                <input type="date" value={draft.date}
+                  onChange={(e) => setDraft({ ...draft, date: e.target.value })}
                   style={{ ...INPUT_STYLE, boxSizing: "border-box", width: "100%" }} />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-                {numField("Weight", "weight", "kg")}
-                {numField("Skeletal Muscle Mass (SMM)", "skeletalMuscleMass", "kg")}
-                {numField("Body Fat Mass", "bodyFatMass", "kg")}
-                {numField("Body Fat %", "bodyFatPercent", "%")}
-                {numField("BMI", "bmi", "")}
-                {numField("BMR", "bmr", "kcal/day")}
-                {numField("Visceral Fat Level", "visceralFatLevel", "/ 20")}
-                {numField("Total Body Water", "totalBodyWater", "L")}
+
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: "#9a9590", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>InBody</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
+                {INBODY_METRICS.map(([label, key, unit]) =>
+                  <div key={key}>{numField(label, unit, draft.inBody[key], (v) => setDraft({ ...draft, inBody: { ...draft.inBody, [key]: v } }))}</div>
+                )}
               </div>
+
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: "#9a9590", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Body Circumference</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+                {CIRCUMFERENCE_METRICS.map(([label, key, unit]) =>
+                  <div key={key}>{numField(label, unit, draft.circumference[key], (v) => setDraft({ ...draft, circumference: { ...draft.circumference, [key]: v } }))}</div>
+                )}
+              </div>
+
               <div style={{ marginBottom: 14 }}>
                 <div style={LABEL_SM}>Notes</div>
                 <textarea rows={2} value={draft.notes}
                   onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
-                  placeholder="Any additional notes from the InBody report…"
+                  placeholder="Any additional notes from this assessment…"
                   style={{ ...INPUT_STYLE, resize: "vertical", width: "100%", boxSizing: "border-box", lineHeight: 1.5 } as React.CSSProperties} />
               </div>
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                 <button onClick={() => setAdding(false)} style={{ ...BTN, background: "#fafaf8", color: "#9a9590" }}>Cancel</button>
-                <button onClick={handleSaveNew} disabled={saving || !draft.measuredAt}
+                <button onClick={handleSaveNew} disabled={saving || !draft.date}
                   style={{ ...BTN, background: "#6d28d9", color: "#fff", border: "none", padding: "8px 18px" }}>
-                  {saving ? "Saving…" : <><Save size={13} /> Save Reading</>}
+                  {saving ? "Saving…" : <><Save size={13} /> Save Assessment</>}
                 </button>
               </div>
             </div>
           )}
 
           {/* Empty state */}
-          {history.length === 0 && !adding && (
+          {!historyLoading && totalCount === 0 && !adding && (
             <div style={{ padding: "4px 0 6px", fontSize: 13, color: "#b4b0ab" }}>
-              No readings yet. Add a measurement to enable AI-optimised quantities and track progress.
+              No assessments yet. Record a baseline to enable AI-optimised quantities and track progress.
             </div>
           )}
 
-          {/* Reading list */}
+          {/* Assessment list (newest first) */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {history.map((r, idx) => {
+            {[...history].sort((a, b) => b.date.localeCompare(a.date)).map((snap, idx) => {
               const isLatest   = idx === 0;
+              const isExpanded = expanded === snap.date;
+              return (
+                <div key={snap.date} style={{ border: `1.5px solid ${isLatest ? "#ddd6fe" : "#e5e0d8"}`, borderRadius: 12, background: isLatest ? "#faf8ff" : "#fafaf8", overflow: "hidden" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px" }}>
+                    <button onClick={() => setExpanded(isExpanded ? null : snap.date)}
+                      style={{ flex: 1, background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, padding: 0, textAlign: "left", fontFamily: "'Outfit',sans-serif" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 600, color: "#1a1a1a" }}>{snap.date}</span>
+                          <span style={{ fontSize: 10, background: snap.type === "baseline" ? "#1a1a1a" : "#6d28d9", color: "#fff", borderRadius: 20, padding: "2px 8px", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                            {snap.type}
+                          </span>
+                          {isLatest && <span style={{ fontSize: 10, background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe", borderRadius: 20, padding: "2px 8px", fontWeight: 600, letterSpacing: "0.04em" }}>LATEST</span>}
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                          {snap.inBody.weight            != null && <span style={{ fontSize: 12, color: "#6b7280" }}>{snap.inBody.weight} kg</span>}
+                          {snap.inBody.bodyFatPercent     != null && <span style={{ fontSize: 12, color: "#6b7280" }}>{snap.inBody.bodyFatPercent}% fat</span>}
+                          {snap.circumference.waist       != null && <span style={{ fontSize: 12, color: "#6b7280" }}>Waist {snap.circumference.waist} cm</span>}
+                        </div>
+                      </div>
+                      {isExpanded ? <ChevronUp size={14} color="#9a9590" /> : <ChevronDown size={14} color="#9a9590" />}
+                    </button>
+                    <button onClick={() => handleDelete(snap.date)} title="Delete assessment"
+                      style={{ ...BTN, padding: "5px 8px", background: "#fef2f2", color: "#dc2626", borderColor: "#fecaca", flexShrink: 0, marginLeft: 8 }}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+
+                  {isExpanded && (
+                    <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0ede8" }}>
+                      <div style={{ fontSize: 10, color: "#9a9590", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 12, marginBottom: 6 }}>InBody</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {INBODY_METRICS.filter(([, key]) => snap.inBody[key] != null).map(([label, key, unit]) => (
+                          <div key={label} style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "7px 12px" }}>
+                            <div style={{ fontSize: 10, color: "#6d28d9", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+                            <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1a1a1a", marginTop: 2 }}>{snap.inBody[key]} {unit}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: 10, color: "#9a9590", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 14, marginBottom: 6 }}>Circumference</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {CIRCUMFERENCE_METRICS.filter(([, key]) => snap.circumference[key] != null).map(([label, key, unit]) => (
+                          <div key={label} style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "7px 12px" }}>
+                            <div style={{ fontSize: 10, color: "#1d4ed8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+                            <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1a1a1a", marginTop: 2 }}>{snap.circumference[key]} {unit}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ marginTop: 12, fontSize: 12.5, color: "#6b7280" }}>
+                        <span style={{ fontWeight: 600 }}>Diet plan given: </span>
+                        {snap.dietPlan.mealsPerDay} meals/day, {Object.keys(snap.dietPlan.quantities).length} items set
+                      </div>
+                      {snap.notes && <div style={{ marginTop: 6, fontSize: 12.5, color: "#6b7280" }}><span style={{ fontWeight: 600 }}>Notes: </span>{snap.notes}</div>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Legacy InBody-only entries from before this feature */}
+            {legacyOnly.sort((a, b) => b.measuredAt.localeCompare(a.measuredAt)).map((r) => {
               const isExpanded = expanded === r.measuredAt;
               return (
-                <div key={r.measuredAt || idx} style={{ border: `1.5px solid ${isLatest ? "#ddd6fe" : "#e5e0d8"}`, borderRadius: 12, background: isLatest ? "#faf8ff" : "#fafaf8", overflow: "hidden" }}>
-                  {/* Row header */}
+                <div key={r.measuredAt} style={{ border: "1.5px solid #e5e0d8", borderRadius: 12, background: "#fafaf8", overflow: "hidden" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px" }}>
                     <button onClick={() => setExpanded(isExpanded ? null : r.measuredAt)}
                       style={{ flex: 1, background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, padding: 0, textAlign: "left", fontFamily: "'Outfit',sans-serif" }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                           <span style={{ fontSize: 13.5, fontWeight: 600, color: "#1a1a1a" }}>{r.measuredAt || "—"}</span>
-                          {isLatest && <span style={{ fontSize: 10, background: "#6d28d9", color: "#fff", borderRadius: 20, padding: "2px 8px", fontWeight: 600, letterSpacing: "0.04em" }}>LATEST</span>}
+                          <span style={{ fontSize: 10, background: "#e5e0d8", color: "#6b7280", borderRadius: 20, padding: "2px 8px", fontWeight: 600, letterSpacing: "0.04em" }}>LEGACY INBODY ONLY</span>
                         </div>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-                          {r.weight            && <span style={{ fontSize: 12, color: "#6b7280" }}>{r.weight} kg</span>}
-                          {r.bodyFatPercent     && <span style={{ fontSize: 12, color: "#6b7280" }}>{r.bodyFatPercent}% fat</span>}
-                          {r.skeletalMuscleMass && <span style={{ fontSize: 12, color: "#6b7280" }}>SMM {r.skeletalMuscleMass} kg</span>}
-                          {r.bmr               && <span style={{ fontSize: 12, color: "#6b7280" }}>BMR {r.bmr} kcal</span>}
+                          {r.weight            != null && <span style={{ fontSize: 12, color: "#6b7280" }}>{r.weight} kg</span>}
+                          {r.bodyFatPercent     != null && <span style={{ fontSize: 12, color: "#6b7280" }}>{r.bodyFatPercent}% fat</span>}
                         </div>
                       </div>
                       {isExpanded ? <ChevronUp size={14} color="#9a9590" /> : <ChevronDown size={14} color="#9a9590" />}
                     </button>
-                    <button onClick={() => handleDelete(r.measuredAt)} title="Delete reading"
+                    <button onClick={() => handleDeleteLegacy(r.measuredAt)} title="Delete reading"
                       style={{ ...BTN, padding: "5px 8px", background: "#fef2f2", color: "#dc2626", borderColor: "#fecaca", flexShrink: 0, marginLeft: 8 }}>
                       <Trash2 size={12} />
                     </button>
                   </div>
-
-                  {/* Expanded detail */}
                   {isExpanded && (
                     <div style={{ padding: "0 14px 14px", borderTop: "1px solid #f0ede8" }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingTop: 12 }}>
-                        {METRICS.filter(([, key]) => r[key] !== null && r[key] !== undefined).map(([label, key, unit]) => (
+                        {INBODY_METRICS.filter(([, key]) => r[key] != null).map(([label, key, unit]) => (
                           <div key={label} style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "7px 12px" }}>
                             <div style={{ fontSize: 10, color: "#6d28d9", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
                             <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1a1a1a", marginTop: 2 }}>{r[key]} {unit}</div>
@@ -1141,8 +1298,8 @@ export default function NutritionTab({ patientId, patientName, canEdit }: Props)
       {/* Patient Variables */}
       {(canEdit || !isNew) && <SetupCard profile={profile} onSave={persist} saving={saving} isNew={isNew} />}
 
-      {/* InBody — visible as soon as physio opens the plan (not gated on isNew) */}
-      {canEdit && <InBodyCard profile={profile} onSave={persist} saving={saving} />}
+      {/* Assessment history — visible as soon as physio opens the plan (not gated on isNew) */}
+      {canEdit && <AssessmentCard patientId={patientId} profile={profile} onSave={persist} saving={saving} />}
 
       {/* Plan */}
       {!isNew && (

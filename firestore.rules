@@ -175,6 +175,12 @@ service cloud.firestore {
       allow write: if isManager() || isPhysio();
     }
 
+    // ── Nutrition Assessment History (baseline + biweekly reassessments) ──────
+    match /nutritionAssessmentHistory/{patientId}/snapshots/{date} {
+      allow read:  if isStaff();
+      allow write: if isManager() || isPhysio();
+    }
+
     // ── Clinic Settings ──────────────────────────────────────────────────────
     match /clinicSettings/{docId} {
       allow read:  if isStaff() || isPatient();

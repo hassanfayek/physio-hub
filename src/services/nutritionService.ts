@@ -1,6 +1,6 @@
 // FILE: src/services/nutritionService.ts
 
-import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, getDocs, collection, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -19,6 +19,32 @@ export interface InBodyData {
   visceralFatLevel:   number | null; // 1 – 20
   totalBodyWater:     number | null; // L
   notes:              string;
+}
+
+export interface BodyCircumference {
+  measuredAt: string;        // ISO date string  (YYYY-MM-DD)
+  neck:       number | null; // cm
+  chest:      number | null; // cm
+  waist:      number | null; // cm
+  hip:        number | null; // cm
+  arm:        number | null; // cm  — relaxed upper arm
+  thigh:      number | null; // cm
+  notes:      string;
+}
+
+export type NutritionAssessmentType = "baseline" | "reassessment";
+
+export interface NutritionAssessmentSnapshot {
+  date:          string;                 // ISO date string (YYYY-MM-DD) — doc id
+  type:          NutritionAssessmentType;
+  inBody:        InBodyData;
+  circumference: BodyCircumference;
+  dietPlan: {
+    mealsPerDay: 4 | 5;
+    quantities:  Record<string, number>; // frozen aiQuantities + overrides at time of assessment
+    reasoning?:  string;
+  };
+  notes: string;
 }
 
 export interface CustomSupplement {
@@ -71,6 +97,17 @@ export const DEFAULT_INBODY: InBodyData = {
   visceralFatLevel:   null,
   totalBodyWater:     null,
   notes:              "",
+};
+
+export const DEFAULT_CIRCUMFERENCE: BodyCircumference = {
+  measuredAt: "",
+  neck:       null,
+  chest:      null,
+  waist:      null,
+  hip:        null,
+  arm:        null,
+  thigh:      null,
+  notes:      "",
 };
 
 export const DEFAULT_INTAKE_FORM: IntakeForm = {
@@ -156,4 +193,56 @@ export async function deleteNutritionProfile(
   } catch (err) {
     return { error: (err as Error).message ?? "Failed to delete." };
   }
+}
+
+// ─── Assessment / reassessment history ─────────────────────────────────────────
+// One snapshot per sit-down (baseline or biweekly reassessment): InBody +
+// circumference + the diet plan actually given that day, frozen in place so
+// progress can be tracked over time. Mirrors the jointAssessmentHistory pattern.
+
+export async function getNutritionHistory(
+  patientId: string
+): Promise<NutritionAssessmentSnapshot[]> {
+  const snap = await getDocs(collection(db, "nutritionAssessmentHistory", patientId, "snapshots"));
+  return snap.docs
+    .map((d) => d.data() as NutritionAssessmentSnapshot)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export async function saveNutritionSnapshot(
+  patientId: string,
+  snapshot:  NutritionAssessmentSnapshot
+): Promise<{ error?: string }> {
+  try {
+    await setDoc(
+      doc(db, "nutritionAssessmentHistory", patientId, "snapshots", snapshot.date),
+      { ...snapshot, savedAt: serverTimestamp() },
+    );
+    return {};
+  } catch (err) {
+    return { error: (err as Error).message ?? "Failed to save assessment." };
+  }
+}
+
+export async function deleteNutritionSnapshot(
+  patientId: string,
+  date:      string
+): Promise<{ error?: string }> {
+  try {
+    await deleteDoc(doc(db, "nutritionAssessmentHistory", patientId, "snapshots", date));
+    return {};
+  } catch (err) {
+    return { error: (err as Error).message ?? "Failed to delete assessment." };
+  }
+}
+
+const REASSESSMENT_INTERVAL_DAYS = 14;
+
+// Next reassessment due date, computed from the most recent snapshot — biweekly cadence.
+export function getNextDueDate(history: NutritionAssessmentSnapshot[]): string | null {
+  if (history.length === 0) return null;
+  const last = history[history.length - 1].date; // history is sorted oldest-first
+  const d = new Date(last + "T00:00:00");
+  d.setDate(d.getDate() + REASSESSMENT_INTERVAL_DAYS);
+  return d.toISOString().slice(0, 10);
 }
