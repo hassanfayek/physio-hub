@@ -9,6 +9,65 @@ setGlobalOptions({ maxInstances: 10 });
 
 const CLAUDE_API_KEY = defineSecret("CLAUDE_API_KEY");
 
+// ─── Kapso WhatsApp bridge (onRequest, shared-secret auth) ───────────────────
+
+const bridgeApi = require("./bridgeApi");
+exports.lookupPatient           = bridgeApi.lookupPatient;
+exports.rescheduleAppointment   = bridgeApi.rescheduleAppointment;
+exports.cancelAppointment       = bridgeApi.cancelAppointment;
+exports.createWalkInAppointment = bridgeApi.createWalkInAppointment;
+exports.bookNextSession         = bridgeApi.bookNextSession;
+exports.getAvailableSlots       = bridgeApi.getAvailableSlots;
+
+// ─── Webapp-facing atomic booking (onCall) ───────────────────────────────────
+// Mirrors firestore.rules' `allow create` condition for /appointments exactly
+// (isStaff() || (isPatient() && patientId == auth.uid)), since this callable
+// uses the Admin SDK and therefore bypasses those rules — this check is the
+// only authorization boundary. Shares the same atomic booking primitive
+// (scheduling.bookAppointmentAtomic) used by the WhatsApp bridge, so both
+// callers enforce identical capacity/hours/Friday rules with no duplicated
+// transaction logic.
+
+const scheduling = require("./scheduling");
+const STAFF_ROLES = new Set(["clinic_manager", "manager", "physiotherapist", "secretary"]);
+
+exports.bookAppointment = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be logged in.");
+  }
+
+  const userDoc = await admin.firestore().collection("users").doc(request.auth.uid).get();
+  const role = userDoc.exists ? userDoc.data().role : null;
+  const isStaff = STAFF_ROLES.has(role);
+  const isPatient = role === "patient";
+
+  const data = request.data || {};
+
+  if (!isStaff && !(isPatient && data.patientId === request.auth.uid)) {
+    throw new HttpsError("permission-denied", "Not authorized to book this appointment.");
+  }
+
+  const result = await scheduling.bookAppointmentAtomic({
+    patientId: data.patientId,
+    patientName: data.patientName,
+    patientPhone: data.patientPhone,
+    physioId: data.physioId,
+    physioName: data.physioName,
+    date: data.date,
+    hour: data.hour,
+    sessionType: data.sessionType,
+  });
+
+  if (!result.ok) {
+    if (result.reason === "SLOT_UNAVAILABLE") {
+      throw new HttpsError("already-exists", "This time slot is fully booked.", { reason: result.reason });
+    }
+    throw new HttpsError("failed-precondition", `Booking rejected: ${result.reason}`, { reason: result.reason });
+  }
+
+  return { id: result.appointmentId };
+});
+
 // ─── Delete Auth User ─────────────────────────────────────────────────────────
 
 exports.deleteAuthUser = onCall(async (request) => {

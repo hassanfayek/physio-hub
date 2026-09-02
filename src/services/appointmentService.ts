@@ -8,7 +8,6 @@ import {
   updateDoc,
   setDoc,
   getDoc,
-  getDocs,
   query,
   where,
   orderBy,
@@ -352,40 +351,36 @@ export function subscribeToPatientAppointments(
   );
 }
 
-// ─── Patient booking: check capacity then create ──────────────────────────────
-// Reads clinicSettings.maxPatientsPerHour, counts existing appointments for
-// the chosen date+hour, and only writes if there is capacity remaining.
-// Returns the new appointment id, or an error string.
+// ─── Patient booking: atomic capacity check + create ──────────────────────────
+// Delegates to the `bookAppointment` Cloud Function, which shares the exact
+// same atomic booking primitive (scheduling.bookAppointmentAtomic) used by the
+// WhatsApp bridge — same capacity/hours/Friday rules, same Firestore
+// transaction, so a race between two simultaneous bookings (webapp vs webapp,
+// or webapp vs WhatsApp) can't double-book a slot. Return shape and call
+// sites are unchanged; only the internal implementation moved server-side.
 
 export async function bookPatientAppointment(
   payload:     CreateAppointmentPayload,
-  maxPerHour?: number   // optional override; defaults to clinicSettings value
+  _maxPerHour?: number   // no longer used — capacity is enforced server-side via clinicSettings, kept for call-site compatibility
 ): Promise<{ id: string; error?: never } | { id?: never; error: string }> {
   try {
-    // ── Step 3: double-booking protection ─────────────────────────────────
-    const limit = maxPerHour ?? (await getClinicSettings()).maxPatientsPerHour;
+    const { getFunctions, httpsCallable } = await import("firebase/functions");
+    const functions = getFunctions(db.app);
+    const bookAppointment = httpsCallable(functions, "bookAppointment");
 
-    const existing = await getDocs(
-      query(
-        collection(db, "appointments"),
-        where("date", "==", payload.date),
-        where("hour", "==", payload.hour)
-      )
-    );
-
-    if (existing.size >= limit) {
-      return {
-        error: `This time slot is fully booked (${limit} patient${limit !== 1 ? "s" : ""} max). Please choose a different time.`,
-      };
-    }
-
-    // ── Step 1: write to shared appointments collection ───────────────────
-    const ref = await addDoc(collection(db, "appointments"), {
-      ...payload,
-      createdAt: serverTimestamp(),
+    const result = await bookAppointment({
+      patientId:    payload.patientId,
+      patientName:  payload.patientName,
+      patientPhone: payload.patientPhone,
+      physioId:     payload.physioId,
+      physioName:   payload.physioName,
+      date:         payload.date,
+      hour:         payload.hour,
+      sessionType:  payload.sessionType,
     });
 
-    return { id: ref.id };
+    const data = result.data as { id: string };
+    return { id: data.id };
   } catch (err) {
     return { error: parseError(err) };
   }
