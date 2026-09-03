@@ -1,7 +1,7 @@
 // FILE: src/features/loyalty/LoyaltyClubPage.tsx
 
 import { useState, useEffect, useMemo } from "react";
-import { Sparkles, Gift, Search, Copy, Check, Lock, Clock, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Sparkles, Gift, Search, Copy, Check, Lock, Clock, ArrowUpRight, ArrowDownRight, Pencil, Ban } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { formatPhoneDisplay } from "../../utils/phone";
 import { subscribeToAllPatients, type Patient } from "../../services/patientService";
@@ -10,6 +10,8 @@ import {
   subscribeToPointsLedger,
   subscribeToVouchers,
   redeemPoints,
+  adjustPoints,
+  voidVoucher,
   LOYALTY_TIERS,
   VOUCHER_SESSION_CAP,
   EMPTY_POINTS,
@@ -50,6 +52,7 @@ export default function LoyaltyClubPage({ patientId: patientIdProp }: LoyaltyClu
   const { user } = useAuth();
   const role = user?.role ?? "";
   const isStaffView = role === "clinic_manager" || role === "secretary";
+  const isManager   = role === "clinic_manager";
 
   // ── Staff: patient search ──────────────────────────────────────────────────
   const [allPatients, setAllPatients]     = useState<Patient[]>([]);
@@ -120,8 +123,57 @@ export default function LoyaltyClubPage({ patientId: patientIdProp }: LoyaltyClu
     });
   };
 
+  // ── Manager: adjust balance ─────────────────────────────────────────────────
+  const [showAdjust, setShowAdjust]   = useState(false);
+  const [adjustDelta, setAdjustDelta] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
+  const [adjustSaving, setAdjustSaving] = useState(false);
+  const [adjustError, setAdjustError]   = useState<string | null>(null);
+
+  const handleAdjustSubmit = async () => {
+    const delta = parseInt(adjustDelta, 10);
+    if (!delta) { setAdjustError("Enter a non-zero number of points."); return; }
+    setAdjustSaving(true);
+    setAdjustError(null);
+    const result = await adjustPoints(patientId, delta, adjustReason);
+    setAdjustSaving(false);
+    if (result.error) { setAdjustError(result.error); return; }
+    setShowAdjust(false);
+    setAdjustDelta("");
+    setAdjustReason("");
+  };
+
+  // ── Manager: void voucher ───────────────────────────────────────────────────
+  const [voidTarget, setVoidTarget] = useState<PointsVoucher | null>(null);
+  const [voidRefund, setVoidRefund] = useState(false);
+  const [voidReason, setVoidReason] = useState("");
+  const [voidSaving, setVoidSaving] = useState(false);
+  const [voidError, setVoidError]   = useState<string | null>(null);
+
+  const openVoidModal = (voucher: PointsVoucher) => {
+    setVoidTarget(voucher);
+    setVoidRefund(voucher.status === "active");
+    setVoidReason("");
+    setVoidError(null);
+  };
+
+  const handleVoidConfirm = async () => {
+    if (!voidTarget) return;
+    setVoidSaving(true);
+    setVoidError(null);
+    const result = await voidVoucher(voidTarget.id, { refund: voidRefund, reason: voidReason });
+    setVoidSaving(false);
+    if (result.error) { setVoidError(result.error); return; }
+    setVoidTarget(null);
+  };
+
   const activeVouchers = vouchers.filter((v) => v.status === "active");
+  const staffVoucherList = [...vouchers].sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0));
   const canRedeem = role === "patient";
+
+  const VOUCHER_STATUS_LABEL: Record<PointsVoucher["status"], string> = {
+    active: "Active", applied: "Applied", expired: "Expired", voided: "Voided",
+  };
 
   return (
     <div className="lc-page">
@@ -147,6 +199,8 @@ export default function LoyaltyClubPage({ patientId: patientIdProp }: LoyaltyClu
         .lc-hero-track { margin-top: 18px; height: 8px; border-radius: 999px; background: rgba(255,255,255,0.18); overflow: hidden; }
         .lc-hero-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #F4C542, #E8A93B); transition: width 0.4s ease; }
         .lc-hero-next { margin-top: 8px; font-size: 12.5px; opacity: 0.85; }
+        .lc-adjust-btn { position: absolute; top: 20px; right: 22px; display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 9px; border: 1.5px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.12); color: #fff; font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; z-index: 1; }
+        .lc-adjust-btn:hover { background: rgba(255,255,255,0.2); }
 
         .lc-section-title { font-size: 15px; font-weight: 700; color: #0C3C60; margin: 30px 0 12px; }
 
@@ -163,9 +217,18 @@ export default function LoyaltyClubPage({ patientId: patientIdProp }: LoyaltyClu
         .lc-tier-lock { position: absolute; top: 14px; right: 14px; color: #9a9590; }
 
         .lc-voucher-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-radius: 14px; border: 1.5px solid #d8ecd8; background: #f5faf5; margin-bottom: 10px; }
+        .lc-voucher-card.muted { border-color: #e5e0d8; background: #fafaf8; }
+        .lc-voucher-card.muted .lc-voucher-code { color: #7a7570; }
         .lc-voucher-code { font-family: 'Courier New', monospace; font-size: 17px; font-weight: 700; letter-spacing: 0.12em; color: #1b4332; }
         .lc-voucher-meta { font-size: 12px; color: #5a8a5a; margin-top: 2px; }
         .lc-voucher-copy { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 8px; border: 1.5px solid #b7d8b7; background: #fff; color: #1b4332; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+        .lc-voucher-void { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 8px; border: 1.5px solid #f0c4c4; background: #fff; color: #b91c1c; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+
+        .lc-status-badge { font-family: 'Outfit', sans-serif; font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
+        .lc-status-badge.active { background: #dff3df; color: #1b4332; }
+        .lc-status-badge.applied { background: #e4eefc; color: #0C3C60; }
+        .lc-status-badge.expired { background: #f0ede8; color: #9a9590; }
+        .lc-status-badge.voided { background: #fde2e2; color: #b91c1c; }
 
         .lc-empty { padding: 18px; border-radius: 12px; background: #f7f5f1; color: #9a9590; font-size: 13px; text-align: center; }
 
@@ -174,12 +237,23 @@ export default function LoyaltyClubPage({ patientId: patientIdProp }: LoyaltyClu
         .lc-ledger-desc { color: #3a3530; }
         .lc-ledger-date { color: #9a9590; font-size: 11.5px; margin-top: 2px; }
         .lc-ledger-amt { font-weight: 700; display: flex; align-items: center; gap: 4px; }
-        .lc-ledger-amt.earn { color: #1b4332; }
-        .lc-ledger-amt.redeem, .lc-ledger-amt.expire { color: #b91c1c; }
+        .lc-ledger-amt.positive { color: #1b4332; }
+        .lc-ledger-amt.negative { color: #b91c1c; }
 
         .lc-redeem-modal-overlay { position: fixed; inset: 0; z-index: 1002; background: rgba(10,15,10,0.5); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 24px; }
         .lc-redeem-modal { background: #fff; border-radius: 18px; padding: 28px; max-width: 380px; width: 100%; text-align: center; }
         .lc-error-banner { padding: 10px 14px; border-radius: 10px; background: #fef2f2; color: #b91c1c; font-size: 13px; margin-top: 10px; }
+
+        .lc-form-modal { background: #fff; border-radius: 18px; padding: 26px; max-width: 380px; width: 100%; text-align: left; }
+        .lc-form-title { font-size: 15px; font-weight: 700; color: #0C3C60; margin-bottom: 14px; }
+        .lc-form-label { display: block; font-size: 12px; font-weight: 600; color: #7a7570; margin: 12px 0 6px; }
+        .lc-form-input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1.5px solid #e5e0d8; font-family: 'Outfit', sans-serif; font-size: 14px; box-sizing: border-box; }
+        .lc-form-checkbox { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #3a3530; margin-top: 14px; cursor: pointer; }
+        .lc-form-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .lc-form-btn-cancel { flex: 1; padding: 10px; border-radius: 10px; border: 1.5px solid #e5e0d8; background: #fff; color: #5a5550; font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .lc-form-btn-confirm { flex: 1; padding: 10px; border-radius: 10px; border: none; background: #2E8BC0; color: #fff; font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .lc-form-btn-confirm:disabled { background: #e5e0d8; color: #9a9590; cursor: not-allowed; }
+        .lc-form-btn-danger { background: #b91c1c; }
       `}</style>
 
       <h1 className="lc-title"><Sparkles size={20} color="#E8A93B" /> Physio+ Loyalty Club</h1>
@@ -216,6 +290,11 @@ export default function LoyaltyClubPage({ patientId: patientIdProp }: LoyaltyClu
       ) : (
         <>
           <div className="lc-hero">
+            {isManager && (
+              <button className="lc-adjust-btn" onClick={() => setShowAdjust(true)}>
+                <Pencil size={12} /> Adjust Balance
+              </button>
+            )}
             <div className="lc-hero-label">Points Balance</div>
             <div className="lc-hero-balance">{balance.toLocaleString()} <span>pts</span></div>
             <div className="lc-hero-track"><div className="lc-hero-fill" style={{ width: `${progressPct}%` }} /></div>
@@ -251,29 +330,53 @@ export default function LoyaltyClubPage({ patientId: patientIdProp }: LoyaltyClu
           </div>
           {redeemError && <div className="lc-error-banner">{redeemError}</div>}
 
-          <div className="lc-section-title">Active Vouchers</div>
-          {activeVouchers.length === 0 ? (
-            <div className="lc-empty">No active vouchers right now.</div>
-          ) : (
-            activeVouchers.map((v) => {
-              const daysLeft = daysUntil(v.voucherExpiresAt);
-              return (
-                <div key={v.id} className="lc-voucher-card">
+          <div className="lc-section-title">{isStaffView ? "Vouchers" : "Active Vouchers"}</div>
+          {isStaffView ? (
+            staffVoucherList.length === 0 ? (
+              <div className="lc-empty">No vouchers issued yet.</div>
+            ) : (
+              staffVoucherList.map((v) => (
+                <div key={v.id} className={`lc-voucher-card ${v.status !== "active" ? "muted" : ""}`}>
                   <div>
-                    <div className="lc-voucher-code">{v.code}</div>
+                    <div className="lc-voucher-code">
+                      {v.code} <span className={`lc-status-badge ${v.status}`}>{VOUCHER_STATUS_LABEL[v.status]}</span>
+                    </div>
                     <div className="lc-voucher-meta">
-                      {v.voucherValue} EGP · expires {fmtDate(v.voucherExpiresAt)}
-                      {daysLeft !== null && daysLeft <= 14 && ` (${Math.max(0, daysLeft)}d left)`}
+                      {v.voucherValue} EGP · issued {fmtDate(v.createdAt)}
+                      {v.status === "applied" && ` · applied ${fmtDate(v.appliedAt)} (−${v.appliedAmount} EGP)`}
+                      {v.status === "voided" && v.voidedReason && ` · ${v.voidedReason}`}
                     </div>
                   </div>
-                  {canRedeem && (
-                    <button className="lc-voucher-copy" onClick={() => handleCopy(v.code)}>
-                      {copiedCode ? <Check size={13} /> : <Copy size={13} />} {copiedCode ? "Copied" : "Copy"}
+                  {isManager && v.status !== "voided" && (
+                    <button className="lc-voucher-void" onClick={() => openVoidModal(v)}>
+                      <Ban size={13} /> Void
                     </button>
                   )}
                 </div>
-              );
-            })
+              ))
+            )
+          ) : (
+            activeVouchers.length === 0 ? (
+              <div className="lc-empty">No active vouchers right now.</div>
+            ) : (
+              activeVouchers.map((v) => {
+                const daysLeft = daysUntil(v.voucherExpiresAt);
+                return (
+                  <div key={v.id} className="lc-voucher-card">
+                    <div>
+                      <div className="lc-voucher-code">{v.code}</div>
+                      <div className="lc-voucher-meta">
+                        {v.voucherValue} EGP · expires {fmtDate(v.voucherExpiresAt)}
+                        {daysLeft !== null && daysLeft <= 14 && ` (${Math.max(0, daysLeft)}d left)`}
+                      </div>
+                    </div>
+                    <button className="lc-voucher-copy" onClick={() => handleCopy(v.code)}>
+                      {copiedCode ? <Check size={13} /> : <Copy size={13} />} {copiedCode ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                );
+              })
+            )
           )}
           {isStaffView && activeVouchers.length > 0 && (
             <div className="lc-hero-next" style={{ color: "#7a7570", marginTop: -4, marginBottom: 4 }}>
@@ -294,7 +397,7 @@ export default function LoyaltyClubPage({ patientId: patientIdProp }: LoyaltyClu
                     <div className="lc-ledger-desc">{entry.description || entry.type}</div>
                     <div className="lc-ledger-date">{fmtDate(entry.createdAt)}</div>
                   </div>
-                  <div className={`lc-ledger-amt ${entry.type}`}>
+                  <div className={`lc-ledger-amt ${entry.points > 0 ? "positive" : "negative"}`}>
                     {entry.points > 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                     {entry.points > 0 ? "+" : ""}{entry.points.toLocaleString()}
                   </div>
@@ -322,6 +425,65 @@ export default function LoyaltyClubPage({ patientId: patientIdProp }: LoyaltyClu
             >
               Got it
             </button>
+          </div>
+        </div>
+      )}
+
+      {showAdjust && (
+        <div className="lc-redeem-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowAdjust(false); }}>
+          <div className="lc-form-modal">
+            <div className="lc-form-title">Adjust Points Balance</div>
+            <label className="lc-form-label">Points (use a negative number to deduct)</label>
+            <input
+              type="number" placeholder="e.g. 200 or -200"
+              className="lc-form-input"
+              value={adjustDelta}
+              onChange={(e) => setAdjustDelta(e.target.value)}
+            />
+            <label className="lc-form-label">Reason (optional)</label>
+            <input
+              type="text" placeholder="e.g. Goodwill gesture — late cancellation"
+              className="lc-form-input"
+              value={adjustReason}
+              onChange={(e) => setAdjustReason(e.target.value)}
+            />
+            {adjustError && <div className="lc-error-banner">{adjustError}</div>}
+            <div className="lc-form-actions">
+              <button className="lc-form-btn-cancel" onClick={() => setShowAdjust(false)}>Cancel</button>
+              <button className="lc-form-btn-confirm" disabled={adjustSaving} onClick={handleAdjustSubmit}>
+                {adjustSaving ? "Saving…" : "Apply"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {voidTarget && (
+        <div className="lc-redeem-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setVoidTarget(null); }}>
+          <div className="lc-form-modal">
+            <div className="lc-form-title">Void Voucher {voidTarget.code}</div>
+            <div style={{ fontSize: 13, color: "#7a7570" }}>
+              {voidTarget.voucherValue} EGP · {VOUCHER_STATUS_LABEL[voidTarget.status]}
+              {voidTarget.status === "applied" && ` · already applied to a session`}
+            </div>
+            <label className="lc-form-checkbox">
+              <input type="checkbox" checked={voidRefund} onChange={(e) => setVoidRefund(e.target.checked)} />
+              Refund {voidTarget.pointsCost.toLocaleString()} points to the patient's balance
+            </label>
+            <label className="lc-form-label">Reason (optional)</label>
+            <input
+              type="text" placeholder="e.g. Issued by mistake"
+              className="lc-form-input"
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+            />
+            {voidError && <div className="lc-error-banner">{voidError}</div>}
+            <div className="lc-form-actions">
+              <button className="lc-form-btn-cancel" onClick={() => setVoidTarget(null)}>Cancel</button>
+              <button className="lc-form-btn-confirm lc-form-btn-danger" disabled={voidSaving} onClick={handleVoidConfirm}>
+                {voidSaving ? "Voiding…" : "Void Voucher"}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -49,8 +49,8 @@ export const EMPTY_POINTS: PatientPoints = {
 export interface PointsLedgerEntry {
   id:          string;
   patientId:   string;
-  type:        "earn" | "redeem" | "expire";
-  points:      number; // signed: +earn, -redeem, -expire
+  type:        "earn" | "redeem" | "expire" | "adjustment";
+  points:      number; // signed: +earn/+credit, -redeem/-deduction/-expire
   sourceType:  string;
   sourceId:    string;
   description: string;
@@ -64,12 +64,14 @@ export interface PointsVoucher {
   pointsCost:            number;
   voucherValue:          number;
   code:                  string;
-  status:                "active" | "applied" | "expired";
+  status:                "active" | "applied" | "expired" | "voided";
   createdAt:             Timestamp | null;
   voucherExpiresAt:      Timestamp | null;
   appliedAt:             Timestamp | null;
   appliedAppointmentId:  string;
   appliedAmount:         number;
+  voidedAt?:             Timestamp | null;
+  voidedReason?:         string;
 }
 
 // ─── Error parser ─────────────────────────────────────────────────────────────
@@ -108,6 +110,8 @@ function docToVoucher(id: string, data: Record<string, unknown>): PointsVoucher 
     appliedAt:            (data.appliedAt              as Timestamp | null) ?? null,
     appliedAppointmentId: (data.appliedAppointmentId   as string)  ?? "",
     appliedAmount:        (data.appliedAmount          as number)  ?? 0,
+    voidedAt:             (data.voidedAt               as Timestamp | null) ?? null,
+    voidedReason:         (data.voidedReason           as string)  ?? "",
   };
 }
 
@@ -152,6 +156,107 @@ export async function earnPoints(
       processed:   false,
     });
   });
+}
+
+// ─── Manual balance adjustment (manager-only, gated in the UI) ────────────────
+// Same trust model as earnPoints — staff already have direct write access to
+// these collections (see firestore.rules). Balance is clamped at 0; delta can
+// be positive (credit) or negative (deduction).
+
+export async function adjustPoints(
+  patientId: string,
+  delta:     number,
+  reason:    string
+): Promise<{ error?: string }> {
+  if (!patientId || !delta) return {};
+  try {
+    const pointsRef = doc(db, "patientPoints", patientId);
+    const ledgerRef = doc(collection(db, "pointsLedger"));
+
+    await runTransaction(db, async (tx) => {
+      const snap    = await tx.get(pointsRef);
+      const current = snap.exists() ? (snap.data() as Partial<PatientPoints>) : {};
+      const balance = Math.max(0, (current.balance ?? 0) + delta);
+
+      tx.set(pointsRef, {
+        balance,
+        lifetimeEarned:   current.lifetimeEarned ?? 0,
+        lifetimeRedeemed: current.lifetimeRedeemed ?? 0,
+        lifetimeExpired:  current.lifetimeExpired ?? 0,
+        updatedAt:        serverTimestamp(),
+      });
+
+      tx.set(ledgerRef, {
+        patientId,
+        type:        "adjustment",
+        points:      delta,
+        sourceType:  "manual",
+        sourceId:    "",
+        description: reason.trim() || (delta > 0 ? "Manual credit" : "Manual deduction"),
+        createdAt:   new Date(),
+      });
+    });
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+// ─── Void a voucher (manager-only, gated in the UI) ───────────────────────────
+// Soft delete — keeps the ledger's sourceId references and audit trail intact.
+// `refund` is a per-voucher choice made by the manager at void time, not a
+// fixed policy.
+
+export async function voidVoucher(
+  voucherId: string,
+  options:   { refund: boolean; reason: string }
+): Promise<{ error?: string }> {
+  try {
+    const voucherRef = doc(db, "pointsVouchers", voucherId);
+
+    // Firestore transactions require all reads before any writes — resolve
+    // both the voucher and (conditionally) the points doc up front.
+    await runTransaction(db, async (tx) => {
+      const voucherSnap = await tx.get(voucherRef);
+      if (!voucherSnap.exists()) throw new Error("Voucher not found.");
+      const voucher = docToVoucher(voucherSnap.id, voucherSnap.data());
+      if (voucher.status === "voided") throw new Error("This voucher is already voided.");
+
+      const shouldRefund = options.refund && voucher.pointsCost > 0;
+      const pointsRef = shouldRefund ? doc(db, "patientPoints", voucher.patientId) : null;
+      const pointsSnap = pointsRef ? await tx.get(pointsRef) : null;
+
+      tx.update(voucherRef, {
+        status:       "voided",
+        voidedAt:     serverTimestamp(),
+        voidedReason: options.reason.trim(),
+      });
+
+      if (pointsRef) {
+        const current = pointsSnap?.exists() ? (pointsSnap.data() as Partial<PatientPoints>) : {};
+        tx.set(pointsRef, {
+          balance:          (current.balance ?? 0) + voucher.pointsCost,
+          lifetimeEarned:   current.lifetimeEarned ?? 0,
+          lifetimeRedeemed: current.lifetimeRedeemed ?? 0,
+          lifetimeExpired:  current.lifetimeExpired ?? 0,
+          updatedAt:        serverTimestamp(),
+        });
+
+        tx.set(doc(collection(db, "pointsLedger")), {
+          patientId:   voucher.patientId,
+          type:        "adjustment",
+          points:      voucher.pointsCost,
+          sourceType:  "voucher",
+          sourceId:    voucherId,
+          description: `Refund: voided voucher ${voucher.code}`,
+          createdAt:   new Date(),
+        });
+      }
+    });
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
 }
 
 // ─── Realtime: patient's points balance ───────────────────────────────────────
