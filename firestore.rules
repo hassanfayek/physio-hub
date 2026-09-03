@@ -232,6 +232,12 @@ service cloud.firestore {
       allow update: if isManager() || isSecretary();
     }
 
+    // ── Staff Attendance (manager + secretary only — not the physios being tracked) ──
+    match /staffAttendance/{docId} {
+      allow read:  if isManager() || isSecretary();
+      allow write: if isManager() || isSecretary();
+    }
+
     // ── Daily Check-ins ───────────────────────────────────────────────────────
     match /dailyCheckIns/{docId} {
       allow read:          if isStaff() || isPatient();
