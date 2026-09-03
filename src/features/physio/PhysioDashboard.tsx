@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Calendar, Dumbbell, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen, Wifi, Stethoscope, Sparkles, UserCog } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, Dumbbell, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen, Wifi, Stethoscope, Sparkles, UserCog, Menu, X } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
 import { doc, getDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -1318,6 +1318,7 @@ export default function PhysioDashboard() {
   ];
 
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -1529,10 +1530,10 @@ export default function PhysioDashboard() {
         }
         .phd-hamburger:hover { background: #ede9e3; }
 
-        /* ── MOBILE OVERLAY ── */
+        /* ── MOBILE DRAWER OVERLAY ── */
         .phd-overlay {
           display: none;
-          position: fixed; inset: 0; z-index: 90;
+          position: fixed; inset: 0; z-index: 199;
           background: rgba(0,0,0,0.4);
           backdrop-filter: blur(2px);
           animation: phdOvIn 0.2s ease both;
@@ -1540,80 +1541,57 @@ export default function PhysioDashboard() {
         .phd-overlay.open { display: block; }
         @keyframes phdOvIn { from { opacity: 0; } to { opacity: 1; } }
 
+        /* ── Close button inside the drawer (mobile only) ── */
+        .phd-drawer-close {
+          display: none;
+          position: absolute; top: 12px; right: 12px;
+          width: 32px; height: 32px; border-radius: 8px;
+          align-items: center; justify-content: center;
+          background: rgba(255,255,255,0.08); border: none; cursor: pointer;
+        }
+
+        /* ── Desktop: sidebar always visible, no hamburger/drawer chrome ── */
         @media (min-width: 769px) {
           .phd-sidebar {
             display: flex !important;
             transform: none !important;
             position: sticky;
           }
-        }
-
-        /* ── Bottom nav bar — mobile only ── */
-        .phd-bottom-nav {
-          display: none; /* hidden by default; shown on mobile */
-        }
-
-        /* ── Desktop: sidebar visible, bottom nav hidden ── */
-        @media (min-width: 769px) {
-          .phd-sidebar { display: flex !important; }
-          .phd-bottom-nav { display: none !important; }
           .phd-main { padding: 20px 18px; }
         }
 
-        /* ── Mobile: sidebar hidden, bottom nav shown ── */
+        /* ── Mobile: sidebar becomes a slide-in drawer, opened via hamburger ── */
         @media (max-width: 768px) {
           .phd-body { grid-template-columns: 1fr; }
-          .phd-sidebar { display: none !important; }
+          .phd-hamburger { display: flex; }
           .phd-logout-btn { padding: 8px; }
           .phd-logout-btn .phd-logout-text { display: none; }
           .phd-user-name { max-width: 90px; }
           .phd-user-chip { padding: 5px 10px; }
-          .phd-main { padding: 14px 12px 80px; }
+          .phd-main { padding: 14px 12px; }
 
-          .phd-bottom-nav {
-            display: flex;
-            position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
-            background: #fff;
-            border-top: 1px solid #e8e4de;
-            box-shadow: 0 -4px 24px rgba(0,0,0,0.07);
-            align-items: stretch;
-            height: 60px;
-            padding-bottom: env(safe-area-inset-bottom);
+          .phd-sidebar {
+            display: flex !important;
+            position: fixed; top: 0; left: 0;
+            width: 280px; max-width: 82vw; height: 100vh;
+            z-index: 201;
+            transform: translateX(-100%);
+            transition: transform 0.25s ease;
+            box-shadow: 4px 0 24px rgba(0,0,0,0.18);
           }
-          .phd-bn-item {
-            flex: 1; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; gap: 2px;
-            cursor: pointer; border: none; background: transparent;
-            font-family: 'Outfit', sans-serif;
-            color: #b0aba4; transition: color 0.15s;
-            padding: 5px 2px 4px; min-width: 0; position: relative;
-          }
-          .phd-bn-item:hover { color: #2E8BC0; }
-          .phd-bn-item.active { color: #2E8BC0; }
-          .phd-bn-icon {
-            width: 26px; height: 26px; border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            transition: background 0.15s;
-          }
-          .phd-bn-item.active .phd-bn-icon { background: #EAF5FC; }
-          .phd-bn-label {
-            font-size: 9.5px; font-weight: 600; letter-spacing: 0.01em;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            max-width: 52px;
-          }
-          .phd-bn-dot {
-            position: absolute; top: 5px; right: calc(50% - 16px);
-            width: 6px; height: 6px; border-radius: 50%;
-            background: #5BC0BE; border: 2px solid #fff;
-          }
+          .phd-sidebar.open { transform: translateX(0); }
+          .phd-drawer-close { display: flex; }
         }
       `}</style>
 
       <div className="phd-root">
         {/* Topbar */}
         <header className="phd-topbar">
-          {/* Left: logo + clinic name */}
+          {/* Left: hamburger (mobile) + logo + clinic name */}
           <div className="phd-topbar-left">
+            <button className="phd-hamburger" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation">
+              <Menu size={20} strokeWidth={2} color="currentColor" />
+            </button>
             <div className="phd-topbar-brand">
               <img src={logo} alt="Physio+ Hub" style={{ height: 36, width: "auto", objectFit: "contain", display: "block" }} />
               <div className="phd-topbar-brand-name">Physio+ Clinic</div>
@@ -1647,10 +1625,18 @@ export default function PhysioDashboard() {
         </header>
 
 
+        {/* Mobile drawer overlay */}
+        {mobileNavOpen && <div className="phd-overlay open" onClick={() => setMobileNavOpen(false)} />}
+
         {/* Body */}
         <div className="phd-body">
-          {/* Sidebar */}
-          <aside className="phd-sidebar">
+          {/* Sidebar (desktop: always visible · mobile: slide-in drawer) */}
+          <aside className={`phd-sidebar ${mobileNavOpen ? "open" : ""}`}>
+            {mobileNavOpen && (
+              <button className="phd-drawer-close" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation">
+                <X size={18} strokeWidth={2} color="rgba(255,255,255,0.8)" />
+              </button>
+            )}
             <div className="phd-profile">
               <div className="phd-p-avatar">
                 {physio.firstName[0]}{physio.lastName[0]}
@@ -1677,7 +1663,7 @@ export default function PhysioDashboard() {
                 <div
                   key={tab.id}
                   className={`phd-nav-item ${activeTab === tab.id ? "active" : ""}`}
-                  onClick={() => { setActiveTab(tab.id); setViewingPatientId(null); setViewingPatientSection(undefined); }}
+                  onClick={() => { setActiveTab(tab.id); setViewingPatientId(null); setViewingPatientSection(undefined); setMobileNavOpen(false); }}
                 >
                   <div className="phd-nav-icon">{tab.icon}</div>
                   <span className="phd-nav-text">{tab.label}</span>
@@ -1790,28 +1776,6 @@ export default function PhysioDashboard() {
             )}
           </main>
         </div>
-
-        {/* ── Bottom nav bar ── */}
-        <nav className="phd-bottom-nav">
-          {TABS.map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                className={`phd-bn-item${isActive ? " active" : ""}`}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setViewingPatientId(null);
-                  setViewingPatientSection(undefined);
-                }}
-              >
-                <div className="phd-bn-icon">{tab.icon}</div>
-                <span className="phd-bn-label">{tab.label}</span>
-                {tab.badge ? <span className="phd-bn-dot" /> : null}
-              </button>
-            );
-          })}
-        </nav>
       </div>
 
       {/* ── Sign-out confirmation ── */}
