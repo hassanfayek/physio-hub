@@ -161,6 +161,11 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
     setShowEntry(true);
   };
 
+  // Opening "Add / Edit Entry" defaults to today only if today is inside the
+  // month currently being viewed — otherwise the select's value wouldn't
+  // match any option in monthDays.
+  const openEntryDefault = () => openEntry(monthDays.includes(todayStr()) ? todayStr() : monthDays[0]);
+
   const handleSaveAttendance = async () => {
     setEntrySaving(true);
     await upsertAttendance(
@@ -325,7 +330,7 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
           value={attendanceMonth}
           onChange={(e) => setAttendanceMonth(e.target.value)}
         />
-        <button className="sf-add-entry-btn" onClick={() => openEntry(todayStr())}>
+        <button className="sf-add-entry-btn" onClick={openEntryDefault}>
           <Plus size={14} /> Add / Edit Entry
         </button>
         <button className="sf-print-btn" onClick={handlePrint}>
@@ -378,7 +383,11 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
           <div className="sf-modal">
             <div className="sf-modal-title">Attendance Entry</div>
             <label className="sf-modal-label">Date</label>
-            <input type="date" className="sf-modal-input" value={entryDate} onChange={(e) => openEntry(e.target.value)} />
+            <select className="sf-modal-input" value={entryDate} onChange={(e) => openEntry(e.target.value)}>
+              {monthDays.map((d) => (
+                <option key={d} value={d}>{fmtDateDisplay(d)} — {dayOfWeekShort(d)}</option>
+              ))}
+            </select>
             <label className="sf-modal-label">Check-In</label>
             <input type="time" className="sf-modal-input" value={entryCheckIn} onChange={(e) => setEntryCheckIn(e.target.value)} />
             <label className="sf-modal-label">Check-Out</label>
