@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Calendar, Dumbbell, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen, Wifi, Stethoscope } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, Dumbbell, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen, Wifi, Stethoscope, Sparkles } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
 import { doc, getDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -35,12 +35,13 @@ import ClinicBillingPage from "./ClinicBillingPage";
 import TreatmentProtocolsPage from "../protocols/TreatmentProtocolsPage";
 import DiagnosisTemplatesPage from "../diagnoses/DiagnosisTemplatesPage";
 import OnlineServicesPage from "../rehab/OnlineServicesPage";
+import LoyaltyClubPage from "../loyalty/LoyaltyClubPage";
 import { runBackgroundScan, subscribeToPackageAlerts } from "../../services/notificationService";
 
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
-type Tab = "overview" | "patients" | "people" | "schedule" | "exercises" | "billing" | "protocols" | "online-services" | "diagnoses";
+type Tab = "overview" | "patients" | "people" | "schedule" | "exercises" | "billing" | "protocols" | "online-services" | "diagnoses" | "loyalty";
 
 interface TabDef {
   id:    Tab;
@@ -1311,6 +1312,7 @@ export default function PhysioDashboard() {
     ...(!isSecretary ? [{ id: "protocols" as Tab, label: "Protocols",            icon: <IconProtocols /> }] : []),
     ...(isManager    ? [{ id: "diagnoses" as Tab, label: "Diagnoses",            icon: <IconDiagnoses /> }] : []),
     ...((isManager || isSenior) ? [{ id: "online-services" as Tab, label: "Online Services", icon: <IconRehab /> }] : []),
+    ...((isManager || isSecretary) ? [{ id: "loyalty" as Tab, label: "Loyalty Club", icon: <Sparkles size={18} strokeWidth={1.8} color="currentColor" /> }] : []),
   ];
 
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
@@ -1780,6 +1782,7 @@ export default function PhysioDashboard() {
                     isSenior={isSenior}
                   />
                 )}
+                {activeTab === "loyalty" && (isManager || isSecretary) && <LoyaltyClubPage />}
               </>
             )}
           </main>

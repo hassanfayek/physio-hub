@@ -210,6 +210,28 @@ service cloud.firestore {
       allow write: if isManager() || isSecretary() || isPhysio();
     }
 
+    // ── Physio+ Loyalty Club ─────────────────────────────────────────────────
+    // Earn-side writes come from priceService.ts (staff already trusted with
+    // direct billing writes elsewhere in this file). Voucher *creation* is
+    // Admin-SDK-only (redeemLoyaltyPoints Cloud Function) since that's the
+    // patient-initiated, money-equivalent step that needs server-side balance
+    // validation — client create is denied here on purpose.
+    match /patientPoints/{patientId} {
+      allow read:  if isStaff() || (isPatient() && request.auth.uid == patientId);
+      allow write: if isManager() || isSecretary();
+    }
+
+    match /pointsLedger/{docId} {
+      allow read:  if isStaff() || (isPatient() && resource.data.patientId == request.auth.uid);
+      allow write: if isManager() || isSecretary();
+    }
+
+    match /pointsVouchers/{docId} {
+      allow read:   if isStaff() || (isPatient() && resource.data.patientId == request.auth.uid);
+      allow create: if false;
+      allow update: if isManager() || isSecretary();
+    }
+
     // ── Daily Check-ins ───────────────────────────────────────────────────────
     match /dailyCheckIns/{docId} {
       allow read:          if isStaff() || isPatient();

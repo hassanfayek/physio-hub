@@ -8,25 +8,28 @@ import ExercisesPage from "./ExercisesPage";
 import AppointmentsPage from "./AppointmentsPage";
 import PatientSheetPage from "./PatientSheetPage";
 import FeedbackPage from "./FeedbackPage";
+import LoyaltyClubPage from "../loyalty/LoyaltyClubPage";
 import logo from "../../assets/physio-logo.svg";
-import { Home, Dumbbell, CalendarDays, FileText, MessageSquare, ChevronRight, LogOut, ChevronLeft, History } from "lucide-react";
+import { Home, Dumbbell, CalendarDays, FileText, MessageSquare, ChevronRight, LogOut, ChevronLeft, History, Sparkles } from "lucide-react";
 import NotificationPanel from "../../components/NotificationPanel";
 import type { AppNotification } from "../../services/notificationService";
 import { useLang } from "../../contexts/LanguageContext";
 
-type Tab = "home" | "exercises" | "appointments" | "sheet" | "feedback";
+type Tab = "home" | "exercises" | "appointments" | "sheet" | "feedback" | "loyalty";
 
 function IconHome()         { return <Home         size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconExercises()    { return <Dumbbell      size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconAppointments() { return <CalendarDays  size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconSheet()        { return <FileText      size={18} strokeWidth={1.8} color="currentColor" />; }
 function IconFeedback()     { return <MessageSquare size={18} strokeWidth={1.8} color="currentColor" />; }
+function IconLoyalty()      { return <Sparkles      size={18} strokeWidth={1.8} color="currentColor" />; }
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; desc: string }[] = [
   { id: "home",         label: "Home",         desc: "Overview",     icon: <IconHome /> },
   { id: "exercises",    label: "Exercises",    desc: "4 assigned",   icon: <IconExercises /> },
   { id: "appointments", label: "Appointments", desc: "2 upcoming",   icon: <IconAppointments /> },
   { id: "sheet",        label: "Sheet",        desc: "View records", icon: <IconSheet /> },
+  { id: "loyalty",      label: "Loyalty Club", desc: "Points & vouchers", icon: <IconLoyalty /> },
   { id: "feedback",     label: "Feedback",     desc: "Rate session", icon: <IconFeedback /> },
 ];
 
@@ -468,6 +471,7 @@ export default function PatientDashboard() {
               {activeTab === "exercises"    && <ExercisesPage />}
               {activeTab === "appointments" && <AppointmentsPage />}
               {activeTab === "sheet"        && <PatientSheetPage key={sheetSection ?? "sheet"} initialSection={sheetSection} />}
+              {activeTab === "loyalty"      && <LoyaltyClubPage />}
               {activeTab === "feedback"     && <FeedbackPage />}
             </div>
           </main>

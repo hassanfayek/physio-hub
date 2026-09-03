@@ -19,6 +19,12 @@ exports.createWalkInAppointment = bridgeApi.createWalkInAppointment;
 exports.bookNextSession         = bridgeApi.bookNextSession;
 exports.getAvailableSlots       = bridgeApi.getAvailableSlots;
 
+// ─── Physio+ Loyalty Club (points redemption + expiry) ───────────────────────
+
+const loyalty = require("./loyalty");
+exports.redeemLoyaltyPoints = loyalty.redeemLoyaltyPoints;
+exports.expireLoyaltyPoints = loyalty.expireLoyaltyPoints;
+
 // ─── Webapp-facing atomic booking (onCall) ───────────────────────────────────
 // Mirrors firestore.rules' `allow create` condition for /appointments exactly
 // (isStaff() || (isPatient() && patientId == auth.uid)), since this callable

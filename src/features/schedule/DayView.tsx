@@ -24,6 +24,12 @@ import {
   subscribeToPatientPackages,
   type SessionPackage,
 } from "../../services/priceService";
+import {
+  lookupVoucherByCode,
+  applyVoucher,
+  VOUCHER_SESSION_CAP,
+  type PointsVoucher,
+} from "../../services/pointsService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,6 +81,11 @@ export default function DayView({
   const [customNotes,   setCustomNotes]   = useState("");
   const [billingSaving, setBillingSaving] = useState(false);
   const [billingError,  setBillingError]  = useState<string | null>(null);
+  // Loyalty voucher redemption at checkout
+  const [voucherCode,     setVoucherCode]     = useState("");
+  const [voucherChecking, setVoucherChecking] = useState(false);
+  const [voucherError,    setVoucherError]    = useState<string | null>(null);
+  const [voucherInfo,     setVoucherInfo]     = useState<{ voucher: PointsVoucher; appliedAmount: number } | null>(null);
   // pending status update to apply after billing is confirmed
   const [pendingUpdate, setPendingUpdate] = useState<{
     apptId: string; status: Appointment["status"]; patientName: string; prevStatus?: Appointment["status"]; patientId?: string;
@@ -190,6 +201,9 @@ export default function DayView({
       setCustomAmount("");
       setCustomNotes("");
       setBillingError(null);
+      setVoucherCode("");
+      setVoucherInfo(null);
+      setVoucherError(null);
       // Load packages only for eligible session types
       if (patientId && isPackageEligible) {
         subscribeToPatientPackages(patientId, (pkgs) => {
@@ -204,6 +218,27 @@ export default function DayView({
       return;
     }
     void applyStatusUpdate(apptId, status, patientName, prevStatus, patientId);
+  };
+
+  // ── Loyalty voucher: look up by code, cap the discount ────────────────────
+  const handleCheckVoucher = async () => {
+    if (!billingAppt || !voucherCode.trim()) return;
+    const patientId = pendingUpdate?.patientId || billingAppt.patientId;
+    if (!patientId) return;
+
+    setVoucherChecking(true);
+    setVoucherError(null);
+    const result = await lookupVoucherByCode(patientId, voucherCode);
+    setVoucherChecking(false);
+
+    if (result.error || !result.voucher) {
+      setVoucherError(result.error || "Voucher not found.");
+      setVoucherInfo(null);
+      return;
+    }
+    const sessionAmount = parseFloat(customAmount) || 0;
+    const appliedAmount = Math.min(result.voucher.voucherValue, sessionAmount, VOUCHER_SESSION_CAP);
+    setVoucherInfo({ voucher: result.voucher, appliedAmount });
   };
 
   // ── Billing confirm ────────────────────────────────────────────────────────
@@ -243,7 +278,11 @@ export default function DayView({
         }
       } else {
         // Custom cost — write to patientSessionPrices
-        const amount = parseFloat(customAmount) || 0;
+        const rawAmount = parseFloat(customAmount) || 0;
+        const amount = voucherInfo ? Math.max(0, rawAmount - voucherInfo.appliedAmount) : rawAmount;
+        const voucherNote = voucherInfo
+          ? ` (voucher ${voucherInfo.voucher.code}: -${voucherInfo.appliedAmount} EGP)`
+          : "";
         await setSessionPrice({
           patientId:     update.patientId ?? "",
           appointmentId: appt.id,
@@ -254,8 +293,11 @@ export default function DayView({
           paid:          false,
           paidDate:      "",
           packageId:     "",
-          notes:         customNotes.trim(),
+          notes:         customNotes.trim() + voucherNote,
         });
+        if (voucherInfo) {
+          await applyVoucher(voucherInfo.voucher.id, appt.id, voucherInfo.appliedAmount);
+        }
       }
     } catch (err) {
       const e = err as { message?: string };
@@ -267,6 +309,9 @@ export default function DayView({
     setBillingSaving(false);
     setBillingAppt(null);
     setPendingUpdate(null);
+    setVoucherCode("");
+    setVoucherInfo(null);
+    setVoucherError(null);
     // Now actually mark the appointment as completed
     void applyStatusUpdate(update.apptId, update.status, update.patientName, update.prevStatus, update.patientId);
   };
@@ -276,6 +321,9 @@ export default function DayView({
     const u = pendingUpdate;
     setBillingAppt(null);
     setPendingUpdate(null);
+    setVoucherCode("");
+    setVoucherInfo(null);
+    setVoucherError(null);
     void applyStatusUpdate(u.apptId, u.status, u.patientName, u.prevStatus, u.patientId);
   };
 
@@ -949,7 +997,13 @@ export default function DayView({
                 <input
                   type="number" min="0" placeholder="e.g. 350"
                   value={customAmount}
-                  onChange={(e) => setCustomAmount(e.target.value)}
+                  onChange={(e) => {
+                    setCustomAmount(e.target.value);
+                    setVoucherInfo((prev) => prev
+                      ? { ...prev, appliedAmount: Math.min(prev.voucher.voucherValue, parseFloat(e.target.value) || 0, VOUCHER_SESSION_CAP) }
+                      : prev
+                    );
+                  }}
                   className="dv-assign-select"
                   style={{ marginBottom: 10 }}
                 />
@@ -959,7 +1013,40 @@ export default function DayView({
                   value={customNotes}
                   onChange={(e) => setCustomNotes(e.target.value)}
                   className="dv-assign-select"
+                  style={{ marginBottom: 10 }}
                 />
+
+                <label className="dv-assign-label">Loyalty Voucher (optional)</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="text" placeholder="e.g. 7K2P9A"
+                    value={voucherCode}
+                    onChange={(e) => { setVoucherCode(e.target.value.toUpperCase()); setVoucherInfo(null); setVoucherError(null); }}
+                    className="dv-assign-select"
+                    style={{ flex: 1, textTransform: "uppercase" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCheckVoucher}
+                    disabled={!voucherCode.trim() || voucherChecking}
+                    style={{ padding: "0 16px", borderRadius: 10, border: "1.5px solid #2E8BC0", background: "#fff", color: "#2E8BC0", fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 600, cursor: voucherChecking ? "default" : "pointer" }}
+                  >
+                    {voucherChecking ? "…" : "Check"}
+                  </button>
+                </div>
+                {voucherError && (
+                  <div style={{ marginTop: 8, fontSize: 12.5, color: "#b91c1c" }}>{voucherError}</div>
+                )}
+                {voucherInfo && (
+                  <div style={{ marginTop: 8, padding: "10px 14px", background: "#f0f9f0", borderRadius: 10, fontSize: 13, color: "#1b4332" }}>
+                    ✓ Voucher valid — <strong>−{voucherInfo.appliedAmount} EGP</strong> will be applied
+                    {voucherInfo.appliedAmount < voucherInfo.voucher.voucherValue && (
+                      <div style={{ marginTop: 2, fontSize: 12, color: "#7a7570" }}>
+                        Capped at {VOUCHER_SESSION_CAP} EGP/session — the remaining {voucherInfo.voucher.voucherValue - voucherInfo.appliedAmount} EGP of this voucher is forfeited.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

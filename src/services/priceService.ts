@@ -16,6 +16,7 @@ import {
   type Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { earnPoints } from "./pointsService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -85,6 +86,7 @@ export interface SessionPrice {
   paidDate:      string;
   packageId:     string;   // empty if not covered by a package
   notes:         string;
+  pointsAwarded?: number;  // loyalty points already earned for this record — internal bookkeeping, set by setSessionPrice
   createdAt:     Timestamp | null;
 }
 
@@ -101,6 +103,7 @@ function docToSessionPrice(id: string, data: Record<string, unknown>): SessionPr
     paidDate:      (data.paidDate      as string)           ?? "",
     packageId:     (data.packageId     as string)           ?? "",
     notes:         (data.notes         as string)           ?? "",
+    pointsAwarded: (data.pointsAwarded as number | undefined) ?? 0,
     createdAt:     (data.createdAt     as Timestamp | null) ?? null,
   };
 }
@@ -136,13 +139,36 @@ export async function setSessionPrice(
       where("appointmentId", "==", price.appointmentId)
     );
     const snap = await getDocs(q);
-    if (!snap.empty) {
+    const existing = !snap.empty ? docToSessionPrice(snap.docs[0].id, snap.docs[0].data()) : null;
+
+    // Loyalty points: earn 1 pt per 1 EGP actually paid, once — never for
+    // package-linked sessions (that money was already counted at package
+    // purchase, see addSessionPackage/updateSessionPackage below).
+    const pointsAwarded = (!price.packageId && price.paid)
+      ? Math.max(existing?.pointsAwarded ?? 0, Math.floor(price.amount))
+      : (existing?.pointsAwarded ?? 0);
+    const delta = pointsAwarded - (existing?.pointsAwarded ?? 0);
+    if (delta > 0) {
+      try {
+        await earnPoints(price.patientId, delta, {
+          sourceType:  "session",
+          sourceId:    price.appointmentId,
+          description: `${price.sessionType || "Session"} on ${price.date}`,
+        });
+      } catch (pointsErr) {
+        // Points bookkeeping must never block a billing save.
+        console.error("earnPoints failed for session", price.appointmentId, pointsErr);
+      }
+    }
+
+    if (existing) {
       const ref = snap.docs[0].ref;
-      await updateDoc(ref, { ...price, updatedAt: null });
+      await updateDoc(ref, { ...price, pointsAwarded, updatedAt: null });
       return { id: ref.id };
     }
     const ref = await addDoc(collection(db, "patientSessionPrices"), {
       ...price,
+      pointsAwarded,
       createdAt: serverTimestamp(),
     });
     return { id: ref.id };
@@ -175,6 +201,7 @@ export interface SessionPackage {
   sessionsUsed:    number;
   active:          boolean;
   notes:           string;
+  pointsAwarded?:  number;  // loyalty points already earned against paidAmount — internal bookkeeping
   createdAt:       Timestamp | null;
 }
 
@@ -190,6 +217,7 @@ function docToPackage(id: string, data: Record<string, unknown>): SessionPackage
     sessionsUsed:    (data.sessionsUsed    as number)           ?? 0,
     active:          (data.active          as boolean)          ?? true,
     notes:           (data.notes           as string)           ?? "",
+    pointsAwarded:   (data.pointsAwarded   as number | undefined) ?? 0,
     createdAt:       (data.createdAt       as Timestamp | null) ?? null,
   };
 }
@@ -222,10 +250,23 @@ export async function addSessionPackage(
   pkg: Omit<SessionPackage, "id" | "createdAt">
 ): Promise<{ id: string; error?: never } | { id?: never; error: string }> {
   try {
+    const pointsAwarded = Math.max(0, Math.floor(pkg.paidAmount || 0));
     const ref = await addDoc(collection(db, "patientPackages"), {
       ...pkg,
+      pointsAwarded,
       createdAt: serverTimestamp(),
     });
+    if (pointsAwarded > 0) {
+      try {
+        await earnPoints(pkg.patientId, pointsAwarded, {
+          sourceType:  "package",
+          sourceId:    ref.id,
+          description: `${pkg.packageSize}-session package payment`,
+        });
+      } catch (pointsErr) {
+        console.error("earnPoints failed for package", ref.id, pointsErr);
+      }
+    }
     return { id: ref.id };
   } catch (err) {
     return { error: parseError(err) };
@@ -237,10 +278,31 @@ export async function updateSessionPackage(
   updates: Partial<Omit<SessionPackage, "id" | "createdAt">>
 ): Promise<{ error?: string }> {
   try {
-    await updateDoc(doc(db, "patientPackages", pkgId), {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    });
+    const payload: Record<string, unknown> = { ...updates, updatedAt: serverTimestamp() };
+
+    // Loyalty points: earn on the paidAmount delta (handles installments —
+    // points trickle in as paidAmount rises), never re-awarded on unrelated edits.
+    if (updates.paidAmount !== undefined) {
+      const snap = await getDoc(doc(db, "patientPackages", pkgId));
+      const pkg = snap.exists() ? docToPackage(pkgId, snap.data()) : null;
+      const target  = Math.max(0, Math.floor(updates.paidAmount));
+      const already = pkg?.pointsAwarded ?? 0;
+      const delta   = target - already;
+      if (delta > 0 && pkg) {
+        try {
+          await earnPoints(pkg.patientId, delta, {
+            sourceType:  "package",
+            sourceId:    pkgId,
+            description: `${pkg.packageSize}-session package payment`,
+          });
+        } catch (pointsErr) {
+          console.error("earnPoints failed for package", pkgId, pointsErr);
+        }
+      }
+      payload.pointsAwarded = Math.max(target, already);
+    }
+
+    await updateDoc(doc(db, "patientPackages", pkgId), payload);
     return {};
   } catch (err) {
     return { error: parseError(err) };
