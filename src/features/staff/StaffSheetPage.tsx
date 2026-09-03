@@ -96,6 +96,8 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
   // ── Case history: trailing 6-month trend (one-time fetch, past months are static) ──
   const [trend, setTrend] = useState<Map<string, number>>(new Map());
   const months6 = useMemo(() => trailingMonths(6), []);
+  // Selectable months for the two month pickers below — most recent first.
+  const monthOptions = useMemo(() => [...trailingMonths(12)].reverse(), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -304,11 +306,9 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
       </div>
 
       <div className="sf-month-row">
-        <input
-          type="month" className="sf-month-input"
-          value={yearMonth}
-          onChange={(e) => setYearMonth(e.target.value)}
-        />
+        <select className="sf-month-input" value={yearMonth} onChange={(e) => setYearMonth(e.target.value)}>
+          {monthOptions.map((m) => <option key={m} value={m}>{monthYearLabel(m)}</option>)}
+        </select>
       </div>
       {completedCases.length === 0 ? (
         <div className="sf-empty">No completed sessions in this month.</div>
@@ -325,11 +325,9 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
       <div className="sf-section-sub">The full calendar month — tap any day to add or correct it.</div>
 
       <div className="sf-attend-toolbar">
-        <input
-          type="month" className="sf-month-input"
-          value={attendanceMonth}
-          onChange={(e) => setAttendanceMonth(e.target.value)}
-        />
+        <select className="sf-month-input" value={attendanceMonth} onChange={(e) => setAttendanceMonth(e.target.value)}>
+          {monthOptions.map((m) => <option key={m} value={m}>{monthYearLabel(m)}</option>)}
+        </select>
         <button className="sf-add-entry-btn" onClick={openEntryDefault}>
           <Plus size={14} /> Add / Edit Entry
         </button>
