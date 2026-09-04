@@ -1337,6 +1337,7 @@ export default function PhysioDashboard() {
           min-height: 100vh; background: #f5f3ef;
           font-family: 'Outfit', sans-serif;
           display: grid; grid-template-rows: 56px 1fr;
+          overflow-x: hidden; max-width: 100vw;
         }
 
         .phd-topbar {
@@ -1578,6 +1579,11 @@ export default function PhysioDashboard() {
             transform: translateX(-100%);
             transition: transform 0.25s ease;
             box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+            /* Without this, a fixed+transformed element can still widen the
+               page's scrollable area on mobile Safari even while visually
+               off-screen — contain stops it from affecting anything outside
+               its own box. */
+            contain: layout style;
           }
           .phd-sidebar.open { transform: translateX(0); }
           .phd-drawer-close { display: flex; }

@@ -52,12 +52,15 @@
 
   color: #1a1a1a;
   background-color: #f5f3ef;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  max-width: 100vw;
   overflow-x: hidden;
 }
 
