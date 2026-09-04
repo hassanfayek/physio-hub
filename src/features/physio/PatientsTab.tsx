@@ -1,7 +1,7 @@
 // FILE: src/features/physio/PatientsTab.tsx
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Check, Trash2, Search, X, Plus, AlertCircle, UserPlus, Filter } from "lucide-react";
+import { Check, Trash2, Search, X, Plus, AlertCircle, UserPlus, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import AddPatientModal from "../../components/AddPatientModal";
 import {
   subscribeToPhysioPatients,
@@ -201,6 +201,8 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
   const [toastMsg,       setToastMsg]       = useState<string | null>(null);
   const [searchQuery,    setSearchQuery]    = useState("");
   const [referralFilter, setReferralFilter] = useState("");
+  // Mobile-only: which row's Assign Staff / Delete panel is expanded (desktop shows it always)
+  const [expandedId,     setExpandedId]     = useState<string | null>(null);
 
   const canAddPatient = isManager || isSenior || isSecretary;
 
@@ -401,36 +403,42 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
           display: flex; align-items: center; gap: 10px;
         }
 
-        /* Table */
-        .pt-assign-table-wrap {
+        /* Patient list — responsive rows (replaces the old <table>) */
+        .pt-list {
           background: #fff; border: 1px solid #e5e0d8;
-          border-radius: 14px; overflow-x: auto;
+          border-radius: 14px; overflow: hidden;
           box-shadow: 0 1px 6px rgba(0,0,0,0.03);
-          -webkit-overflow-scrolling: touch;
         }
-        .pt-assign-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .pt-assign-table thead th {
-          background: #fafaf8; border-bottom: 1px solid #e5e0d8;
-          padding: 10px 12px; text-align: left;
-          font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
-          color: #c0bbb4; font-weight: 600; white-space: nowrap;
+        .pt-row {
+          display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap;
+          padding: 14px 16px; border-bottom: 1px solid #f5f3ef;
+          transition: background 0.12s;
         }
-        .pt-assign-table tbody tr {
-          border-bottom: 1px solid #f5f3ef; transition: background 0.12s;
-        }
-        .pt-assign-table tbody tr:last-child { border-bottom: none; }
-        .pt-assign-table tbody tr:hover       { background: #fafaf8; }
-        .pt-assign-table td { padding: 10px 12px; vertical-align: middle; }
+        .pt-row:last-child { border-bottom: none; }
+        .pt-row:hover { background: #fafaf8; }
 
-        .pt-patient-cell { display: flex; align-items: center; gap: 10px; }
+        .pt-row-main { display: flex; gap: 10px; align-items: flex-start; flex: 1 1 220px; min-width: 220px; }
         .pt-cell-avatar {
-          width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+          width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
-          font-size: 12px; font-weight: 600;
+          font-size: 13px; font-weight: 600; margin-top: 1px;
         }
-        .pt-cell-name  { font-weight: 500; color: #1a1a1a; line-height: 1.2; }
-        .pt-cell-email { font-size: 12px; color: #9a9590; }
-        .pt-cell-cond  { color: #5a5550; }
+        .pt-cell-name  { font-weight: 500; color: #1a1a1a; line-height: 1.3; }
+        .pt-cell-contact { font-size: 12.5px; color: #9a9590; line-height: 1.5; }
+        .pt-cell-email { display: block; }
+        .pt-cell-phone { display: block; }
+
+        .pt-row-tags { display: flex; flex-direction: column; gap: 5px; flex: 1 1 160px; min-width: 140px; }
+        .pt-referred-tag { font-size: 12px; color: #5a5550; }
+        .pt-referred-tag strong { color: #9a9590; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 5px; }
+
+        .pt-row-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .pt-row-toggle {
+          display: none; align-items: center; gap: 4px;
+          background: none; border: 1.5px solid #e5e0d8; border-radius: 8px;
+          padding: 6px 10px; font-family: 'Outfit', sans-serif; font-size: 12px;
+          color: #5a5550; cursor: pointer; margin-left: auto;
+        }
 
         .pt-status-chip {
           display: inline-block; padding: 3px 10px; border-radius: 100px;
@@ -438,9 +446,20 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
         }
         .pt-unassigned-chip {
           display: inline-flex; align-items: center; gap: 4px;
-          padding: 3px 10px; border-radius: 100px;
+          padding: 3px 10px; border-radius: 100px; width: fit-content;
           font-size: 12px; font-weight: 500;
           background: #f5f3ef; color: #9a9590; white-space: nowrap;
+        }
+
+        @media (max-width: 768px) {
+          .pt-row { flex-direction: column; }
+          /* Undo the desktop flex-grow — in a column flex, flex:1 grows along
+             the now-vertical main axis and stretches these apart instead of
+             letting them stack tightly. */
+          .pt-row-main, .pt-row-tags { flex: none; }
+          .pt-row-toggle { display: flex; }
+          .pt-row-actions { display: none; width: 100%; padding-top: 10px; border-top: 1px dashed #e5e0d8; margin-top: 4px; }
+          .pt-row-actions.expanded { display: flex; }
         }
 
         /* Delete button */
@@ -690,118 +709,115 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
           </div>
         )}
 
-        {/* Patients table */}
-        <div className="pt-assign-table-wrap">
-          <table className="pt-assign-table">
-            <thead>
-              <tr>
-                <th>Patient</th>
-                <th>Phone</th>
-                <th>Referred By</th>
-                <th>Team</th>
-                {(isManager || isSecretary) && <th>Assign Staff</th>}
-                {isManager && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {loading
-                ? Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i}>
-                      <td><div className="pt-patient-cell"><div className="pt-skel pt-skel-avatar" /><div className="pt-skel pt-skel-md" /></div></td>
-                      <td><div className="pt-skel pt-skel-sm" /></td>
-                      <td><div className="pt-skel pt-skel-sm" /></td>
-                      <td><div className="pt-skel pt-skel-lg" /></td>
-                      {(isManager || isSecretary) && <td><div className="pt-skel pt-skel-sel" /></td>}
-                      {isManager && <td><div className="pt-skel pt-skel-sm" /></td>}
-                    </tr>
-                  ))
-                : filteredPatients.length === 0
-                  ? (
-                    <tr>
-                      <td colSpan={(isManager || isSecretary) ? 6 : 4}>
-                        <div className="pt-empty">
-                          <div className="pt-empty-icon">{searchQuery ? "🔍" : "🏥"}</div>
-                          {searchQuery
-                            ? `No patients match "${searchQuery}"`
-                            : (isManager || isSecretary)
-                              ? "No patients found in the system."
-                              : "No patients assigned to you yet."
-                          }
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                  : filteredPatients.map((patient) => {
-                      const fullName   = `${patient.firstName} ${patient.lastName}`;
-                      const initials   = `${patient.firstName[0] ?? ""}${patient.lastName[0] ?? ""}`.toUpperCase();
-                      const hue        = fullName.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
-
-                      return (
-                        <tr key={patient.uid}>
-                          <td>
-                            <div className="pt-patient-cell">
-                              <div className="pt-cell-avatar" style={{ background: `hsl(${hue},40%,88%)`, color: `hsl(${hue},45%,32%)` }}>
-                                {initials}
-                              </div>
-                              <div>
-                                <div
-                                  className="pt-cell-name"
-                                  onClick={() => onViewPatient?.(patient.uid)}
-                                  style={onViewPatient ? { cursor: "pointer", color: "#2d6a4f" } : undefined}
-                                >{fullName}</div>
-                                <div className="pt-cell-email">{patient.email}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="pt-cell-cond">{patient.phone || "—"}</td>
-                          <td className="pt-cell-cond">{patient.referredBy || "—"}</td>
-                          <td>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                              {patient.seniorEditorName && (
-                                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                  <span style={{ fontSize: 10, fontWeight: 700, background: "#fef3c7", color: "#92400e", padding: "1px 6px", borderRadius: 100, textTransform: "uppercase" }}>Senior</span>
-                                  <span style={{ fontSize: 13, color: "#1a1a1a" }}>{patient.seniorEditorName}</span>
-                                </div>
-                              )}
-                              {(patient.juniorNames ?? []).map((name, i) => (
-                                <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                  <span style={{ fontSize: 10, fontWeight: 700, background: "#D6EEF8", color: "#0C3C60", padding: "1px 6px", borderRadius: 100, textTransform: "uppercase" }}>Junior</span>
-                                  <span style={{ fontSize: 13, color: "#1a1a1a" }}>{name}</span>
-                                </div>
-                              ))}
-                              {patient.traineeName && (
-                                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                  <span style={{ fontSize: 10, fontWeight: 700, background: "#f3f4f6", color: "#374151", padding: "1px 6px", borderRadius: 100, textTransform: "uppercase" }}>Trainee</span>
-                                  <span style={{ fontSize: 13, color: "#1a1a1a" }}>{patient.traineeName}</span>
-                                </div>
-                              )}
-                              {!patient.seniorEditorName && (patient.juniorNames ?? []).length === 0 && !patient.traineeName && (
-                                <span className="pt-unassigned-chip">
-                                  <Plus size={10} strokeWidth={2.5} />
-                                  Unassigned
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          {(isManager || isSecretary) && (
-                            <td>
-                              <StaffAssignmentPanel patient={patient} physios={physios} />
-                            </td>
-                          )}
-                          {isManager && (
-                            <td>
-                              <DeleteButton
-                                patientId={patient.uid}
-                                onDeleted={() => showToast(`✓ Patient record removed`)}
-                              />
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })
+        {/* Patients list */}
+        <div className="pt-list">
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div className="pt-row" key={i}>
+                <div className="pt-row-main">
+                  <div className="pt-skel pt-skel-avatar" />
+                  <div>
+                    <div className="pt-skel pt-skel-md" style={{ marginBottom: 6 }} />
+                    <div className="pt-skel pt-skel-sm" />
+                  </div>
+                </div>
+                {(isManager || isSecretary) && <div className="pt-skel pt-skel-sel" />}
+              </div>
+            ))
+          ) : filteredPatients.length === 0 ? (
+            <div className="pt-empty">
+              <div className="pt-empty-icon">{searchQuery ? "🔍" : "🏥"}</div>
+              {searchQuery
+                ? `No patients match "${searchQuery}"`
+                : (isManager || isSecretary)
+                  ? "No patients found in the system."
+                  : "No patients assigned to you yet."
               }
-            </tbody>
-          </table>
+            </div>
+          ) : (
+            filteredPatients.map((patient) => {
+              const fullName = `${patient.firstName} ${patient.lastName}`;
+              const initials = `${patient.firstName[0] ?? ""}${patient.lastName[0] ?? ""}`.toUpperCase();
+              const hue      = fullName.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+              const hasTeam  = patient.seniorEditorName || (patient.juniorNames ?? []).length > 0 || patient.traineeName;
+              const isExpanded = expandedId === patient.uid;
+              const showActions = isManager || isSecretary;
+
+              return (
+                <div className="pt-row" key={patient.uid}>
+                  <div className="pt-row-main">
+                    <div className="pt-cell-avatar" style={{ background: `hsl(${hue},40%,88%)`, color: `hsl(${hue},45%,32%)` }}>
+                      {initials}
+                    </div>
+                    <div>
+                      <div
+                        className="pt-cell-name"
+                        onClick={() => onViewPatient?.(patient.uid)}
+                        style={onViewPatient ? { cursor: "pointer", color: "#2d6a4f" } : undefined}
+                      >{fullName}</div>
+                      <div className="pt-cell-contact">
+                        {patient.phone && <span className="pt-cell-phone">{patient.phone}</span>}
+                        <span className="pt-cell-email">{patient.email}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-row-tags">
+                    {patient.referredBy && (
+                      <div className="pt-referred-tag"><strong>Referred</strong>{patient.referredBy}</div>
+                    )}
+                    {patient.seniorEditorName && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, background: "#fef3c7", color: "#92400e", padding: "1px 6px", borderRadius: 100, textTransform: "uppercase" }}>Senior</span>
+                        <span style={{ fontSize: 13, color: "#1a1a1a" }}>{patient.seniorEditorName}</span>
+                      </div>
+                    )}
+                    {(patient.juniorNames ?? []).map((name, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, background: "#D6EEF8", color: "#0C3C60", padding: "1px 6px", borderRadius: 100, textTransform: "uppercase" }}>Junior</span>
+                        <span style={{ fontSize: 13, color: "#1a1a1a" }}>{name}</span>
+                      </div>
+                    ))}
+                    {patient.traineeName && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, background: "#f3f4f6", color: "#374151", padding: "1px 6px", borderRadius: 100, textTransform: "uppercase" }}>Trainee</span>
+                        <span style={{ fontSize: 13, color: "#1a1a1a" }}>{patient.traineeName}</span>
+                      </div>
+                    )}
+                    {!hasTeam && (
+                      <span className="pt-unassigned-chip">
+                        <Plus size={10} strokeWidth={2.5} />
+                        Unassigned
+                      </span>
+                    )}
+                  </div>
+
+                  {showActions && (
+                    <button
+                      className="pt-row-toggle"
+                      onClick={() => setExpandedId(isExpanded ? null : patient.uid)}
+                      aria-label={isExpanded ? "Hide staff assignment" : "Manage staff assignment"}
+                    >
+                      {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      Manage
+                    </button>
+                  )}
+
+                  {showActions && (
+                    <div className={`pt-row-actions ${isExpanded ? "expanded" : ""}`}>
+                      <StaffAssignmentPanel patient={patient} physios={physios} />
+                      {isManager && (
+                        <DeleteButton
+                          patientId={patient.uid}
+                          onDeleted={() => showToast(`✓ Patient record removed`)}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
 
         {/* Add Patient Modal */}
