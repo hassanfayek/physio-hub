@@ -1434,7 +1434,12 @@ export default function PhysioDashboard() {
           border-radius: 12px; padding: 12px;
           position: relative; overflow: hidden;
           margin-bottom: 4px;
+          flex-shrink: 0; /* never let the flex column compress this below its content */
         }
+        /* The mobile drawer's close button sits directly above the profile
+           card in the DOM (only rendered when the drawer is open) — give the
+           card room instead of letting the button overlap its top-right corner. */
+        .phd-drawer-close + .phd-profile { margin-top: 36px; }
         .phd-profile::before {
           content: ''; position: absolute; top: -20px; right: -20px;
           width: 70px; height: 70px; border-radius: 50%;
@@ -1461,7 +1466,7 @@ export default function PhysioDashboard() {
         .phd-p-stat-row span:last-child  { color: rgba(255,255,255,0.85); font-weight: 500; }
 
         /* Nav — matches patient portal style */
-        .phd-nav-section {}
+        .phd-nav-section { flex-shrink: 0; }
         .phd-nav-label {
           font-size: 10px; text-transform: uppercase;
           letter-spacing: 0.12em; color: rgba(255,255,255,0.35);
@@ -1499,6 +1504,7 @@ export default function PhysioDashboard() {
           margin-top: auto;
           padding-top: 12px;
           border-top: 1px solid rgba(255,255,255,0.08);
+          flex-shrink: 0;
         }
         .phd-sidebar-signout-btn {
           display: flex; align-items: center; gap: 10px;
