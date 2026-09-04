@@ -303,6 +303,11 @@ export default function PatientDashboard() {
           min-height: calc(100vh - 56px);
           animation: fadeSlide 0.3s ease both;
           overflow-x: hidden;
+          /* Grid items default to min-width: auto and won't shrink below
+             their content's natural width — same bug class fixed on the
+             login page. overflow-x: hidden alone doesn't prevent the grid
+             track itself from being pushed wider than the viewport. */
+          min-width: 0;
         }
         @keyframes fadeSlide {
           from { opacity: 0; transform: translateY(10px); }

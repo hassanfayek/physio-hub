@@ -1411,6 +1411,11 @@ export default function PhysioDashboard() {
           display: grid; grid-template-columns: 240px 1fr;
           min-height: calc(100vh - 56px);
         }
+        /* Grid items default to min-width: auto and won't shrink below their
+           content's natural width (same bug class fixed on the login page) —
+           .phd-main hosts wide tables/grids across the various tabs, so this
+           keeps it shrinkable instead of blowing out narrow viewports. */
+        .phd-main { min-width: 0; }
 
         /* Dark sidebar — desktop only */
         .phd-sidebar {
