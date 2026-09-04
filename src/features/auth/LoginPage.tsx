@@ -85,6 +85,11 @@ export default function LoginPage() {
           grid-template-columns: 1.1fr 0.9fr;
           font-family: 'DM Sans', sans-serif;
         }
+        /* Grid items default to min-width: auto — they refuse to shrink below
+           their content's natural width (e.g. the role tabs below not
+           wrapping). Without this, narrow phones get pushed wider than the
+           viewport instead of the content wrapping/shrinking to fit. */
+        .lp-left, .lp-right { min-width: 0; }
 
         /* ── LEFT PANEL ── */
         .lp-left {
