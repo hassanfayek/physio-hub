@@ -1351,12 +1351,12 @@ export default function PhysioDashboard() {
           box-shadow: 0 2px 12px rgba(0,0,0,0.04);
           height: 56px;
         }
-        .phd-topbar-left { display: flex; align-items: center; gap: 12px; }
+        .phd-topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
         .phd-topbar-brand { display: flex; align-items: center; gap: 10px; }
         .phd-topbar-brand-name { font-size: 15px; font-weight: 700; color: #0C3C60; line-height: 1.2; }
         .phd-topbar-brand-sub  { font-size: 11px; font-weight: 500; color: #9a9590; letter-spacing: 0.02em; }
         .phd-topbar-logo { display: none; }
-        .phd-topbar-right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; grid-column: 3; }
+        .phd-topbar-right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; grid-column: 3; min-width: 0; }
 
         .phd-user-chip {
           display: flex; align-items: center; gap: 9px;
@@ -1572,9 +1572,12 @@ export default function PhysioDashboard() {
           .phd-hamburger { display: flex; }
           .phd-logout-btn { padding: 8px; }
           .phd-logout-btn .phd-logout-text { display: none; }
-          .phd-user-name { max-width: 90px; }
+          .lang-toggle { padding: 6px 9px; }
+          .lang-toggle-text { display: none; }
+          .phd-user-name { max-width: 70px; }
           .phd-user-chip { padding: 5px 10px; }
           .phd-main { padding: 14px 12px; }
+          .phd-topbar-brand-name { font-size: 13px; }
 
           .phd-sidebar {
             display: flex !important;
@@ -1626,7 +1629,7 @@ export default function PhysioDashboard() {
               />
             )}
             <button className="lang-toggle" onClick={toggleLang} title="Switch language">
-              {lang === "en" ? "🌐 العربية" : "🌐 English"}
+              🌐 <span className="lang-toggle-text">{lang === "en" ? "العربية" : "English"}</span>
             </button>
             <button className="phd-logout-btn" onClick={() => setShowSignOutConfirm(true)}>
               <LogOut size={13} strokeWidth={2} color="currentColor" />
