@@ -1424,7 +1424,14 @@ export default function PhysioDashboard() {
           padding: 16px 12px;
           display: flex; flex-direction: column; gap: 4px;
           position: sticky; top: 56px;
-          height: calc(100vh - 56px); overflow-y: auto;
+          /* No height/overflow-y here on purpose: with 10 nav items the list
+             can be taller than the viewport, and giving the sidebar its own
+             independent scroll region (separate from the page/.phd-main)
+             meant an accidental scroll over it left it stuck mid-scroll,
+             looking permanently cropped regardless of the main content's
+             scroll position. Sizing to content + plain sticky means it just
+             scrolls normally with the page once its own bottom is reached —
+             one scroll region, not two fighting each other. */
         }
 
         /* Profile card inside dark sidebar */
@@ -1522,7 +1529,12 @@ export default function PhysioDashboard() {
         }
 
         .phd-main {
-          padding: 20px 18px; overflow-y: auto; overflow-x: hidden;
+          padding: 20px 18px; overflow-x: hidden;
+          /* No overflow-y here on purpose — see the note on .phd-sidebar.
+             With both this and the sidebar independently scrollable, a
+             scroll gesture moved whichever one the cursor happened to be
+             over, leaving the other looking "stuck" wherever it last was.
+             One scroll region (the page itself) removes that ambiguity. */
           animation: phdFadeIn 0.25s ease both;
         }
         @keyframes phdFadeIn {
@@ -1589,6 +1601,7 @@ export default function PhysioDashboard() {
             display: flex !important;
             position: fixed; top: 0; left: 0;
             width: 280px; max-width: 82vw; height: 100vh;
+            overflow-y: auto; /* fixed overlay, not sticky-with-page — needs its own scroll */
             z-index: 201;
             transform: translateX(-100%);
             transition: transform 0.25s ease;
