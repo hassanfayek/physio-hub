@@ -1,6 +1,7 @@
 // FILE: src/features/staff/StaffSheetPage.tsx
 
 import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, Phone, Award, FileBadge, Briefcase, Calendar, Clock, Plus, AlertTriangle, Printer } from "lucide-react";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -387,7 +388,7 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
         </table>
       </div>
 
-      {showEntry && (
+      {showEntry && createPortal(
         <div className="sf-modal-overlay no-print" onClick={(e) => { if (e.target === e.currentTarget) setShowEntry(false); }}>
           <div className="sf-modal">
             <div className="sf-modal-title">Attendance Entry</div>
@@ -408,7 +409,8 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

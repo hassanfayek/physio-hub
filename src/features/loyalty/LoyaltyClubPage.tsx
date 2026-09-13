@@ -1,6 +1,7 @@
 // FILE: src/features/loyalty/LoyaltyClubPage.tsx
 
 import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Sparkles, Gift, Search, Copy, Check, Lock, Clock, ArrowUpRight, ArrowDownRight, Pencil, Ban } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { formatPhoneDisplay } from "../../utils/phone";
@@ -408,7 +409,7 @@ export default function LoyaltyClubPage({ patientId: patientIdProp }: LoyaltyClu
         </>
       )}
 
-      {justRedeemed && (
+      {justRedeemed && createPortal(
         <div className="lc-redeem-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setJustRedeemed(null); }}>
           <div className="lc-redeem-modal">
             <Sparkles size={28} color="#E8A93B" style={{ marginBottom: 10 }} />
@@ -426,10 +427,11 @@ export default function LoyaltyClubPage({ patientId: patientIdProp }: LoyaltyClu
               Got it
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showAdjust && (
+      {showAdjust && createPortal(
         <div className="lc-redeem-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowAdjust(false); }}>
           <div className="lc-form-modal">
             <div className="lc-form-title">Adjust Points Balance</div>
@@ -455,10 +457,11 @@ export default function LoyaltyClubPage({ patientId: patientIdProp }: LoyaltyClu
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {voidTarget && (
+      {voidTarget && createPortal(
         <div className="lc-redeem-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setVoidTarget(null); }}>
           <div className="lc-form-modal">
             <div className="lc-form-title">Void Voucher {voidTarget.code}</div>
@@ -485,7 +488,8 @@ export default function LoyaltyClubPage({ patientId: patientIdProp }: LoyaltyClu
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
