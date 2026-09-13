@@ -41,6 +41,16 @@ export interface ClinicSettings {
   closingHour:        number;
 }
 
+// The clinic's fixed list of bookable services — shared by patient self-booking
+// and any staff UI that needs to pick/display a session type.
+export const SESSION_TYPES = [
+  "Physiotherapy Session",
+  "Recovery Session",
+  "Assessment Session",
+  "Rehabilitation Session",
+  "Online Assessment Session",
+];
+
 export interface CreateAppointmentPayload {
   patientId:    string;
   patientName:  string;

@@ -18,6 +18,7 @@ import {
   subscribeToClinicSettings,
   fmtHour12,
   toDateStr,
+  SESSION_TYPES,
   type Appointment as FSAppt,
   type ClinicSettings,
 } from "../../services/appointmentService";
@@ -32,16 +33,6 @@ import { collection, query, where, onSnapshot as fsOnSnapshot } from "firebase/f
 import { db } from "../../firebase";
 import { Check, Clock } from "lucide-react";
 import { subscribeToPatientPackages, subscribeToSessionPrices, type SessionPackage } from "../../services/priceService";
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const SESSION_TYPES = [
-  "Physiotherapy Session",
-  "Recovery Session",
-  "Assessment Session",
-  "Rehabilitation Session",
-  "Online Assessment Session",
-];
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const DAY_LABELS  = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];

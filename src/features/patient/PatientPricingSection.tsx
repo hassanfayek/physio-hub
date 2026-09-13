@@ -21,8 +21,13 @@ import {
 import {
   subscribeToPatientAllAppointments,
   fmtHour12,
+  SESSION_TYPES,
   type Appointment,
 } from "../../services/appointmentService";
+import {
+  subscribeToPhysiotherapists,
+  type Physiotherapist,
+} from "../../services/patientService";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -95,6 +100,12 @@ export default function PatientPricingSection({
   // ── Toast ────────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+
+  // ── Physiotherapists (for the Session Price modal's dropdown) ────────────────
+  const [physios, setPhysios] = useState<Physiotherapist[]>([]);
+  useEffect(() => {
+    return subscribeToPhysiotherapists(setPhysios, () => {});
+  }, []);
 
   // ── Subscriptions ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -747,11 +758,34 @@ export default function PatientPricingSection({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
               <div className="pps-field" style={{ marginBottom: 0 }}>
                 <label className="pps-label">Session Type</label>
-                <input className="pps-input" type="text" placeholder="e.g. Physiotherapy" value={sessionPriceForm.sessionType} onChange={(e) => setSessionPriceForm({ ...sessionPriceForm, sessionType: e.target.value })} />
+                <select
+                  className="pps-discount-type"
+                  value={sessionPriceForm.sessionType}
+                  onChange={(e) => setSessionPriceForm({ ...sessionPriceForm, sessionType: e.target.value })}
+                >
+                  <option value="">— Select —</option>
+                  {SESSION_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {sessionPriceForm.sessionType && !SESSION_TYPES.includes(sessionPriceForm.sessionType) && (
+                    <option value={sessionPriceForm.sessionType}>{sessionPriceForm.sessionType} (existing)</option>
+                  )}
+                </select>
               </div>
               <div className="pps-field" style={{ marginBottom: 0 }}>
                 <label className="pps-label">Physiotherapist</label>
-                <input className="pps-input" type="text" placeholder="Name" value={sessionPriceForm.physioName} onChange={(e) => setSessionPriceForm({ ...sessionPriceForm, physioName: e.target.value })} />
+                <select
+                  className="pps-discount-type"
+                  value={sessionPriceForm.physioName}
+                  onChange={(e) => setSessionPriceForm({ ...sessionPriceForm, physioName: e.target.value })}
+                >
+                  <option value="">— Select —</option>
+                  {physios.map((p) => {
+                    const name = `Dr. ${p.firstName} ${p.lastName}`;
+                    return <option key={p.uid} value={name}>{name}</option>;
+                  })}
+                  {sessionPriceForm.physioName && !physios.some((p) => `Dr. ${p.firstName} ${p.lastName}` === sessionPriceForm.physioName) && (
+                    <option value={sessionPriceForm.physioName}>{sessionPriceForm.physioName} (existing)</option>
+                  )}
+                </select>
               </div>
             </div>
             <div className="pps-field">
