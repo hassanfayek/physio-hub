@@ -22,6 +22,17 @@ function currentYearMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// "HH:MM" (24hr, as stored) -> "h:MM AM/PM" for display
+function fmtTime12(hhmm: string): string {
+  if (!hhmm) return "";
+  const [hStr, mStr] = hhmm.split(":");
+  const h = parseInt(hStr, 10);
+  if (Number.isNaN(h)) return hhmm;
+  const period = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${mStr} ${period}`;
+}
+
 function currentMonthLabel(): string {
   return new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
@@ -228,14 +239,14 @@ export default function StaffListPage() {
                 )}
                 {att?.checkIn && !att?.checkOut && (
                   <>
-                    <span className="sl-attend-pill in">In {att.checkIn}</span>
+                    <span className="sl-attend-pill in">In {fmtTime12(att.checkIn)}</span>
                     <button className="sl-attend-action out" disabled={saving} onClick={() => handleMark(p, "checkOut")}>
                       <LogOut size={13} /> Mark Departed
                     </button>
                   </>
                 )}
                 {att?.checkIn && att?.checkOut && (
-                  <span className="sl-attend-pill out">In {att.checkIn} · Out {att.checkOut}</span>
+                  <span className="sl-attend-pill out">In {fmtTime12(att.checkIn)} · Out {fmtTime12(att.checkOut)}</span>
                 )}
 
                 <div className="sl-attend-view" onClick={() => setSelected(p)}>

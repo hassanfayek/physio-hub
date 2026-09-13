@@ -40,6 +40,17 @@ function fmtDateDisplay(dateStr: string): string {
   return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
+// "HH:MM" (24hr, as stored/entered) -> "h:MM AM/PM" for display
+function fmtTime12(hhmm: string): string {
+  if (!hhmm) return "";
+  const [hStr, mStr] = hhmm.split(":");
+  const h = parseInt(hStr, 10);
+  if (Number.isNaN(h)) return hhmm;
+  const period = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${mStr} ${period}`;
+}
+
 function dayOfWeekShort(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("en-GB", { weekday: "short" });
@@ -341,9 +352,9 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
           <div>{fmtDateDisplay(date)} <span className="sf-attend-dow">{dayOfWeekShort(date)}</span></div>
           <div className="sf-attend-times">
             {isPastIncomplete(date, record) && <AlertTriangle size={13} className="sf-warn-icon" />}
-            In: {record?.checkIn ? record.checkIn : <span className="sf-attend-missing">—</span>}
+            In: {record?.checkIn ? fmtTime12(record.checkIn) : <span className="sf-attend-missing">—</span>}
             {"  ·  "}
-            Out: {record?.checkOut ? record.checkOut : <span className="sf-attend-missing">—</span>}
+            Out: {record?.checkOut ? fmtTime12(record.checkOut) : <span className="sf-attend-missing">—</span>}
           </div>
         </div>
       ))}
@@ -368,8 +379,8 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
               <tr key={date}>
                 <td>{fmtDateDisplay(date)}</td>
                 <td>{dayOfWeekShort(date)}</td>
-                <td>{record?.checkIn || "—"}</td>
-                <td>{record?.checkOut || "—"}</td>
+                <td>{record?.checkIn ? fmtTime12(record.checkIn) : "—"}</td>
+                <td>{record?.checkOut ? fmtTime12(record.checkOut) : "—"}</td>
               </tr>
             ))}
           </tbody>
