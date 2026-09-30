@@ -1615,6 +1615,16 @@ export default function PhysioDashboard() {
           .phd-sidebar.open { transform: translateX(0); }
           .phd-drawer-close { display: flex; }
         }
+
+        /* ── Print: the dashboard chrome (topbar, sidebar) should never print —
+           only a page's own .print-only content should. Without this, printing
+           anything from inside this shell (e.g. a staff attendance sheet) prints
+           the whole app around it instead of just the intended content. ── */
+        @media print {
+          .phd-topbar, .phd-sidebar, .phd-hamburger, .phd-overlay { display: none !important; }
+          .phd-body { display: block !important; }
+          .phd-main { padding: 0 !important; }
+        }
       `}</style>
 
       <div className="phd-root">
