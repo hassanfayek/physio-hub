@@ -160,11 +160,18 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
   }, [attendance]);
 
   // Every day of the selected month, filled in with a record where one exists —
-  // a printable monthly sheet needs the gaps to show, not just the recorded days.
+  // the on-screen list needs the gaps to show (tap a blank day to add it).
   const monthDays = useMemo(() => allDaysInMonth(attendanceMonth), [attendanceMonth]);
   const monthAttendanceRows = useMemo(
     () => monthDays.map((date) => ({ date, record: attendanceByDate.get(date) ?? null })),
     [monthDays, attendanceByDate]
+  );
+  // The printed sheet only needs days someone actually recorded — printing 30
+  // rows of "—" isn't useful on paper, and trims what the browser has to lay
+  // out for print (a large part of why printing felt slow).
+  const printAttendanceRows = useMemo(
+    () => monthAttendanceRows.filter(({ record }) => record?.checkIn || record?.checkOut),
+    [monthAttendanceRows]
   );
 
   const openEntry = (date: string) => {
@@ -196,7 +203,11 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
   const isPastIncomplete = (date: string, record: AttendanceRecord | null) =>
     date < todayStr() && !!record?.checkIn && !record?.checkOut;
 
-  const handlePrint = () => window.print();
+  // Deferring one paint frame gives the browser a chance to finish applying
+  // the @media print stylesheet before the print dialog opens, instead of
+  // both happening at once — this is what made the dialog feel like it was
+  // hanging on a half-laid-out page.
+  const handlePrint = () => requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
 
   return (
     <div className="sf-page">
@@ -376,14 +387,18 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
             <tr><th>Date</th><th>Day</th><th>Check-In</th><th>Check-Out</th></tr>
           </thead>
           <tbody>
-            {monthAttendanceRows.map(({ date, record }) => (
-              <tr key={date}>
-                <td>{fmtDateDisplay(date)}</td>
-                <td>{dayOfWeekShort(date)}</td>
-                <td>{record?.checkIn ? fmtTime12(record.checkIn) : "—"}</td>
-                <td>{record?.checkOut ? fmtTime12(record.checkOut) : "—"}</td>
-              </tr>
-            ))}
+            {printAttendanceRows.length === 0 ? (
+              <tr><td colSpan={4} style={{ textAlign: "center", color: "#666" }}>No attendance recorded for this month.</td></tr>
+            ) : (
+              printAttendanceRows.map(({ date, record }) => (
+                <tr key={date}>
+                  <td>{fmtDateDisplay(date)}</td>
+                  <td>{dayOfWeekShort(date)}</td>
+                  <td>{record?.checkIn ? fmtTime12(record.checkIn) : "—"}</td>
+                  <td>{record?.checkOut ? fmtTime12(record.checkOut) : "—"}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
