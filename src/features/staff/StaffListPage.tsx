@@ -82,9 +82,13 @@ export default function StaffListPage() {
   }, [todayAttendance]);
 
   const ranked = useMemo(
-    () => [...physios].sort((a, b) => (caseCountByPhysio.get(b.uid) ?? 0) - (caseCountByPhysio.get(a.uid) ?? 0)),
+    () => physios.filter((p) => p.active).sort((a, b) => (caseCountByPhysio.get(b.uid) ?? 0) - (caseCountByPhysio.get(a.uid) ?? 0)),
     [physios, caseCountByPhysio]
   );
+  // Deactivated staff: kept out of the leaderboard/attendance, but their
+  // profile (case history, attendance, print) is still reachable here.
+  const formerStaff = useMemo(() => physios.filter((p) => !p.active), [physios]);
+  const [showFormer, setShowFormer] = useState(false);
   const topCount = caseCountByPhysio.get(ranked[0]?.uid ?? "") ?? 0;
 
   const handleMark = async (physio: Physiotherapist, field: "checkIn" | "checkOut") => {
@@ -176,6 +180,11 @@ export default function StaffListPage() {
         .sl-attend-action:disabled { opacity: 0.5; cursor: not-allowed; }
         .sl-attend-view { color: #9a9590; display: flex; align-items: center; flex-shrink: 0; }
 
+        .sl-former-toggle {
+          display: flex; align-items: center; gap: 6px; margin: 28px 0 10px;
+          background: none; border: none; padding: 0; cursor: pointer;
+          font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600; color: #7a7570;
+        }
         .sl-empty { padding: 18px; border-radius: 12px; background: #f7f5f1; color: #9a9590; font-size: 13px; text-align: center; }
       `}</style>
 
@@ -256,6 +265,27 @@ export default function StaffListPage() {
             );
           })}
         </div>
+      )}
+
+      {formerStaff.length > 0 && (
+        <>
+          <button className="sl-former-toggle" onClick={() => setShowFormer(!showFormer)}>
+            <ChevronRight size={14} style={{ transform: showFormer ? "rotate(90deg)" : undefined, transition: "transform 0.15s" }} />
+            Former staff ({formerStaff.length})
+          </button>
+          {showFormer && (
+            <div className="sl-attend-list">
+              {formerStaff.map((p) => (
+                <div key={p.uid} className="sl-attend-row" style={{ cursor: "pointer", opacity: 0.7 }} onClick={() => setSelected(p)}>
+                  <div className="sl-attend-avatar">{initials(p)}</div>
+                  <div className="sl-attend-name">{p.firstName} {p.lastName}</div>
+                  <span className="sl-attend-pill pending">Deactivated</span>
+                  <div className="sl-attend-view"><ChevronRight size={16} /></div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

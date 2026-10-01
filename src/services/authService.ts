@@ -225,7 +225,7 @@ export function parseFirebaseError(error: unknown): AuthError {
     "auth/wrong-password":          "Incorrect password. Please try again.",
     "auth/too-many-requests":       "Too many failed attempts. Please try again later.",
     "auth/network-request-failed":  "Network error. Please check your connection.",
-    "auth/user-disabled":           "This account has been disabled. Contact support.",
+    "auth/user-disabled":           "Your account has been deactivated. Please contact the clinic manager.",
     "auth/invalid-credential":      "Invalid credentials. Please check your email and password.",
   };
 
@@ -425,6 +425,13 @@ export async function loadUserProfile(
 
   const userData = userSnap.data() as DocumentData;
   const role: UserRole = userData.role;
+
+  // Deactivated staff: end the session even if Auth still holds a valid token
+  // (the Auth account is disabled too, but an open session lasts up to an hour).
+  if (userData.active === false) {
+    await signOut(auth);
+    throw { code: "auth/user-disabled", message: "Your account has been deactivated." };
+  }
 
   const base: UserProfile = {
     uid:         user.uid,

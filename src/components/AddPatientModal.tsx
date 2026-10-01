@@ -361,7 +361,7 @@ export default function AddPatientModal({
                       <select className="apm-select" value={assignedPhysioId}
                         onChange={(e: ChangeEvent<HTMLSelectElement>) => setAssignedPhysioId(e.target.value)}>
                         <option value="">— Unassigned —</option>
-                        {physios.map((p) => (
+                        {physios.filter((p) => p.active).map((p) => (
                           <option key={p.uid} value={p.uid}>{p.firstName} {p.lastName}</option>
                         ))}
                       </select>

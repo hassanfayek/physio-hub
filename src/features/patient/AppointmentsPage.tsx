@@ -134,7 +134,7 @@ export default function AppointmentsPage() {
   // ── Load physio list (realtime) ───────────────────────────────────────────
   useEffect(() => {
     return subscribeToPhysiotherapists((data) => {
-      setPhysios(data);
+      setPhysios(data.filter((p) => p.active)); // patients can only book active staff
       // Don't auto-select — user must choose explicitly
     });
   }, []);

@@ -59,6 +59,7 @@ export interface Physiotherapist {
   phone:           string;
   specializations: string[];
   rank:            PhysioRank;
+  active:          boolean; // false once deactivated — data kept, access revoked
 }
 
 export interface CreatePatientPayload {
@@ -144,6 +145,7 @@ function docToPhysio(id: string, data: Record<string, unknown>): Physiotherapist
                    : (data.rank as string) === "trainee" ? "trainee"
                    : (data.rank as string) === "manager" ? "manager"
                    : "senior") as PhysioRank,
+    active:          (data.active as boolean | undefined) !== false,
   };
 }
 

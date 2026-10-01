@@ -525,7 +525,7 @@ export default function AppointmentModal({
                           required
                         >
                           <option value="">— Choose a physiotherapist —</option>
-                          {physios.map((p) => (
+                          {physios.filter((p) => p.active || p.uid === physioId).map((p) => (
                             <option key={p.uid} value={p.uid}>
                               Dr. {p.firstName} {p.lastName}
                             </option>

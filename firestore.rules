@@ -8,13 +8,21 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function role() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function isManager()   { return isAuth() && (role() == 'clinic_manager' || role() == 'manager'); }
-    function isPhysio()    { return isAuth() && role() == 'physiotherapist';  }
-    function isSecretary() { return isAuth() && role() == 'secretary';        }
+    function role() {
+      return userDoc().role;
+    }
+
+    // Deactivated staff (users/{uid}.active == false) lose access immediately,
+    // even mid-session. Docs without the field count as active.
+    function isActive()    { return userDoc().get('active', true) != false; }
+
+    function isManager()   { return isAuth() && (role() == 'clinic_manager' || role() == 'manager') && isActive(); }
+    function isPhysio()    { return isAuth() && role() == 'physiotherapist' && isActive(); }
+    function isSecretary() { return isAuth() && role() == 'secretary' && isActive(); }
     function isPatient()   { return isAuth() && role() == 'patient';          }
     function isPhysician() { return isAuth() && role() == 'physician';        }
     function isPartner()   { return isAuth() && role() == 'partner';          }
@@ -24,8 +32,17 @@ service cloud.firestore {
     // ── Users ─────────────────────────────────────────────────────────────────
     // Each user can read/update their own profile; manager can read all.
     match /users/{uid} {
-      allow read:  if isAuth() && (request.auth.uid == uid || isManager());
-      allow write: if isAuth() && (request.auth.uid == uid || isManager());
+      allow read:   if isAuth() && (request.auth.uid == uid || isManager());
+      allow create: if isAuth() && (request.auth.uid == uid || isManager());
+      // Users may edit their own doc, but never their own role or active flag —
+      // otherwise anyone could promote themselves or undo a deactivation.
+      allow update: if isAuth() && (
+        isManager() ||
+        (request.auth.uid == uid
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.get('active', true) == resource.data.get('active', true))
+      );
+      allow delete: if isManager();
     }
 
     // ── Physiotherapists ──────────────────────────────────────────────────────

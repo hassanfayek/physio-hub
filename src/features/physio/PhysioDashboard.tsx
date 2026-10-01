@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { LayoutDashboard, Users, Calendar, Dumbbell, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen, Wifi, Stethoscope, Sparkles, UserCog, Menu, X } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
-import { doc, getDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, getDocs, deleteDoc, updateDoc, serverTimestamp, collection, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAuth } from "../../hooks/useAuth";
 import PatientsTab      from "./PatientsTab";
@@ -23,7 +23,7 @@ import type { PhysioProfile } from "../../services/authService";
 import logo from "../../assets/physio-logo.svg";
 import { subscribeToPhysiotherapists, subscribeToPhysioPatients, subscribeToAllPatients, type Physiotherapist, type Patient } from "../../services/patientService";
 import { registerSecretary, registerViewer, type RegisterViewerData } from "../../services/authService";
-import { subscribeToSecretaries, deleteSecretary, type Secretary } from "../../services/secretaryService";
+import { subscribeToSecretaries, deleteSecretary, setStaffActive, type Secretary } from "../../services/secretaryService";
 import { subscribeToViewers, deleteViewer, type Viewer } from "../../services/viewerService";
 import { subscribeToPhysicians, deletePhysician, type Physician } from "../../services/physicianService";
 import { registerPhysician, type RegisterPhysicianData } from "../../services/authService";
@@ -213,7 +213,7 @@ function TeamTab() {
   };
 
   const handleDeletePhysio = async (uid: string, name: string) => {
-    if (!window.confirm(`Remove Dr. ${name} from the team? This will permanently delete their account.`)) return;
+    if (!window.confirm(`PERMANENTLY delete Dr. ${name}'s account?\n\nTo keep their history and just block access, use "Deactivate" instead.`)) return;
     setDeletingUid(uid);
     try {
       // 1. Delete Firestore documents
@@ -291,11 +291,47 @@ function TeamTab() {
   };
 
   const handleDeleteSecretary = async (uid: string, name: string) => {
-    if (!window.confirm(`Remove ${name} from secretaries? This will permanently delete their account.`)) return;
+    if (!window.confirm(`PERMANENTLY delete ${name}'s account?\n\nTo keep their history and just block access, use "Deactivate" instead.`)) return;
     setDeletingSecUid(uid);
     const { error } = await deleteSecretary(uid);
     if (error) alert(error);
     setDeletingSecUid(null);
+  };
+
+  // ── Deactivate / Reactivate (keeps all data, revokes access) ────────────────
+  const [togglingUid, setTogglingUid] = React.useState<string | null>(null);
+
+  const handleToggleActive = async (uid: string, name: string, currentlyActive: boolean, isPhysioMember: boolean) => {
+    if (currentlyActive) {
+      let impact = "";
+      if (isPhysioMember) {
+        // Surface what's still attached to this physio so nothing is orphaned silently.
+        const today = new Date().toISOString().slice(0, 10);
+        const [primary, senior, junior, trainee, appts] = await Promise.all([
+          getDocs(query(collection(db, "patients"), where("physioId", "==", uid))),
+          getDocs(query(collection(db, "patients"), where("seniorEditorId", "==", uid))),
+          getDocs(query(collection(db, "patients"), where("juniorIds", "array-contains", uid))),
+          getDocs(query(collection(db, "patients"), where("traineeId", "==", uid))),
+          getDocs(query(collection(db, "appointments"), where("date", ">=", today))),
+        ]);
+        const patientIds = new Set([...primary.docs, ...senior.docs, ...junior.docs, ...trainee.docs].map((d) => d.id));
+        const futureAppts = appts.docs.filter((d) => {
+          const a = d.data();
+          return a.physioId === uid && (a.status === "scheduled" || a.status === "rescheduled" || !a.status);
+        }).length;
+        if (patientIds.size || futureAppts) {
+          impact = `\n\nStill assigned to them: ${patientIds.size} patient(s) and ${futureAppts} upcoming appointment(s). You may want to reassign these.`;
+        }
+      }
+      if (!window.confirm(`Deactivate ${name}?\n\nThey won't be able to log in. All their records, history and attendance are kept, and you can reactivate them anytime.${impact}`)) return;
+    } else if (!window.confirm(`Reactivate ${name}? They'll be able to log in again.`)) {
+      return;
+    }
+
+    setTogglingUid(uid);
+    const { error } = await setStaffActive(uid, !currentlyActive);
+    if (error) alert(error);
+    setTogglingUid(null);
   };
 
   return (
@@ -346,6 +382,17 @@ function TeamTab() {
         }
         .tm-del-btn:hover { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
         .tm-del-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .tm-access-btn {
+          flex-shrink: 0; margin-left: 6px; padding: 5px 10px; border-radius: 8px;
+          border: 1.5px solid #e5e0d8; background: #fafaf8; color: #92400e;
+          font-family: 'Outfit', sans-serif; font-size: 11.5px; font-weight: 600; cursor: pointer;
+          white-space: nowrap;
+        }
+        .tm-access-btn:hover { background: #fef3c7; border-color: #fcd34d; }
+        .tm-access-btn.reactivate { color: #1b4332; }
+        .tm-access-btn.reactivate:hover { background: #dff3df; border-color: #b7e4c7; }
+        .tm-access-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .tm-inactive-badge { background: #fde2e2 !important; color: #b91c1c !important; }
         .tm-edit-btn {
           display: inline-flex; align-items: center; gap: 5px;
           padding: 5px 12px; border-radius: 8px;
@@ -446,8 +493,8 @@ function TeamTab() {
         <div style={{ textAlign: "center", padding: "32px 0", color: "#9a9590", fontSize: 14 }}>No physiotherapists added yet.</div>
       ) : (
         <div className="tm-grid">
-          {physios.map((p) => (
-            <div key={p.uid} className="tm-card">
+          {[...physios].sort((a, b) => Number(b.active) - Number(a.active)).map((p) => (
+            <div key={p.uid} className="tm-card" style={p.active ? undefined : { opacity: 0.6 }}>
               <div className="tm-card-header"
                 onClick={() => setExpandedUid(expandedUid === p.uid ? null : p.uid)}>
                 <div className="tm-avatar">{p.firstName[0]}{p.lastName[0]}</div>
@@ -459,8 +506,18 @@ function TeamTab() {
                       {(p.rank ?? "junior").charAt(0).toUpperCase() + (p.rank ?? "junior").slice(1)}
                     </span>
                     {p.specializations?.[0] && <span className="tm-badge">{p.specializations[0]}</span>}
+                    {!p.active && <span className="tm-badge tm-inactive-badge">Deactivated</span>}
                   </div>
                 </div>
+                {p.rank !== "manager" && (
+                  <button
+                    className={`tm-access-btn ${p.active ? "" : "reactivate"}`}
+                    disabled={togglingUid === p.uid}
+                    onClick={(e) => { e.stopPropagation(); handleToggleActive(p.uid, `Dr. ${p.firstName} ${p.lastName}`, p.active, true); }}
+                  >
+                    {togglingUid === p.uid ? "…" : p.active ? "Deactivate" : "Reactivate"}
+                  </button>
+                )}
                 <ChevronDown className={`tm-card-chevron ${expandedUid === p.uid ? "open" : ""}`} size={14} strokeWidth={2.5} />
                 <button
                   className="tm-del-btn"
@@ -522,8 +579,8 @@ function TeamTab() {
         <div style={{ textAlign: "center", padding: "24px 0", color: "#9a9590", fontSize: 14, marginBottom: 16 }}>No secretaries added yet.</div>
       ) : (
         <div className="tm-grid" style={{ marginBottom: 16 }}>
-          {secretaries.map((s) => (
-            <div key={s.uid} className="tm-card">
+          {[...secretaries].sort((a, b) => Number(b.active) - Number(a.active)).map((s) => (
+            <div key={s.uid} className="tm-card" style={s.active ? undefined : { opacity: 0.6 }}>
               <div className="tm-card-header" style={{ cursor: "default" }}>
                 <div className="tm-avatar" style={{ background: "linear-gradient(135deg, #9b59b6, #8e44ad)" }}>
                   {s.firstName[0]}{s.lastName[0]}
@@ -533,8 +590,16 @@ function TeamTab() {
                   <div className="tm-spec">{s.email}</div>
                   <div style={{ marginTop: 4 }}>
                     <span className="tm-badge" style={{ background: "#f3e8ff", color: "#7c3aed" }}>Secretary</span>
+                    {!s.active && <span className="tm-badge tm-inactive-badge">Deactivated</span>}
                   </div>
                 </div>
+                <button
+                  className={`tm-access-btn ${s.active ? "" : "reactivate"}`}
+                  disabled={togglingUid === s.uid}
+                  onClick={() => handleToggleActive(s.uid, `${s.firstName} ${s.lastName}`, s.active, false)}
+                >
+                  {togglingUid === s.uid ? "…" : s.active ? "Deactivate" : "Reactivate"}
+                </button>
                 <button
                   className="tm-del-btn"
                   style={{ position: "static", marginLeft: 4 }}

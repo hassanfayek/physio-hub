@@ -99,6 +99,55 @@ exports.deleteAuthUser = onCall(async (request) => {
   return { success: true };
 });
 
+// ─── Deactivate / Reactivate Staff ────────────────────────────────────────────
+// Cuts off (or restores) a staff member's access without deleting any data.
+// Disables the Auth account (no sign-in, no token refresh) and flags
+// users/{uid}.active, which firestore.rules checks so an already-open session
+// loses access immediately rather than at token expiry.
+
+const DEACTIVATABLE_ROLES = { physiotherapist: "physiotherapists", secretary: "secretaries" };
+
+exports.setStaffActive = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be logged in.");
+  }
+
+  const db = admin.firestore();
+  const callerDoc = await db.collection("users").doc(request.auth.uid).get();
+  const caller = callerDoc.exists ? callerDoc.data() : null;
+  if (!caller || caller.role !== "clinic_manager" || caller.active === false) {
+    throw new HttpsError("permission-denied", "Only clinic managers can change staff access.");
+  }
+
+  const { uid, active } = request.data || {};
+  if (!uid || typeof uid !== "string" || typeof active !== "boolean") {
+    throw new HttpsError("invalid-argument", "uid and active are required.");
+  }
+  if (uid === request.auth.uid) {
+    throw new HttpsError("failed-precondition", "You can't deactivate your own account.");
+  }
+
+  const targetDoc = await db.collection("users").doc(uid).get();
+  const roleCollection = targetDoc.exists ? DEACTIVATABLE_ROLES[targetDoc.data().role] : null;
+  if (!roleCollection) {
+    throw new HttpsError("failed-precondition", "Only physiotherapists and secretaries can be deactivated.");
+  }
+
+  await admin.auth().updateUser(uid, { disabled: !active });
+  if (!active) await admin.auth().revokeRefreshTokens(uid);
+
+  const flags = active
+    ? { active: true, deactivatedAt: null, deactivatedBy: null }
+    : { active: false, deactivatedAt: admin.firestore.FieldValue.serverTimestamp(), deactivatedBy: request.auth.uid };
+
+  await Promise.all([
+    db.collection("users").doc(uid).set(flags, { merge: true }),
+    db.collection(roleCollection).doc(uid).set(flags, { merge: true }),
+  ]);
+
+  return { success: true };
+});
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatSection(title, fields) {

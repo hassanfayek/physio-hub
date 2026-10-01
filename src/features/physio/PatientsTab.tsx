@@ -74,9 +74,13 @@ function StaffAssignmentPanel({ patient, physios }: { patient: Patient; physios:
   const [saving, setSaving] = useState<string | null>(null);
   const [err,    setErr]    = useState<string | null>(null);
 
-  const seniors  = physios.filter((p) => (p.rank ?? "junior") === "senior");
-  const juniors  = physios.filter((p) => (p.rank ?? "junior") === "junior");
-  const trainees = physios.filter((p) => (p.rank ?? "junior") === "trainee");
+  // Deactivated staff drop out of the pickers, except whoever is already
+  // assigned — so an existing assignment still displays instead of going blank.
+  const assignedIds = new Set([patient.seniorEditorId, patient.traineeId, ...(patient.juniorIds ?? [])].filter(Boolean));
+  const pickable = physios.filter((p) => p.active || assignedIds.has(p.uid));
+  const seniors  = pickable.filter((p) => (p.rank ?? "junior") === "senior");
+  const juniors  = pickable.filter((p) => (p.rank ?? "junior") === "junior");
+  const trainees = pickable.filter((p) => (p.rank ?? "junior") === "trainee");
 
   const assign = async (field: string, uid: string, name: string) => {
     setSaving(field); setErr(null);

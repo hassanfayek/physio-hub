@@ -188,7 +188,7 @@ function SeniorAssignPanel({
           disabled={saving}
         >
           <option value="">— Unassigned —</option>
-          {physios.filter((p) => p.rank === "senior").map((p) => (
+          {physios.filter((p) => p.rank === "senior" && (p.active || p.uid === seniorEditorId)).map((p) => (
             <option key={p.uid} value={p.uid}>
               Dr. {p.firstName} {p.lastName}
             </option>

@@ -778,11 +778,11 @@ export default function PatientPricingSection({
                   onChange={(e) => setSessionPriceForm({ ...sessionPriceForm, physioName: e.target.value })}
                 >
                   <option value="">— Select —</option>
-                  {physios.map((p) => {
+                  {physios.filter((p) => p.active).map((p) => {
                     const name = `Dr. ${p.firstName} ${p.lastName}`;
                     return <option key={p.uid} value={name}>{name}</option>;
                   })}
-                  {sessionPriceForm.physioName && !physios.some((p) => `Dr. ${p.firstName} ${p.lastName}` === sessionPriceForm.physioName) && (
+                  {sessionPriceForm.physioName && !physios.some((p) => p.active && `Dr. ${p.firstName} ${p.lastName}` === sessionPriceForm.physioName) && (
                     <option value={sessionPriceForm.physioName}>{sessionPriceForm.physioName} (existing)</option>
                   )}
                 </select>
