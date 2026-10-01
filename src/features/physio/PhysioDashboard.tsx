@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Calendar, Dumbbell, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen, Wifi, Stethoscope, Sparkles, UserCog, Menu, X } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, Dumbbell, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen, Wifi, Stethoscope, Sparkles, UserCog, Menu, X, Trash2 } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
 import { doc, getDoc, getDocs, deleteDoc, updateDoc, serverTimestamp, collection, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -351,7 +351,7 @@ function TeamTab() {
         .tm-add-btn.patient { background: #EAF5FC; color: #2E8BC0; border: 1.5px solid #B3DEF0; }
         .tm-add-btn.patient:hover { background: #D6EEF8; }
         .tm-success { background: #d8f3dc; border: 1px solid #b7e4c7; border-radius: 10px; padding: 12px 16px; font-size: 13.5px; color: #1b4332; margin-bottom: 16px; }
-        .tm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+        .tm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
         .tm-card {
           background: #fff; border: 1.5px solid #e5e0d8; border-radius: 14px;
           overflow: hidden; transition: border-color 0.15s; position: relative;
@@ -421,6 +421,57 @@ function TeamTab() {
         .tm-rank-junior  { background: #D6EEF8; color: #0C3C60; }
         .tm-rank-trainee { background: #f3f4f6; color: #374151; }
         .tm-rank-manager { background: #ede9fe; color: #5b21b6; }
+        .tm-rank-secretary { background: #f3e8ff; color: #7c3aed; }
+
+        /* ── Staff cards (physios + secretaries): identity on top, actions in a footer ── */
+        .tm-card-v2 {
+          display: flex; flex-direction: column; border-radius: 16px;
+          border-top-width: 3px;
+          box-shadow: 0 1px 2px rgba(12,60,96,0.04), 0 4px 14px rgba(12,60,96,0.05);
+          transition: box-shadow 0.18s, transform 0.18s, border-color 0.15s;
+        }
+        .tm-card-v2:hover { box-shadow: 0 8px 24px rgba(12,60,96,0.10); transform: translateY(-1px); }
+        .tm-card-v2.tm-accent-senior    { border-top-color: #E8A93B; }
+        .tm-card-v2.tm-accent-junior    { border-top-color: #2E8BC0; }
+        .tm-card-v2.tm-accent-trainee   { border-top-color: #b8b2aa; }
+        .tm-card-v2.tm-accent-manager   { border-top-color: #7c3aed; }
+        .tm-card-v2.tm-accent-secretary { border-top-color: #9b59b6; }
+
+        .tm-card-top { display: flex; align-items: center; gap: 14px; padding: 18px 18px 12px; cursor: pointer; }
+        .tm-card-id { flex: 1; min-width: 0; }
+        .tm-card-v2 .tm-name { font-size: 15.5px; line-height: 1.3; }
+        .tm-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tm-card-v2 .tm-avatar { width: 48px; height: 48px; }
+        .tm-ring-senior    { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #F4D39A; }
+        .tm-ring-junior    { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #B3DEF0; }
+        .tm-ring-trainee   { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #e5e0d8; }
+        .tm-ring-manager   { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #d8ccfb; }
+        .tm-ring-secretary { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #e4cdf3; }
+
+        .tm-badges { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 18px 16px; }
+        .tm-card-v2 .tm-badge, .tm-card-v2 .tm-rank-badge { margin: 0; }
+
+        .tm-card-foot {
+          margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+          padding: 10px 14px 10px 18px; border-top: 1px solid #f0ede8; background: #fcfbf9;
+        }
+        .tm-foot-link {
+          display: inline-flex; align-items: center; gap: 4px; background: none; border: none; padding: 4px 0;
+          font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 600; color: #2E8BC0; cursor: pointer;
+        }
+        .tm-foot-actions { display: flex; align-items: center; gap: 6px; }
+        .tm-card-v2 .tm-access-btn { margin-left: 0; padding: 6px 12px; }
+        .tm-icon-btn {
+          width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+          border: 1.5px solid #e5e0d8; background: #fff; color: #9a9590;
+          display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s;
+        }
+        .tm-icon-btn:hover { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+        .tm-icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Deactivated: dim the identity, keep the footer (Reactivate) fully usable */
+        .tm-card-v2.inactive { border-top-color: #d6d0c8; }
+        .tm-card-v2.inactive .tm-card-top, .tm-card-v2.inactive .tm-badges { opacity: 0.55; filter: grayscale(0.6); }
 
         /* Modal */
         .tm-modal-overlay {
@@ -493,43 +544,25 @@ function TeamTab() {
         <div style={{ textAlign: "center", padding: "32px 0", color: "#9a9590", fontSize: 14 }}>No physiotherapists added yet.</div>
       ) : (
         <div className="tm-grid">
-          {[...physios].sort((a, b) => Number(b.active) - Number(a.active)).map((p) => (
-            <div key={p.uid} className="tm-card" style={p.active ? undefined : { opacity: 0.6 }}>
-              <div className="tm-card-header"
-                onClick={() => setExpandedUid(expandedUid === p.uid ? null : p.uid)}>
-                <div className="tm-avatar">{p.firstName[0]}{p.lastName[0]}</div>
-                <div style={{ flex: 1 }}>
+          {[...physios].sort((a, b) => Number(b.active) - Number(a.active)).map((p) => {
+            const rank = p.rank ?? "junior";
+            const expanded = expandedUid === p.uid;
+            const toggle = () => setExpandedUid(expanded ? null : p.uid);
+            return (
+            <div key={p.uid} className={`tm-card tm-card-v2 tm-accent-${rank} ${p.active ? "" : "inactive"}`}>
+              <div className="tm-card-top" onClick={toggle}>
+                <div className={`tm-avatar tm-ring-${rank}`}>{p.firstName[0]}{p.lastName[0]}</div>
+                <div className="tm-card-id">
                   <div className="tm-name">Dr. {p.firstName} {p.lastName}</div>
                   <div className="tm-spec">{p.clinicName || "Physio+ Clinic"}</div>
-                  <div style={{ marginTop: 4 }}>
-                    <span className={`tm-rank-badge tm-rank-${p.rank ?? "junior"}`}>
-                      {(p.rank ?? "junior").charAt(0).toUpperCase() + (p.rank ?? "junior").slice(1)}
-                    </span>
-                    {p.specializations?.[0] && <span className="tm-badge">{p.specializations[0]}</span>}
-                    {!p.active && <span className="tm-badge tm-inactive-badge">Deactivated</span>}
-                  </div>
                 </div>
-                {p.rank !== "manager" && (
-                  <button
-                    className={`tm-access-btn ${p.active ? "" : "reactivate"}`}
-                    disabled={togglingUid === p.uid}
-                    onClick={(e) => { e.stopPropagation(); handleToggleActive(p.uid, `Dr. ${p.firstName} ${p.lastName}`, p.active, true); }}
-                  >
-                    {togglingUid === p.uid ? "…" : p.active ? "Deactivate" : "Reactivate"}
-                  </button>
-                )}
-                <ChevronDown className={`tm-card-chevron ${expandedUid === p.uid ? "open" : ""}`} size={14} strokeWidth={2.5} />
-                <button
-                  className="tm-del-btn"
-                  style={{ position: "static", marginLeft: 4 }}
-                  disabled={deletingUid === p.uid}
-                  onClick={(e) => { e.stopPropagation(); handleDeletePhysio(p.uid, `${p.firstName} ${p.lastName}`); }}
-                  title="Remove physiotherapist"
-                >
-                  {deletingUid === p.uid ? "…" : "✕"}
-                </button>
               </div>
-              {expandedUid === p.uid && (
+              <div className="tm-badges">
+                <span className={`tm-rank-badge tm-rank-${rank}`}>{rank}</span>
+                {(p.specializations ?? []).slice(0, 2).map((s) => <span key={s} className="tm-badge">{s}</span>)}
+                {!p.active && <span className="tm-badge tm-inactive-badge">Deactivated</span>}
+              </div>
+              {expanded && (
                 <div className="tm-card-body">
                   {([
                     ["License No.",      p.licenseNumber || "—"],
@@ -566,8 +599,35 @@ function TeamTab() {
                   </div>
                 </div>
               )}
+              <div className="tm-card-foot">
+                <button className="tm-foot-link" onClick={toggle}>
+                  {expanded ? "Hide details" : "Details"}
+                  <ChevronDown className={`tm-card-chevron ${expanded ? "open" : ""}`} size={13} strokeWidth={2.5} />
+                </button>
+                <div className="tm-foot-actions">
+                  {rank !== "manager" && (
+                    <button
+                      className={`tm-access-btn ${p.active ? "" : "reactivate"}`}
+                      disabled={togglingUid === p.uid}
+                      onClick={() => handleToggleActive(p.uid, `Dr. ${p.firstName} ${p.lastName}`, p.active, true)}
+                    >
+                      {togglingUid === p.uid ? "…" : p.active ? "Deactivate" : "Reactivate"}
+                    </button>
+                  )}
+                  <button
+                    className="tm-icon-btn"
+                    disabled={deletingUid === p.uid}
+                    onClick={() => handleDeletePhysio(p.uid, `${p.firstName} ${p.lastName}`)}
+                    title="Permanently delete"
+                    aria-label="Permanently delete"
+                  >
+                    {deletingUid === p.uid ? "…" : <Trash2 size={13} strokeWidth={2} />}
+                  </button>
+                </div>
+              </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -580,35 +640,40 @@ function TeamTab() {
       ) : (
         <div className="tm-grid" style={{ marginBottom: 16 }}>
           {[...secretaries].sort((a, b) => Number(b.active) - Number(a.active)).map((s) => (
-            <div key={s.uid} className="tm-card" style={s.active ? undefined : { opacity: 0.6 }}>
-              <div className="tm-card-header" style={{ cursor: "default" }}>
-                <div className="tm-avatar" style={{ background: "linear-gradient(135deg, #9b59b6, #8e44ad)" }}>
+            <div key={s.uid} className={`tm-card tm-card-v2 tm-accent-secretary ${s.active ? "" : "inactive"}`}>
+              <div className="tm-card-top" style={{ cursor: "default" }}>
+                <div className="tm-avatar tm-ring-secretary" style={{ background: "linear-gradient(135deg, #9b59b6, #8e44ad)" }}>
                   {s.firstName[0]}{s.lastName[0]}
                 </div>
-                <div style={{ flex: 1 }}>
+                <div className="tm-card-id">
                   <div className="tm-name">{s.firstName} {s.lastName}</div>
-                  <div className="tm-spec">{s.email}</div>
-                  <div style={{ marginTop: 4 }}>
-                    <span className="tm-badge" style={{ background: "#f3e8ff", color: "#7c3aed" }}>Secretary</span>
-                    {!s.active && <span className="tm-badge tm-inactive-badge">Deactivated</span>}
-                  </div>
+                  <div className="tm-spec tm-ellipsis">{s.email}</div>
                 </div>
-                <button
-                  className={`tm-access-btn ${s.active ? "" : "reactivate"}`}
-                  disabled={togglingUid === s.uid}
-                  onClick={() => handleToggleActive(s.uid, `${s.firstName} ${s.lastName}`, s.active, false)}
-                >
-                  {togglingUid === s.uid ? "…" : s.active ? "Deactivate" : "Reactivate"}
-                </button>
-                <button
-                  className="tm-del-btn"
-                  style={{ position: "static", marginLeft: 4 }}
-                  disabled={deletingSecUid === s.uid}
-                  onClick={() => handleDeleteSecretary(s.uid, `${s.firstName} ${s.lastName}`)}
-                  title="Remove secretary"
-                >
-                  {deletingSecUid === s.uid ? "…" : "✕"}
-                </button>
+              </div>
+              <div className="tm-badges">
+                <span className="tm-rank-badge tm-rank-secretary">Secretary</span>
+                {!s.active && <span className="tm-badge tm-inactive-badge">Deactivated</span>}
+              </div>
+              <div className="tm-card-foot">
+                <span />
+                <div className="tm-foot-actions">
+                  <button
+                    className={`tm-access-btn ${s.active ? "" : "reactivate"}`}
+                    disabled={togglingUid === s.uid}
+                    onClick={() => handleToggleActive(s.uid, `${s.firstName} ${s.lastName}`, s.active, false)}
+                  >
+                    {togglingUid === s.uid ? "…" : s.active ? "Deactivate" : "Reactivate"}
+                  </button>
+                  <button
+                    className="tm-icon-btn"
+                    disabled={deletingSecUid === s.uid}
+                    onClick={() => handleDeleteSecretary(s.uid, `${s.firstName} ${s.lastName}`)}
+                    title="Permanently delete"
+                    aria-label="Permanently delete"
+                  >
+                    {deletingSecUid === s.uid ? "…" : <Trash2 size={13} strokeWidth={2} />}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
