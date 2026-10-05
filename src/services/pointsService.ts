@@ -69,6 +69,7 @@ export interface PointsVoucher {
   voucherExpiresAt:      Timestamp | null;
   appliedAt:             Timestamp | null;
   appliedAppointmentId:  string;
+  appliedPackageId:      string;
   appliedAmount:         number;
   voidedAt?:             Timestamp | null;
   voidedReason?:         string;
@@ -109,6 +110,7 @@ function docToVoucher(id: string, data: Record<string, unknown>): PointsVoucher 
     voucherExpiresAt:     (data.voucherExpiresAt       as Timestamp | null) ?? null,
     appliedAt:            (data.appliedAt              as Timestamp | null) ?? null,
     appliedAppointmentId: (data.appliedAppointmentId   as string)  ?? "",
+    appliedPackageId:     (data.appliedPackageId       as string)  ?? "",
     appliedAmount:        (data.appliedAmount          as number)  ?? 0,
     voidedAt:             (data.voidedAt               as Timestamp | null) ?? null,
     voidedReason:         (data.voidedReason           as string)  ?? "",
@@ -377,4 +379,37 @@ export async function applyVoucher(
   } catch (err) {
     return { error: parseError(err) };
   }
+}
+
+// ─── Package vouchers: claim → link → (release on failure) ────────────────────
+// Claimed in a transaction *before* the package is created so the same code
+// can't be spent twice by two staff members at once; released again if the
+// package write then fails.
+
+export async function claimVoucher(
+  voucherId:     string,
+  appliedAmount: number
+): Promise<{ error?: string }> {
+  try {
+    const ref = doc(db, "pointsVouchers", voucherId);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error("Voucher not found.");
+      const v = docToVoucher(snap.id, snap.data());
+      if (v.status !== "active") throw new Error(`This voucher has already been ${v.status}.`);
+      if (v.voucherExpiresAt && v.voucherExpiresAt.toMillis() < Date.now()) throw new Error("This voucher has expired.");
+      tx.update(ref, { status: "applied", appliedAt: serverTimestamp(), appliedAmount });
+    });
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+export async function linkVoucherToPackage(voucherId: string, packageId: string): Promise<void> {
+  await updateDoc(doc(db, "pointsVouchers", voucherId), { appliedPackageId: packageId });
+}
+
+export async function releaseVoucher(voucherId: string): Promise<void> {
+  await updateDoc(doc(db, "pointsVouchers", voucherId), { status: "active", appliedAt: null, appliedAmount: 0 });
 }

@@ -28,6 +28,14 @@ import {
   subscribeToPhysiotherapists,
   type Physiotherapist,
 } from "../../services/patientService";
+import {
+  lookupVoucherByCode,
+  claimVoucher,
+  linkVoucherToPackage,
+  releaseVoucher,
+  VOUCHER_SESSION_CAP,
+  type PointsVoucher,
+} from "../../services/pointsService";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -89,6 +97,13 @@ export default function PatientPricingSection({
   const [pkgError,      setPkgError]      = useState<string | null>(null);
   const [deletingPkgId, setDeletingPkgId] = useState<string | null>(null);
   const [deletingPkg,   setDeletingPkg]   = useState(false);
+
+  // Loyalty voucher on a new package — capped at VOUCHER_SESSION_CAP per session in the package
+  const [pkgVoucherCode,     setPkgVoucherCode]     = useState("");
+  const [pkgVoucher,         setPkgVoucher]         = useState<PointsVoucher | null>(null);
+  const [pkgVoucherChecking, setPkgVoucherChecking] = useState(false);
+  const [pkgVoucherError,    setPkgVoucherError]    = useState<string | null>(null);
+  const canUseVoucher = isManager || isSecretary;
 
   // ── WhatsApp reminder editor ─────────────────────────────────────────────────
   const [editingMsgPkgId, setEditingMsgPkgId] = useState<string | null>(null);
@@ -225,20 +240,42 @@ export default function PatientPricingSection({
     return (parseFloat(pkgForm.pricePerSession) || 0) * pkgForm.packageSize;
   };
   const pkgDiscount = (): number => calcDiscount(pkgBaseTotal(), pkgForm.discountType, pkgForm.discountValue);
-  const pkgFinalTotal = (): number => Math.max(0, pkgBaseTotal() - pkgDiscount());
+  const pkgAfterDiscount = (): number => Math.max(0, pkgBaseTotal() - pkgDiscount());
+  const pkgVoucherAmount = (): number => pkgVoucher
+    ? Math.min(pkgVoucher.voucherValue, pkgAfterDiscount(), VOUCHER_SESSION_CAP * pkgForm.packageSize)
+    : 0;
+  const pkgFinalTotal = (): number => Math.max(0, pkgAfterDiscount() - pkgVoucherAmount());
   const pkgPPS = (): number => pkgForm.packageSize > 0 ? pkgFinalTotal() / pkgForm.packageSize : 0;
 
   const spBaseAmount = (): number => parseFloat(sessionPriceForm.amount) || 0;
   const spDiscount = (): number => calcDiscount(spBaseAmount(), sessionPriceForm.discountType, sessionPriceForm.discountValue);
   const spFinalAmount = (): number => Math.max(0, spBaseAmount() - spDiscount());
 
+  const resetPkgVoucher = () => {
+    setPkgVoucherCode(""); setPkgVoucher(null); setPkgVoucherError(null);
+  };
+
+  const handleCheckPkgVoucher = async () => {
+    if (!pkgVoucherCode.trim()) return;
+    setPkgVoucherChecking(true); setPkgVoucherError(null);
+    const result = await lookupVoucherByCode(patientId, pkgVoucherCode);
+    setPkgVoucherChecking(false);
+    if (result.error || !result.voucher) {
+      setPkgVoucher(null); setPkgVoucherError(result.error || "Voucher not found.");
+      return;
+    }
+    setPkgVoucher(result.voucher);
+  };
+
   const openAddPkg = () => {
+    resetPkgVoucher();
     setPkgForm({ ...EMPTY_PKG, packageSize: 6 });
     setCustomSizeMode(false);
     setEditPkg(null); setPkgError(null); setShowPkgForm(true);
   };
 
   const openEditPkg = (pkg: SessionPackage) => {
+    resetPkgVoucher();
     setPkgForm({ packageSize: pkg.packageSize, priceMode: "per", pricePerSession: String(pkg.pricePerSession), totalPrice: String(pkg.totalAmount), discountType: "none", discountValue: "", startDate: pkg.startDate, paidAmount: String(pkg.paidAmount), notes: pkg.notes, active: pkg.active, sessionsUsed: String(pkg.sessionsUsed) });
     setEditPkg(pkg); setPkgError(null); setShowPkgForm(true);
   };
@@ -247,7 +284,9 @@ export default function PatientPricingSection({
     const finalTotal = pkgFinalTotal();
     const pps        = pkgPPS();
     const paid = parseFloat(String(pkgForm.paidAmount) || "0");
-    if (finalTotal <= 0) { setPkgError("Please enter a valid price."); return; }
+    const voucherAmount = editPkg ? 0 : pkgVoucherAmount();
+    if (finalTotal <= 0 && voucherAmount <= 0) { setPkgError("Please enter a valid price."); return; }
+    if (pkgVoucherCode.trim() && !pkgVoucher && !editPkg) { setPkgError("Check the voucher code first, or clear it."); return; }
     setPkgSaving(true); setPkgError(null);
     const totalAmount = finalTotal;
     const payload = {
@@ -259,16 +298,27 @@ export default function PatientPricingSection({
       startDate:       pkgForm.startDate,
       sessionsUsed:    editPkg ? (parseInt(pkgForm.sessionsUsed, 10) || 0) : 0,
       active:          pkgForm.active,
-      notes:           `${pkgForm.notes.trim()}${pkgForm.discountType !== "none" ? ` [Discount: ${pkgForm.discountType === "pct" ? pkgForm.discountValue + "%" : fmt(parseFloat(pkgForm.discountValue) || 0) + " off"}]` : ""}`.trim(),
+      notes:           `${pkgForm.notes.trim()}${pkgForm.discountType !== "none" ? ` [Discount: ${pkgForm.discountType === "pct" ? pkgForm.discountValue + "%" : fmt(parseFloat(pkgForm.discountValue) || 0) + " off"}]` : ""}${voucherAmount > 0 && pkgVoucher ? ` [Voucher ${pkgVoucher.code}: -${fmt(voucherAmount)}]` : ""}`.trim(),
     };
     if (editPkg) {
       const { error } = await updateSessionPackage(editPkg.id, payload);
       if (error) { setPkgError(error); setPkgSaving(false); return; }
       showToast("Package updated");
     } else {
+      // Claim the voucher first so it can't be spent twice; release it if the package fails.
+      const claimId = voucherAmount > 0 && pkgVoucher ? pkgVoucher.id : null;
+      if (claimId) {
+        const claim = await claimVoucher(claimId, voucherAmount);
+        if (claim.error) { setPkgError(claim.error); setPkgVoucher(null); setPkgSaving(false); return; }
+      }
       const result = await addSessionPackage(payload);
-      if ("error" in result && result.error) { setPkgError(result.error); setPkgSaving(false); return; }
-      showToast("Package added");
+      if ("error" in result && result.error) {
+        if (claimId) await releaseVoucher(claimId).catch(() => {});
+        setPkgError(result.error); setPkgSaving(false); return;
+      }
+      if (claimId && result.id) await linkVoucherToPackage(claimId, result.id).catch(() => {});
+      showToast(claimId ? `Package added — voucher applied (−${fmt(voucherAmount)})` : "Package added");
+      resetPkgVoucher();
     }
     setPkgSaving(false); setShowPkgForm(false); setEditPkg(null);
   };
@@ -493,6 +543,15 @@ export default function PatientPricingSection({
 
         /* Discount row */
         .pps-discount-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .pps-voucher-btn {
+          flex-shrink: 0; padding: 0 14px; border-radius: 10px; border: 1.5px solid #B3DEF0;
+          background: #EAF5FC; color: #2E8BC0; font-family: 'Outfit', sans-serif;
+          font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+        }
+        .pps-voucher-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .pps-voucher-msg { margin-top: 6px; font-size: 12px; line-height: 1.45; padding: 7px 10px; border-radius: 8px; }
+        .pps-voucher-msg.ok  { background: #ecfdf3; color: #1b4332; border: 1px solid #b7e4c7; }
+        .pps-voucher-msg.err { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
         .pps-discount-type {
           width: 100%; padding: 10px 13px; border-radius: 10px; box-sizing: border-box;
           border: 1.5px solid #e5e0d8; background: #fafaf8;
@@ -952,6 +1011,41 @@ export default function PatientPricingSection({
               </div>
             </div>
 
+            {/* Loyalty voucher — new packages only, manager/secretary */}
+            {!editPkg && canUseVoucher && (
+              <div className="pps-field">
+                <label className="pps-label">Loyalty Voucher Code (optional)</label>
+                <div className="pps-discount-row" style={{ gridTemplateColumns: "1fr auto" }}>
+                  <input className="pps-input" placeholder="e.g. K7M2XQ"
+                    value={pkgVoucherCode}
+                    style={{ textTransform: "uppercase" }}
+                    onChange={(e) => { setPkgVoucherCode(e.target.value); setPkgVoucher(null); setPkgVoucherError(null); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCheckPkgVoucher(); } }} />
+                  {pkgVoucher ? (
+                    <button type="button" className="pps-voucher-btn" onClick={resetPkgVoucher}>Remove</button>
+                  ) : (
+                    <button type="button" className="pps-voucher-btn" onClick={handleCheckPkgVoucher}
+                      disabled={!pkgVoucherCode.trim() || pkgVoucherChecking}>
+                      {pkgVoucherChecking ? "Checking…" : "Check"}
+                    </button>
+                  )}
+                </div>
+                {pkgVoucherError && <div className="pps-voucher-msg err">{pkgVoucherError}</div>}
+                {pkgVoucher && (
+                  <div className="pps-voucher-msg ok">
+                    ✓ Voucher valid ({fmt(pkgVoucher.voucherValue)}) — <strong>−{fmt(pkgVoucherAmount())}</strong> will be applied and the voucher claimed on save.
+                    {pkgVoucherAmount() < pkgVoucher.voucherValue && pkgAfterDiscount() > 0 && (
+                      <div style={{ marginTop: 3, opacity: 0.85 }}>
+                        {pkgVoucherAmount() >= pkgAfterDiscount()
+                          ? `Covers the full package — the remaining ${fmt(pkgVoucher.voucherValue - pkgVoucherAmount())} is forfeited.`
+                          : `Capped at ${fmt(VOUCHER_SESSION_CAP)} × ${pkgForm.packageSize} sessions — the remaining ${fmt(pkgVoucher.voucherValue - pkgVoucherAmount())} is forfeited.`}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Final total preview */}
             {pkgBaseTotal() > 0 && (
               <div className="pps-final-row" style={{ marginBottom: 14 }}>
@@ -959,6 +1053,9 @@ export default function PatientPricingSection({
                   <div className="pps-final-label">Final Total</div>
                   {pkgForm.discountType !== "none" && pkgDiscount() > 0 && (
                     <div className="pps-final-sub">− {fmt(pkgDiscount())} discount · {fmt(pkgPPS())} / session</div>
+                  )}
+                  {pkgVoucherAmount() > 0 && pkgVoucher && (
+                    <div className="pps-final-sub">− {fmt(pkgVoucherAmount())} voucher {pkgVoucher.code}</div>
                   )}
                   {pkgForm.discountType === "none" && (
                     <div className="pps-final-sub">{fmt(pkgPPS())} per session</div>
