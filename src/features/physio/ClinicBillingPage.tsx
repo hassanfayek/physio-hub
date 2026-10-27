@@ -114,7 +114,7 @@ export default function ClinicBillingPage() {
       paid:        editSessionForm.paid,
       paidDate:    editSessionForm.paid ? (editSessionForm.paidDate || editSessionForm.date) : "",
       notes:       editSessionForm.notes,
-    });
+    }, { id: editingSession.id });   // update exactly the record being edited
     setEditSessionSaving(false);
     if ("error" in result && result.error) { setEditSessionError(result.error); return; }
     setEditingSession(null);

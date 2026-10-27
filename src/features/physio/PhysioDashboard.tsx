@@ -38,6 +38,7 @@ import OnlineServicesPage from "../rehab/OnlineServicesPage";
 import LoyaltyClubPage from "../loyalty/LoyaltyClubPage";
 import BusinessAnalyticsPage from "../analytics/BusinessAnalyticsPage";
 import FrontDeskPage from "../analytics/FrontDeskPage";
+import { onOpenScheduleDay, onOpenPatientSection } from "../../utils/navEvents";
 import StaffListPage from "../staff/StaffListPage";
 import { runBackgroundScan, subscribeToPackageAlerts } from "../../services/notificationService";
 
@@ -1389,6 +1390,18 @@ export default function PhysioDashboard() {
   const [activeTab,             setActiveTab]             = useState<Tab>("overview");
   const [viewingPatientId,      setViewingPatientId]      = useState<string | null>(null);
   const [viewingPatientSection, setViewingPatientSection] = useState<string | undefined>(undefined);
+  const [scheduleJumpDate,      setScheduleJumpDate]      = useState<string | null>(null);
+
+  // Deep links from anywhere in the dashboard (e.g. a price sheet's "Go to day").
+  useEffect(() => onOpenScheduleDay((date) => {
+    setViewingPatientId(null); setViewingPatientSection(undefined);
+    setScheduleJumpDate(date); setActiveTab("schedule");
+    window.scrollTo({ top: 0 });
+  }), []);
+  useEffect(() => onOpenPatientSection((id, section) => {
+    setViewingPatientSection(section); setViewingPatientId(id);
+    window.scrollTo({ top: 0 });
+  }), []);
 
   // ── Resolve role flags ───────────────────────────────────────────────────
   const [isManager,   setIsManager]   = useState(() => user?.role === "clinic_manager");
@@ -1841,7 +1854,7 @@ export default function PhysioDashboard() {
                 <div
                   key={tab.id}
                   className={`phd-nav-item ${activeTab === tab.id ? "active" : ""}`}
-                  onClick={() => { setActiveTab(tab.id); setViewingPatientId(null); setViewingPatientSection(undefined); setMobileNavOpen(false); }}
+                  onClick={() => { setActiveTab(tab.id); setViewingPatientId(null); setViewingPatientSection(undefined); setScheduleJumpDate(null); setMobileNavOpen(false); }}
                 >
                   <div className="phd-nav-icon">{tab.icon}</div>
                   <span className="phd-nav-text">{tab.label}</span>
@@ -1865,7 +1878,7 @@ export default function PhysioDashboard() {
           </aside>
 
           {/* Main content */}
-          <main className="phd-main" key={viewingPatientId ?? activeTab}>
+          <main className="phd-main" key={viewingPatientId ?? (activeTab === "schedule" && scheduleJumpDate ? `schedule:${scheduleJumpDate}` : activeTab)}>
             {viewingPatientId ? (
               <>
                 {/* Back button — only navigation addition, no styling changes */}
@@ -1922,6 +1935,7 @@ export default function PhysioDashboard() {
                     canBook={isManager || isSenior || isSecretary}
                     onViewPatient={(id) => { setViewingPatientSection(undefined); setViewingPatientId(id); }}
                     onViewPatientSection={(id, section) => { setViewingPatientSection(section); setViewingPatientId(id); }}
+                    initialDayDate={scheduleJumpDate ?? undefined}
                   />
                 )}
                 {activeTab === "exercises" && !isSecretary && (

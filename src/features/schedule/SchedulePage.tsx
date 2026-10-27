@@ -31,6 +31,8 @@ interface SchedulePageProps {
   canBook?:              boolean;  // false for juniors
   onViewPatient?:        (patientId: string) => void;
   onViewPatientSection?: (patientId: string, section: string) => void;
+  /** Open straight into this day (YYYY-MM-DD), e.g. from a price sheet's "Go to day". */
+  initialDayDate?:       string;
 }
 
 type ViewMode = "month" | "week" | "day";
@@ -129,14 +131,15 @@ export default function SchedulePage({
   canBook = true,
   onViewPatient,
   onViewPatientSection,
+  initialDayDate,
 }: SchedulePageProps) {
   // Juniors see all clinic appointments but cannot book
   const showAll = isManager || isSecretary || !canBook;
   // ── State ─────────────────────────────────────────────────────────────────
   const today     = new Date();
-  const [view,    setView]    = useState<ViewMode>("month");
-  const [cursor,  setCursor]  = useState(today);       // month/week navigator
-  const [dayDate, setDayDate] = useState<string | null>(null);
+  const [view,    setView]    = useState<ViewMode>(initialDayDate ? "day" : "month");
+  const [cursor,  setCursor]  = useState(initialDayDate ? new Date(initialDayDate + "T00:00:00") : today);       // month/week navigator
+  const [dayDate, setDayDate] = useState<string | null>(initialDayDate ?? null);
 
   // Intercept Android/browser back button when in day view — go back to week instead of crashing
   useEffect(() => {

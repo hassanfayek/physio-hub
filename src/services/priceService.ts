@@ -88,6 +88,7 @@ export interface SessionPrice {
   packageId:     string;   // empty if not covered by a package
   notes:         string;
   paymentMethod?: string;  // PAYMENT_METHODS value; "" / missing = not recorded
+  keptAsExtra?:  boolean;  // reviewed: a charge not tied to a completed session that should still count (e.g. cancellation fee)
   pointsAwarded?: number;  // loyalty points already earned for this record — internal bookkeeping, set by setSessionPrice
   createdAt:     Timestamp | null;
 }
@@ -106,6 +107,7 @@ export function docToSessionPrice(id: string, data: Record<string, unknown>): Se
     packageId:     (data.packageId     as string)           ?? "",
     notes:         (data.notes         as string)           ?? "",
     paymentMethod: (data.paymentMethod as string)           ?? "",
+    keptAsExtra:   (data.keptAsExtra   as boolean)          ?? false,
     pointsAwarded: (data.pointsAwarded as number | undefined) ?? 0,
     createdAt:     (data.createdAt     as Timestamp | null) ?? null,
   };
@@ -132,17 +134,23 @@ export function subscribeToSessionPrices(
   );
 }
 
+// Pass `opts.id` when editing a specific charge so exactly that record is updated.
+// Otherwise this upserts by appointmentId; a new charge for an appointment gets the
+// deterministic id `appt_<appointmentId>`, so double saves can't create duplicates.
 export async function setSessionPrice(
-  price: Omit<SessionPrice, "id" | "createdAt">
+  price: Omit<SessionPrice, "id" | "createdAt">,
+  opts: { id?: string } = {}
 ): Promise<{ id: string; error?: never } | { id?: never; error: string }> {
   try {
-    // upsert by appointmentId
-    const q = query(
-      collection(db, "patientSessionPrices"),
-      where("appointmentId", "==", price.appointmentId)
-    );
-    const snap = await getDocs(q);
-    const existing = !snap.empty ? docToSessionPrice(snap.docs[0].id, snap.docs[0].data()) : null;
+    let existingRef: ReturnType<typeof doc> | null = null;
+    let existing: SessionPrice | null = null;
+    if (opts.id) {
+      const s = await getDoc(doc(db, "patientSessionPrices", opts.id));
+      if (s.exists()) { existingRef = s.ref; existing = docToSessionPrice(s.id, s.data()); }
+    } else if (price.appointmentId) {
+      const snap = await getDocs(query(collection(db, "patientSessionPrices"), where("appointmentId", "==", price.appointmentId)));
+      if (!snap.empty) { existingRef = snap.docs[0].ref; existing = docToSessionPrice(snap.docs[0].id, snap.docs[0].data()); }
+    }
 
     // Loyalty points: earn 1 pt per 1 EGP actually paid, once — never for
     // package-linked sessions (that money was already counted at package
@@ -164,17 +172,28 @@ export async function setSessionPrice(
       }
     }
 
-    if (existing) {
-      const ref = snap.docs[0].ref;
-      await updateDoc(ref, { ...price, pointsAwarded, updatedAt: null });
-      return { id: ref.id };
+    if (existing && existingRef) {
+      await updateDoc(existingRef, { ...price, pointsAwarded, updatedAt: null });
+      return { id: existingRef.id };
     }
-    const ref = await addDoc(collection(db, "patientSessionPrices"), {
-      ...price,
-      pointsAwarded,
-      createdAt: serverTimestamp(),
-    });
+    const data = { ...price, pointsAwarded, createdAt: serverTimestamp() };
+    if (price.appointmentId) {
+      const id = `appt_${price.appointmentId}`;
+      await setDoc(doc(db, "patientSessionPrices", id), data);
+      return { id };
+    }
+    const ref = await addDoc(collection(db, "patientSessionPrices"), data);
     return { id: ref.id };
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+/** Mark a charge that isn't tied to a completed session as deliberately kept (counts in totals). */
+export async function setChargeKept(priceId: string, kept: boolean): Promise<{ error?: string }> {
+  try {
+    await updateDoc(doc(db, "patientSessionPrices", priceId), { keptAsExtra: kept });
+    return {};
   } catch (err) {
     return { error: parseError(err) };
   }

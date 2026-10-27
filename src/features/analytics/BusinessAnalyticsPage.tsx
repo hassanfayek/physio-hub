@@ -12,6 +12,12 @@ import {
   NO_SHOW_TRACKING_SINCE, PAYMENT_LOG_TRACKING_SINCE, type BusinessSettings,
 } from "../../services/businessService";
 import { loadAnalyticsData, type AnalyticsData } from "./analyticsData";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../../firebase";
+import { docToAppointment } from "../../services/appointmentService";
+import { docToSessionPrice } from "../../services/priceService";
+import { findChargeIssues, ISSUE_LABEL, type ChargeIssue, type IssueCharge } from "../patient/chargeReconcile";
+import { openScheduleDay, openPatientSection } from "../../utils/navEvents";
 import * as M from "./metrics";
 
 // ─── Formatting ───────────────────────────────────────────────────────────────
@@ -23,7 +29,7 @@ const fmtDate = (d: string) => d ? new Date(d + "T00:00:00").toLocaleDateString(
 const fmtMonth = (ym: string) => new Date(ym + "-01T00:00:00").toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-type SectionKey = "overview" | "financial" | "acquisition" | "retention" | "schedule" | "expansion";
+type SectionKey = "overview" | "financial" | "acquisition" | "retention" | "schedule" | "expansion" | "checks";
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: "overview",    label: "Executive Overview" },
   { key: "financial",   label: "Financial" },
@@ -31,6 +37,7 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: "retention",   label: "Retention & Attendance" },
   { key: "schedule",    label: "Schedule & Capacity" },
   { key: "expansion",   label: "Expansion Readiness" },
+  { key: "checks",      label: "Data checks" },
 ];
 const PRESETS: { key: M.PresetKey; label: string }[] = [
   { key: "week", label: "This week" }, { key: "30d", label: "Last 30 days" }, { key: "month", label: "This month" },
@@ -398,6 +405,7 @@ export default function BusinessAnalyticsPage() {
           {section === "retention" && <Retention m={m} data={data} today={today} />}
           {section === "schedule" && <Schedule data={data} cur={cur} prev={prev} cap={cap} settings={settings} />}
           {section === "expansion" && <Expansion m={m} data={data} settings={settings} cap={cap} />}
+          {section === "checks" && <DataChecks data={data} today={today} />}
         </>
       )}
 
@@ -758,6 +766,72 @@ function Expansion({ m, data, settings, cap }: { m: Computed; data: AnalyticsDat
   );
 }
 
+function DataChecks({ data, today }: { data: AnalyticsData; today: string }) {
+  const [issues, setIssues] = useState<ChargeIssue[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    // Full history on purpose: an old duplicate is still an error today.
+    Promise.all([getDocs(collection(db, "patientSessionPrices")), getDocs(collection(db, "appointments"))])
+      .then(([ps, as]) => {
+        if (!alive) return;
+        const charges: IssueCharge[] = ps.docs.map((d) => {
+          const p = docToSessionPrice(d.id, d.data());
+          return { id: p.id, patientId: p.patientId, appointmentId: p.appointmentId, date: p.date, amount: Number(p.amount) || 0, paid: !!p.paid,
+            paidDate: p.paidDate, packageId: p.packageId, keptAsExtra: !!p.keptAsExtra, createdAtMs: p.createdAt?.toMillis?.() ?? 0 };
+        });
+        const appts = as.docs.map((d) => { const a = docToAppointment(d.id, d.data()); return { id: a.id, date: a.date, status: a.status }; });
+        setIssues(findChargeIssues(charges, appts, today)); setError(null);
+      })
+      .catch((e: { message?: string }) => { if (alive) setError(e.message ?? "Failed to run checks."); });
+    return () => { alive = false; };
+  }, [today, nonce]);
+
+  const names = new Map(data.patients.map((p) => [p.uid, p.name] as const));
+  const counts = (issues ?? []).reduce<Record<string, number>>((acc, i) => { acc[i.kind] = (acc[i.kind] ?? 0) + 1; return acc; }, {});
+  const patientsAffected = new Set((issues ?? []).map((i) => i.charge.patientId)).size;
+  return (
+    <div className="ba-stack">
+      <div className="ba-banner"><Info size={15} />
+        Session charges that need a human look, across all patients and all dates. Nothing here changes on its own: open the patient's price sheet to Keep or Delete a charge, or Go to day to check the session in the schedule.
+        <button className="ba-link" onClick={() => { setIssues(null); setNonce((n) => n + 1); }}>Re-run checks</button>
+      </div>
+      {error && <div className="ba-banner err"><AlertTriangle size={15} /> {error}</div>}
+      {!issues && !error && <div className="ba-loading">{Array.from({ length: 3 }, (_, i) => <div key={i} className="ba-skel" />)}</div>}
+      {issues && (
+        <>
+          <div className="ba-grid">
+            <Kpi label="Charges to review" value={num(issues.length)} lowerIsBetter help="Charges not attached to a completed session (duplicates, cancelled/no-show/deleted appointments, unlinked) plus paid charges with a missing, future or zero paid value. Charges already reviewed and kept are excluded." />
+            <Kpi label="Patients affected" value={num(patientsAffected)} help="Distinct patients with at least one charge to review." />
+            {Object.entries(counts).map(([k, v]) => <Kpi key={k} label={ISSUE_LABEL[k as ChargeIssue["kind"]]} value={num(v)} help={ISSUE_LABEL[k as ChargeIssue["kind"]]} />)}
+          </div>
+          <Card title="Charges to review" wide>
+            {issues.length === 0 ? <div className="ba-empty">No problems found. Every charge matches a completed session.</div> : (
+              <div className="ba-table-wrap"><table className="ba-table">
+                <thead><tr><th>Patient</th><th>Session day</th><th>Issue</th><th className="r">Amount</th><th>Paid</th><th /></tr></thead>
+                <tbody>{issues.map((i) => (
+                  <tr key={`${i.kind}-${i.charge.id}`}>
+                    <td>{names.get(i.charge.patientId) ?? "Unknown patient"}</td>
+                    <td>{fmtDate(i.goToDate)}</td>
+                    <td>{ISSUE_LABEL[i.kind]}{i.apptStatus && i.kind === "not_completed" ? ` (${i.apptStatus.replace("_", "-")})` : ""}</td>
+                    <td className="r">{egp(i.charge.amount)}</td>
+                    <td>{i.charge.paid ? "Paid" : "Unpaid"}</td>
+                    <td className="r" style={{ whiteSpace: "nowrap" }}>
+                      <button className="ba-btn ghost ba-btn-sm" onClick={() => openPatientSection(i.charge.patientId, "pricing")}>Price sheet</button>{" "}
+                      {i.goToDate && <button className="ba-btn ghost ba-btn-sm" onClick={() => openScheduleDay(i.goToDate)}>Go to day</button>}
+                    </td>
+                  </tr>
+                ))}</tbody>
+              </table></div>
+            )}
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const CSS = `
@@ -768,6 +842,7 @@ const CSS = `
 .ba-top-actions { display: flex; gap: 8px; }
 .ba-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 10px; border: 1.5px solid #2E8BC0; background: #2E8BC0; color: #fff; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .ba-btn.ghost { background: #fff; color: #2E8BC0; border-color: #B3DEF0; }
+.ba-btn-sm { padding: 4px 10px; font-size: 12px; border-radius: 8px; }
 .ba-btn:disabled { opacity: .55; cursor: not-allowed; }
 .ba-btn .spin { animation: baSpin 1s linear infinite; }
 @keyframes baSpin { to { transform: rotate(360deg); } }

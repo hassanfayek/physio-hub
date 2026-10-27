@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Trash2, Check, X, Eye, EyeOff, Package, ClipboardList, MessageCircle } from "lucide-react";
+import { Plus, Trash2, Check, X, Eye, EyeOff, Package, ClipboardList, MessageCircle, CalendarDays, AlertTriangle } from "lucide-react";
 import { phoneForLink } from "../../utils/phone";
 import {
   subscribeToBillingSettings,
@@ -11,6 +11,7 @@ import {
   subscribeToSessionPrices,
   setSessionPrice,
   deleteSessionPrice,
+  setChargeKept,
   subscribeToPatientPackages,
   addSessionPackage,
   updateSessionPackage,
@@ -36,7 +37,9 @@ import {
   VOUCHER_SESSION_CAP,
   type PointsVoucher,
 } from "../../services/pointsService";
-import { PAYMENT_METHODS } from "../../services/businessService";
+import { PAYMENT_METHODS, clinicToday } from "../../services/businessService";
+import { reconcileCharges, extraReasonText } from "./chargeReconcile";
+import { openScheduleDay } from "../../utils/navEvents";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -70,6 +73,7 @@ export default function PatientPricingSection({
 // ── Session prices ──────────────────────────────────────────────────────────
   const [sessionPrices, setSessionPrices] = useState<SessionPrice[]>([]);
   const [completedAppts, setCompletedAppts] = useState<Appointment[]>([]);
+  const [allAppts,       setAllAppts]       = useState<Appointment[]>([]);
   const [apptLoading,    setApptLoading]    = useState(true);
 
   // ── Packages ────────────────────────────────────────────────────────────────
@@ -89,7 +93,7 @@ export default function PatientPricingSection({
   const [deletingSp,         setDeletingSp]         = useState(false);
 
   // ── Package form ────────────────────────────────────────────────────────────
-  const EMPTY_PKG = { packageSize: 6, priceMode: "per" as "per" | "total", pricePerSession: "", totalPrice: "", discountType: "none" as "none" | "pct" | "fixed", discountValue: "", startDate: new Date().toISOString().slice(0, 10), paidAmount: "", paymentMethod: "", notes: "", active: true, sessionsUsed: "0" };
+  const EMPTY_PKG = { packageSize: 6, priceMode: "per" as "per" | "total", pricePerSession: "", totalPrice: "", discountType: "none" as "none" | "pct" | "fixed", discountValue: "", startDate: clinicToday(), paidAmount: "", paymentMethod: "", notes: "", active: true, sessionsUsed: "0" };
   const [showPkgForm,   setShowPkgForm]   = useState(false);
   const [editPkg,       setEditPkg]       = useState<SessionPackage | null>(null);
   const [pkgForm,       setPkgForm]       = useState({ ...EMPTY_PKG, packageSize: 6 as number });
@@ -135,6 +139,7 @@ export default function PatientPricingSection({
     return subscribeToPatientAllAppointments(
       patientId,
       (appts) => {
+        setAllAppts(appts);
         setCompletedAppts(appts.filter((a) => a.status === "completed"));
         setApptLoading(false);
       },
@@ -154,9 +159,14 @@ export default function PatientPricingSection({
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const activePackages  = packages.filter((p) => p.active);
-  const sessionPriceMap = new Map(sessionPrices.map((sp) => [sp.appointmentId, sp]));
-  const sessionTotal    = sessionPrices.reduce((s, sp) => s + sp.amount, 0);
-  const sessionPaid     = sessionPrices.filter((sp) => sp.paid).reduce((s, sp) => s + sp.amount, 0);
+  // Each completed session shows exactly one charge; any other charge (duplicate,
+  // cancelled/deleted appointment) is listed under "Other charges" and only counts
+  // in the totals once someone has reviewed it and chosen to keep it.
+  const reconciled      = reconcileCharges(sessionPrices.map((sp) => ({ ...sp, createdAtMs: sp.createdAt?.toMillis?.() ?? 0 })), allAppts);
+  const sessionPriceMap = reconciled.shownByAppt;
+  const sessionTotal    = reconciled.totals.billed;
+  const sessionPaid     = reconciled.totals.paid;
+  const otherCharges    = reconciled.extras;
 
   // ── Visibility toggle ────────────────────────────────────────────────────────
   const handleToggleVisibility = async () => {
@@ -195,6 +205,8 @@ export default function PatientPricingSection({
       ? ` [Discount: ${sessionPriceForm.discountType === "pct" ? sessionPriceForm.discountValue + "%" : fmt(parseFloat(sessionPriceForm.discountValue) || 0) + " off"}]`
       : "";
     setSessionPriceSaving(true); setSessionPriceError(null);
+    // Update the exact charge shown on this row (never a hidden duplicate).
+    const shownCharge = sessionPriceMap.get(sessionPriceAppt.id);
     const result = await setSessionPrice({
       patientId,
       appointmentId: sessionPriceAppt.id,
@@ -207,7 +219,7 @@ export default function PatientPricingSection({
       paymentMethod: sessionPriceForm.paid ? sessionPriceForm.paymentMethod : "",
       packageId:   sessionPriceForm.packageId,
       notes:       (sessionPriceForm.notes.trim() + discountNote).trim(),
-    });
+    }, { id: shownCharge?.id });
     setSessionPriceSaving(false);
     if ("error" in result && result.error) { setSessionPriceError(result.error); return; }
     // If linked to a package, increment sessionsUsed
@@ -547,6 +559,13 @@ export default function PatientPricingSection({
 
         /* Discount row */
         .pps-discount-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .pps-other { margin-top: 16px; border: 1.5px solid #fcd34d; background: #fffbeb; border-radius: 14px; padding: 14px; }
+        .pps-other-title { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; color: #92400e; margin-bottom: 4px; }
+        .pps-other-help { font-size: 12.5px; color: #78350f; line-height: 1.45; margin-bottom: 10px; }
+        .pps-other .pps-table-wrap { background: #fff; border-radius: 10px; }
+        .pps-other .pps-set-price-btn { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+        .pps-kept td { opacity: .7; }
+        .pps-other-flag { color: #b45309; font-weight: 700; display: inline-flex; align-items: center; gap: 3px; }
         .pps-voucher-btn {
           flex-shrink: 0; padding: 0 14px; border-radius: 10px; border: 1.5px solid #B3DEF0;
           background: #EAF5FC; color: #2E8BC0; font-family: 'Outfit', sans-serif;
@@ -745,7 +764,10 @@ export default function PatientPricingSection({
         <div className="pps-section">
           <div className="pps-section-header">
             <div className="pps-section-title"><ClipboardList size={15} strokeWidth={2} /> Session Charges</div>
-            <span className="pps-section-meta">{completedAppts.length} sessions · {fmt(sessionTotal)} billed · {fmt(sessionPaid)} paid</span>
+            <span className="pps-section-meta">
+              {completedAppts.length} sessions · {fmt(sessionTotal)} billed · {fmt(sessionPaid)} paid
+              {otherCharges.some((e) => !e.charge.keptAsExtra) && <span className="pps-other-flag"> · <AlertTriangle size={11} strokeWidth={2.5} /> {otherCharges.filter((e) => !e.charge.keptAsExtra).length} to review</span>}
+            </span>
           </div>
           {apptLoading ? (
             <div style={{ height: 80, background: "linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%)", backgroundSize: "200% 100%", animation: "ppsShimmer 1.4s ease infinite", borderRadius: 14 }} />
@@ -774,10 +796,10 @@ export default function PatientPricingSection({
                           {sp ? (
                             <button className={`pps-paid-badge ${sp.paid ? "paid" : "unpaid"}`} onClick={async () => {
                               const paid = !sp.paid;
-                              const paidDate = paid ? (sp.paidDate || new Date().toISOString().slice(0, 10)) : "";
+                              const paidDate = paid ? (sp.paidDate || clinicToday()) : "";
                               // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                              const { id: _id, createdAt: _ca, ...spRest } = sp;
-                              await setSessionPrice({ ...spRest, paid, paidDate });
+                              const { id: _id, createdAt: _ca, createdAtMs: _cm, ...spRest } = sp;
+                              await setSessionPrice({ ...spRest, paid, paidDate }, { id: sp.id });
                               showToast(paid ? "Marked as paid" : "Marked as unpaid");
                             }}>
                               {sp.paid ? <><Check size={10} strokeWidth={3} /> Paid</> : <><X size={10} strokeWidth={3} /> Unpaid</>}
@@ -806,6 +828,53 @@ export default function PatientPricingSection({
                   </tr>
                 </tfoot>
               </table>
+            </div>
+          )}
+
+          {otherCharges.length > 0 && (
+            <div className="pps-other">
+              <div className="pps-other-title"><AlertTriangle size={14} strokeWidth={2.2} /> Other charges ({otherCharges.length})</div>
+              <div className="pps-other-help">
+                These charges aren't attached to a completed session, so they're not in the table above. They don't count in the totals unless you choose <b>Keep</b> (for example a cancellation fee). Use <b>Go to day</b> to check the session in the schedule.
+              </div>
+              <div className="pps-table-wrap">
+                <table className="pps-table">
+                  <thead><tr><th>Session day</th><th>Why it's here</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody>
+                    {otherCharges.map((e) => (
+                      <tr key={e.charge.id} className={e.charge.keptAsExtra ? "pps-kept" : ""}>
+                        <td style={{ whiteSpace: "nowrap", color: "#5a5550" }}>{e.goToDate || "—"}</td>
+                        <td style={{ fontSize: 13 }}>{extraReasonText(e)}{e.charge.notes && <div className="pps-notes">{e.charge.notes}</div>}</td>
+                        <td><span className="pps-amount">{fmt(e.charge.amount)}</span></td>
+                        <td>
+                          <span className={`pps-paid-badge ${e.charge.paid ? "paid" : "unpaid"}`} style={{ cursor: "default" }}>
+                            {e.charge.paid ? <><Check size={10} strokeWidth={3} /> Paid</> : <><X size={10} strokeWidth={3} /> Unpaid</>}
+                          </span>
+                          {e.charge.keptAsExtra && <div className="pps-notes">Kept · counted in totals</div>}
+                        </td>
+                        <td>
+                          <div className="pps-action-row">
+                            {e.goToDate && (
+                              <button className="pps-set-price-btn" onClick={() => openScheduleDay(e.goToDate)} title="Open this day in the schedule">
+                                <CalendarDays size={12} strokeWidth={2.2} /> Go to day
+                              </button>
+                            )}
+                            {(isManager || isSecretary) && (
+                              <button className="pps-set-price-btn" onClick={async () => {
+                                const r = await setChargeKept(e.charge.id, !e.charge.keptAsExtra);
+                                showToast(r.error ? r.error : e.charge.keptAsExtra ? "No longer counted" : "Kept — now counted in totals");
+                              }}>{e.charge.keptAsExtra ? "Undo keep" : "Keep"}</button>
+                            )}
+                            {(isManager || isSecretary) && (
+                              <button className="pps-del-btn" title="Delete this charge" onClick={() => setDeletingSpId(e.charge.id)} disabled={deletingSp && deletingSpId === e.charge.id}><Trash2 size={12} strokeWidth={2} /></button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
@@ -901,7 +970,7 @@ export default function PatientPricingSection({
               <input className="pps-input" type="text" placeholder="e.g. Package session 3 of 12..." value={sessionPriceForm.notes} onChange={(e) => setSessionPriceForm({ ...sessionPriceForm, notes: e.target.value })} />
             </div>
             <div className="pps-field">
-              <div className="pps-checkbox-row" onClick={() => setSessionPriceForm({ ...sessionPriceForm, paid: !sessionPriceForm.paid, paidDate: !sessionPriceForm.paid ? (sessionPriceForm.paidDate || new Date().toISOString().slice(0, 10)) : "" })}>
+              <div className="pps-checkbox-row" onClick={() => setSessionPriceForm({ ...sessionPriceForm, paid: !sessionPriceForm.paid, paidDate: !sessionPriceForm.paid ? (sessionPriceForm.paidDate || clinicToday()) : "" })}>
                 <input type="checkbox" checked={sessionPriceForm.paid} readOnly />
                 <label>Mark as Paid</label>
               </div>
@@ -1138,7 +1207,11 @@ export default function PatientPricingSection({
         <div className="pps-del-overlay">
           <div className="pps-del-modal">
             <div className="pps-del-title">Remove Session Price?</div>
-            <div className="pps-del-sub">The price record for this session will be deleted.</div>
+            <div className="pps-del-sub">
+              The price record for this session will be deleted.
+              {(() => { const c = sessionPrices.find((x) => x.id === deletingSpId); return c && (c.pointsAwarded ?? 0) > 0
+                ? <> It earned the patient {c.pointsAwarded} loyalty points; those aren't removed automatically (adjust them in the Loyalty Club if needed).</> : null; })()}
+            </div>
             <div className="pps-del-actions">
               <button className="pps-del-back" onClick={() => setDeletingSpId(null)}>Cancel</button>
               <button className="pps-del-confirm" disabled={deletingSp} onClick={() => handleDeleteSessionPrice(deletingSpId)}>{deletingSp ? "Deleting…" : "Delete"}</button>
