@@ -46,6 +46,7 @@ export interface Patient {
   referredByPhysicianId?:    string;
   referredByPhysicianName?:  string;
   referredByPartnerId?:      string;
+  acquisitionSource?:        string;  // ACQUISITION_SOURCES value; missing = Unknown
 }
 
 export type PhysioRank = "manager" | "senior" | "junior" | "trainee";
@@ -71,6 +72,7 @@ export interface CreatePatientPayload {
   phone?: string;
   referredBy?:            string;
   referredByPhysicianId?: string;
+  acquisitionSource?:     string;
 }
 
 export interface CreatePatientResult {
@@ -129,6 +131,7 @@ function docToPatient(id: string, data: Record<string, unknown>): Patient {
     referredByPhysicianId:    (data.referredByPhysicianId    as string | undefined)  ?? "",
     referredByPhysicianName:  (data.referredByPhysicianName  as string | undefined)  ?? "",
     referredByPartnerId:      (data.referredByPartnerId      as string | undefined)  ?? "",
+    acquisitionSource:        (data.acquisitionSource        as string | undefined)  ?? "",
   };
 }
 
@@ -209,6 +212,7 @@ export async function createPatient(
       status:                "active",
       referredBy:            payload.referredBy ?? "",
       referredByPhysicianId: payload.referredByPhysicianId ?? "",
+      acquisitionSource:     payload.acquisitionSource ?? "",
       createdAt:             serverTimestamp(),
     });
 

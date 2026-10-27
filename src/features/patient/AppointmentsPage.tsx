@@ -62,6 +62,7 @@ const STATUS_META: Record<string, { color: string; bg: string; label: string }> 
   pending:   { color: "#92400e", bg: "#fef3c7", label: "Pending"   },
   cancelled: { color: "#991b1b", bg: "#fee2e2", label: "Cancelled" },
   completed: { color: "#374151", bg: "#f3f4f6", label: "Completed" },
+  no_show:   { color: "#9a3412", bg: "#ffedd5", label: "Missed"    },
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────

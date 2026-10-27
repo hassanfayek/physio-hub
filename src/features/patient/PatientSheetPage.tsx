@@ -1,5 +1,6 @@
 // FILE: src/features/patient/PatientSheetPage.tsx
 
+import { ACQUISITION_SOURCES, labelFor } from "../../services/businessService";
 import { useState, useEffect } from "react";
 import { normalizePhone } from "../../utils/phone";
 import { useAuth } from "../../hooks/useAuth";
@@ -432,6 +433,7 @@ interface PatientExtProfile {
   emergencyPhone:   string;
   notes:        string;
   referredBy:   string;
+  acquisitionSource: string;
 }
 
 const EMPTY_EXT: PatientExtProfile = {
@@ -445,6 +447,7 @@ const EMPTY_EXT: PatientExtProfile = {
   emergencyPhone:   "",
   notes:            "",
   referredBy:       "",
+  acquisitionSource: "",
 };
 
 // ─── Diagnosis data structure ────────────────────────────────────────────────
@@ -605,6 +608,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
           ...EMPTY_EXT,
           ...d,
           referredBy: d.referredBy ?? (patient?.referredBy ?? ""),
+          acquisitionSource: d.acquisitionSource ?? (patient?.acquisitionSource ?? ""),
         };
         setExtProfile(filled);
         setExtDraft(filled);
@@ -623,6 +627,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       phone:      prev.phone      || patient.phone      || "",
       occupation: prev.occupation || patient.occupation || "",
       referredBy: prev.referredBy || patient.referredBy || "",
+      acquisitionSource: prev.acquisitionSource || patient.acquisitionSource || "",
     }));
     setExtDraft((prev) => ({
       ...prev,
@@ -630,6 +635,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
       phone:      prev.phone      || patient.phone      || "",
       occupation: prev.occupation || patient.occupation || "",
       referredBy: prev.referredBy || patient.referredBy || "",
+      acquisitionSource: prev.acquisitionSource || patient.acquisitionSource || "",
     }));
   }, [patient]);
 
@@ -647,6 +653,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         occupation: extDraft.occupation,
         age:        extDraft.age,
         referredBy: extDraft.referredBy,
+        acquisitionSource: extDraft.acquisitionSource,
         updatedAt:  serverTimestamp(),
       }),
     ]);
@@ -1025,7 +1032,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
 
   const handleUpdateStatus = async (
     apptId: string,
-    status: "completed" | "cancelled" | "scheduled" | "in_progress" | "rescheduled",
+    status: "completed" | "cancelled" | "scheduled" | "in_progress" | "rescheduled" | "no_show",
     prevStatus?: string
   ) => {
     setUpdatingStatusId(apptId);
@@ -1802,6 +1809,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         .ps-sh-status.scheduled   { background: #D6EEF8; color: #0C3C60; }
         .ps-sh-status.in_progress { background: #fef3c7; color: #92400e; }
         .ps-sh-status.rescheduled { background: #ede9fe; color: #4c1d95; }
+        .ps-sh-status.no_show     { background: #ffedd5; color: #9a3412; }
         .ps-sh-status-select {
           font-family: 'Outfit', sans-serif;
           font-size: 12px; font-weight: 500;
@@ -1819,6 +1827,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
         .ps-sh-status-select.completed   { border-color: #b7e4c7; background-color: #f0fdf4; color: #1b4332; }
         .ps-sh-status-select.cancelled   { border-color: #fca5a5; background-color: #fff5f5; color: #991b1b; }
         .ps-sh-status-select.rescheduled { border-color: #c4b5fd; background-color: #f5f3ff; color: #4c1d95; }
+        .ps-sh-status-select.no_show     { border-color: #fdba74; background-color: #fff7ed; color: #9a3412; }
         .ps-sh-status-select.in_progress { border-color: #fcd34d; background-color: #fffbeb; color: #92400e; }
         @media (max-width: 540px) {
           .ps-sh-table th, .ps-sh-table td { padding: 10px 10px; }
@@ -2238,6 +2247,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                 { key: "Occupation",        val: extProfile.occupation   },
                 { key: "Nationality",       val: extProfile.nationality  },
                 { key: "Referred By",       val: extProfile.referredBy   },
+                { key: "Heard About Us Via", val: extProfile.acquisitionSource ? labelFor(ACQUISITION_SOURCES, extProfile.acquisitionSource) : "" },
               ].map(({ key, val }) => (
                 <div key={key} className="ps-profile-card">
                   <div className="ps-profile-key">{key}</div>
@@ -2329,6 +2339,14 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                     onChange={(e) => setExtDraft({ ...extDraft, nationality: e.target.value })}
                     placeholder="e.g. Egyptian" />
                 </div>
+              </div>
+              <div className="ps-field-group">
+                <label className="ps-field-label">How did they hear about us?</label>
+                <select className="ps-field-input" value={extDraft.acquisitionSource}
+                  onChange={(e) => setExtDraft({ ...extDraft, acquisitionSource: e.target.value })}>
+                  <option value="">— Not asked / unknown —</option>
+                  {ACQUISITION_SOURCES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
               </div>
               <div className="ps-field-row-2">
                 <div className="ps-field-group">
@@ -3347,6 +3365,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                               : appt.status === "cancelled"   ? "✗ Cancelled"
                               : appt.status === "rescheduled" ? "↺ Rescheduled"
                               : appt.status === "in_progress" ? "● In Progress"
+                              : appt.status === "no_show"     ? "⊘ No-show"
                               : "Scheduled"}
                           </span>
                         </td>
@@ -3359,7 +3378,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                               onChange={(e) =>
                                 handleUpdateStatus(
                                   appt.id,
-                                  e.target.value as "completed" | "cancelled" | "scheduled" | "in_progress" | "rescheduled",
+                                  e.target.value as "completed" | "cancelled" | "scheduled" | "in_progress" | "rescheduled" | "no_show",
                                   appt.status ?? "scheduled"
                                 )
                               }
@@ -3368,6 +3387,7 @@ export default function PatientSheetPage({ patientId: patientIdProp, initialSect
                               <option value="in_progress">In Progress</option>
                               <option value="completed">Completed</option>
                               <option value="cancelled">Cancelled</option>
+                              <option value="no_show">No-show</option>
                               <option value="rescheduled">Rescheduled</option>
                             </select>
                           </td>

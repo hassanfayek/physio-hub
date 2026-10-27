@@ -175,6 +175,7 @@ export default function DayView({
                 : status === "cancelled" ? "Cancelled"
                 : status === "rescheduled" ? "Rescheduled"
                 : status === "in_progress" ? "In Progress"
+                : status === "no_show"     ? "No-show"
                 : "Scheduled";
     showToast(`✓ ${patientName || "Walk-in"} marked as ${label}`);
   };
@@ -522,6 +523,7 @@ export default function DayView({
         .dv-appt-status.scheduled   { background: #D6EEF8; color: #0C3C60; }
         .dv-appt-status.in_progress { background: #fef3c7; color: #92400e; }
         .dv-appt-status.rescheduled { background: #ede9fe; color: #4c1d95; }
+        .dv-appt-status.no_show     { background: #ffedd5; color: #9a3412; }
 
         .dv-status-select {
           font-family: 'Outfit', sans-serif;
@@ -552,6 +554,7 @@ export default function DayView({
         .dv-status-select.completed   { border-color: #b7e4c7; background-color: #f0fdf4; color: #1b4332; }
         .dv-status-select.cancelled   { border-color: #fca5a5; background-color: #fff5f5; color: #991b1b; }
         .dv-status-select.rescheduled { border-color: #c4b5fd; background-color: #f5f3ff; color: #4c1d95; }
+        .dv-status-select.no_show     { border-color: #fdba74; background-color: #fff7ed; color: #9a3412; }
         .dv-status-select.in_progress { border-color: #fcd34d; background-color: #fffbeb; color: #92400e; }
 
         .dv-skeleton {
@@ -823,6 +826,7 @@ export default function DayView({
                                     : a.status === "cancelled"   ? "✗ Cancelled"
                                     : a.status === "rescheduled" ? "↺ Rescheduled"
                                     : a.status === "in_progress" ? "● In Progress"
+                                    : a.status === "no_show"     ? "⊘ No-show"
                                     : "Scheduled"}
                                 </span>
                                 {isManager && !a.patientId && (
@@ -853,6 +857,7 @@ export default function DayView({
                                     <option value="in_progress">In Progress</option>
                                     <option value="completed">Completed</option>
                                     <option value="cancelled">Cancelled</option>
+                                    <option value="no_show">No-show</option>
                                     <option value="rescheduled">Rescheduled</option>
                                   </select>
                                 )}

@@ -53,6 +53,7 @@ const STATUS_COLOR: Record<Appointment["status"], string> = {
   completed:   "#3aaa6c",
   cancelled:   "#e05050",
   rescheduled: "#9a9590",
+  no_show:     "#ea7a2e",
 };
 
 const STATUS_LABEL: Record<Appointment["status"], string> = {
@@ -61,6 +62,7 @@ const STATUS_LABEL: Record<Appointment["status"], string> = {
   completed:   "Completed",
   cancelled:   "Cancelled",
   rescheduled: "Rescheduled",
+  no_show:     "No-show",
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────

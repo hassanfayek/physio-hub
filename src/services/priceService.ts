@@ -15,6 +15,7 @@ import {
   serverTimestamp,
   type Timestamp,
 } from "firebase/firestore";
+import { logPackagePayment } from "./businessService";
 import { db } from "../firebase";
 import { earnPoints } from "./pointsService";
 
@@ -86,6 +87,7 @@ export interface SessionPrice {
   paidDate:      string;
   packageId:     string;   // empty if not covered by a package
   notes:         string;
+  paymentMethod?: string;  // PAYMENT_METHODS value; "" / missing = not recorded
   pointsAwarded?: number;  // loyalty points already earned for this record — internal bookkeeping, set by setSessionPrice
   createdAt:     Timestamp | null;
 }
@@ -103,6 +105,7 @@ function docToSessionPrice(id: string, data: Record<string, unknown>): SessionPr
     paidDate:      (data.paidDate      as string)           ?? "",
     packageId:     (data.packageId     as string)           ?? "",
     notes:         (data.notes         as string)           ?? "",
+    paymentMethod: (data.paymentMethod as string)           ?? "",
     pointsAwarded: (data.pointsAwarded as number | undefined) ?? 0,
     createdAt:     (data.createdAt     as Timestamp | null) ?? null,
   };
@@ -201,6 +204,7 @@ export interface SessionPackage {
   sessionsUsed:    number;
   active:          boolean;
   notes:           string;
+  paymentMethod?:  string;  // method of the most recent payment (each payment is logged in packagePayments)
   pointsAwarded?:  number;  // loyalty points already earned against paidAmount — internal bookkeeping
   createdAt:       Timestamp | null;
 }
@@ -217,6 +221,7 @@ function docToPackage(id: string, data: Record<string, unknown>): SessionPackage
     sessionsUsed:    (data.sessionsUsed    as number)           ?? 0,
     active:          (data.active          as boolean)          ?? true,
     notes:           (data.notes           as string)           ?? "",
+    paymentMethod:   (data.paymentMethod   as string)           ?? "",
     pointsAwarded:   (data.pointsAwarded   as number | undefined) ?? 0,
     createdAt:       (data.createdAt       as Timestamp | null) ?? null,
   };
@@ -256,6 +261,13 @@ export async function addSessionPackage(
       pointsAwarded,
       createdAt: serverTimestamp(),
     });
+    if (pkg.paidAmount) {
+      try {
+        await logPackagePayment({ packageId: ref.id, patientId: pkg.patientId, amount: pkg.paidAmount, method: pkg.paymentMethod ?? "" });
+      } catch (logErr) {
+        console.error("logPackagePayment failed for package", ref.id, logErr);
+      }
+    }
     if (pointsAwarded > 0) {
       try {
         await earnPoints(pkg.patientId, pointsAwarded, {
@@ -285,6 +297,15 @@ export async function updateSessionPackage(
     if (updates.paidAmount !== undefined) {
       const snap = await getDoc(doc(db, "patientPackages", pkgId));
       const pkg = snap.exists() ? docToPackage(pkgId, snap.data()) : null;
+      // Dated payment log for analytics — any change (incl. corrections) so totals reconcile.
+      const paidDelta = pkg ? updates.paidAmount - pkg.paidAmount : 0;
+      if (pkg && paidDelta) {
+        try {
+          await logPackagePayment({ packageId: pkgId, patientId: pkg.patientId, amount: paidDelta, method: updates.paymentMethod ?? "" });
+        } catch (logErr) {
+          console.error("logPackagePayment failed for package", pkgId, logErr);
+        }
+      }
       const target  = Math.max(0, Math.floor(updates.paidAmount));
       const already = pkg?.pointsAwarded ?? 0;
       const delta   = target - already;

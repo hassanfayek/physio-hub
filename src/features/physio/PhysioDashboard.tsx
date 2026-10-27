@@ -1035,6 +1035,7 @@ function apptDisplayStatus(status: string): { label: string; color: string; text
   if (status === "in_progress") return { label: "In Progress", color: "#fef3c7", textColor: "#92400e" };
   if (status === "completed")   return { label: "Completed",   color: "#d8f3dc", textColor: "#1b4332" };
   if (status === "cancelled")   return { label: "Cancelled",   color: "#fee2e2", textColor: "#b91c1c" };
+  if (status === "no_show")     return { label: "No-show",     color: "#ffedd5", textColor: "#9a3412" };
   return                               { label: "Upcoming",    color: "#D6EEF8", textColor: "#0C3C60" };
 }
 

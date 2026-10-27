@@ -1,5 +1,6 @@
 // FILE: src/components/AddPatientModal.tsx
 
+import { ACQUISITION_SOURCES } from "../services/businessService";
 import { useState, useEffect, type FormEvent, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { createPatient, type CreatePatientPayload, type Physiotherapist } from "../services/patientService";
@@ -34,6 +35,7 @@ export default function AddPatientModal({
   const [phone,       setPhone]       = useState("");
   const [referredBy,  setReferredBy]  = useState("");
   const [referredByPhysicianId, setReferredByPhysicianId] = useState("");
+  const [acquisitionSource, setAcquisitionSource] = useState("");
   const [physicians,  setPhysicians]  = useState<Physician[]>([]);
   const [assignedPhysioId, setAssignedPhysioId] = useState(physioId);
 
@@ -76,6 +78,7 @@ export default function AddPatientModal({
       phone,
       referredBy:            referredBy.trim(),
       referredByPhysicianId: referredByPhysicianId || undefined,
+      acquisitionSource:     acquisitionSource || undefined,
     };
 
     const result = await createPatient(payload);
@@ -337,6 +340,17 @@ export default function AddPatientModal({
                   <label className="apm-label">Referred By <span style={{ color: "#e07a5f" }}>*</span></label>
                   <input className="apm-input" placeholder="e.g. Dr. Ahmed, Google, Word of mouth…" value={referredBy}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setReferredBy(e.target.value)} required />
+                </div>
+
+                <div className="apm-field">
+                  <label className="apm-label">How did they hear about us? (optional)</label>
+                  <div className="apm-select-wrap">
+                    <select className="apm-select" value={acquisitionSource}
+                      onChange={(e: ChangeEvent<HTMLSelectElement>) => setAcquisitionSource(e.target.value)}>
+                      <option value="">— Not asked / unknown —</option>
+                      {ACQUISITION_SOURCES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
                 </div>
 
                 {physicians.length > 0 && (

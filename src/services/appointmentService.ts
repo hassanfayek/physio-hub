@@ -30,7 +30,7 @@ export interface Appointment {
   date:         string;   // YYYY-MM-DD
   hour:         number;   // 0–23
   sessionType:  string;
-  status:       "scheduled" | "in_progress" | "completed" | "cancelled" | "rescheduled";
+  status:       "scheduled" | "in_progress" | "completed" | "cancelled" | "rescheduled" | "no_show";
   createdAt:    Timestamp | null;
   confirmedByPatient: boolean;
 }
@@ -107,6 +107,7 @@ function docToAppointment(id: string, data: Record<string, unknown>): Appointmen
                 : (data.status as string) === "cancelled"    ? "cancelled"
                 : (data.status as string) === "in_progress"  ? "in_progress"
                 : (data.status as string) === "rescheduled"  ? "rescheduled"
+                : (data.status as string) === "no_show"      ? "no_show"
                 : "scheduled") as Appointment["status"],
     createdAt:   (data.createdAt   as Timestamp | null) ?? null,
     confirmedByPatient: (data.confirmedByPatient as boolean) ?? false,
@@ -444,7 +445,7 @@ export async function updateAppointmentStatus(
       const statusLabels: Record<string, string> = {
         completed:  "marked as completed",
         cancelled:  "cancelled",
-        "no-show":  "marked as no-show",
+        no_show:    "marked as no-show",
         confirmed:  "confirmed",
         scheduled:  "rescheduled",
       };

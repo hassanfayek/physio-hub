@@ -227,6 +227,23 @@ service cloud.firestore {
       allow write: if isManager() || isSecretary() || isPhysio();
     }
 
+    // ── Business Analytics data (manager-only financials) ────────────────────
+    match /clinicExpenses/{docId} {
+      allow read, write: if isManager();
+    }
+
+    match /businessSettings/{docId} {
+      allow read, write: if isManager();
+    }
+
+    // Dated log of package paidAmount changes — written by whoever edits a
+    // package (same roles as patientPackages), corrected only by the manager.
+    match /packagePayments/{docId} {
+      allow read:           if isManager() || isSecretary();
+      allow create:         if isManager() || isSecretary() || isPhysio();
+      allow update, delete: if isManager();
+    }
+
     // ── Physio+ Loyalty Club ─────────────────────────────────────────────────
     // Earn-side writes come from priceService.ts (staff already trusted with
     // direct billing writes elsewhere in this file). Voucher *creation* is
