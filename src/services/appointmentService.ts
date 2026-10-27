@@ -82,7 +82,7 @@ function parseError(err: unknown): string {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function docToAppointment(id: string, data: Record<string, unknown>): Appointment {
+export function docToAppointment(id: string, data: Record<string, unknown>): Appointment {
   // Normalise date to plain "YYYY-MM-DD" – handles both string and Firestore Timestamp.
   let rawDate = "";
   if (typeof data.date === "string") {

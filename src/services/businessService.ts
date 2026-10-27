@@ -182,12 +182,14 @@ export interface BusinessSettings {
   cashBalanceAsOf:            string;
   morningStart: number; morningEnd: number;   // hour range [start, end)
   eveningStart: number; eveningEnd: number;
+  closedWeekdays: number[];                    // 0 = Sun … 6 = Sat; drives operating days & capacity
 }
 
 export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
   fixedMonthlyCosts: null, variableCostPerSession: null, variableIncludedInExpenses: false,
   targetMonthlyResult: null, minCashReserve: null, cashBalance: null, cashBalanceAsOf: "",
   morningStart: 9, morningEnd: 13, eveningStart: 15, eveningEnd: 22,
+  closedWeekdays: [],
 };
 
 export function subscribeToBusinessSettings(

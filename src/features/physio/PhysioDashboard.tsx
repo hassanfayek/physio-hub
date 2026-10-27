@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Calendar, Dumbbell, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen, Wifi, Stethoscope, Sparkles, UserCog, Menu, X, Trash2 } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, Dumbbell, Plus, ChevronDown, ChevronRight, Pencil, LogOut, ArrowLeft, Receipt, BookOpen, Wifi, Stethoscope, Sparkles, UserCog, Menu, X, Trash2, ChartColumn } from "lucide-react";
 import { useLang } from "../../contexts/LanguageContext";
 import { doc, getDoc, getDocs, deleteDoc, updateDoc, serverTimestamp, collection, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -36,13 +36,14 @@ import TreatmentProtocolsPage from "../protocols/TreatmentProtocolsPage";
 import DiagnosisTemplatesPage from "../diagnoses/DiagnosisTemplatesPage";
 import OnlineServicesPage from "../rehab/OnlineServicesPage";
 import LoyaltyClubPage from "../loyalty/LoyaltyClubPage";
+import BusinessAnalyticsPage from "../analytics/BusinessAnalyticsPage";
 import StaffListPage from "../staff/StaffListPage";
 import { runBackgroundScan, subscribeToPackageAlerts } from "../../services/notificationService";
 
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
-type Tab = "overview" | "patients" | "people" | "schedule" | "exercises" | "billing" | "protocols" | "online-services" | "diagnoses" | "loyalty" | "staff";
+type Tab = "overview" | "patients" | "people" | "schedule" | "exercises" | "billing" | "protocols" | "online-services" | "diagnoses" | "loyalty" | "staff" | "analytics";
 
 interface TabDef {
   id:    Tab;
@@ -1441,6 +1442,7 @@ export default function PhysioDashboard() {
     { id: "schedule",  label: t("nav.schedule"),       icon: <IconSchedule /> },
     ...(!isSecretary ? [{ id: "exercises" as Tab, label: t("nav.exercises.lib"), icon: <IconExercises /> }] : []),
     ...(isManager    ? [{ id: "billing"   as Tab, label: "Billing",              icon: <IconBilling /> }]   : []),
+    ...(isManager    ? [{ id: "analytics" as Tab, label: "Business Analytics",   icon: <ChartColumn size={18} strokeWidth={1.8} color="currentColor" /> }] : []),
     ...(!isSecretary ? [{ id: "protocols" as Tab, label: "Protocols",            icon: <IconProtocols /> }] : []),
     ...(isManager    ? [{ id: "diagnoses" as Tab, label: "Diagnoses",            icon: <IconDiagnoses /> }] : []),
     ...((isManager || isSenior) ? [{ id: "online-services" as Tab, label: "Online Services", icon: <IconRehab /> }] : []),
@@ -1930,6 +1932,7 @@ export default function PhysioDashboard() {
                   />
                 )}
                 {activeTab === "billing"   && isManager   && <ClinicBillingPage />}
+                {activeTab === "analytics" && isManager   && <BusinessAnalyticsPage />}
                 {activeTab === "protocols" && !isSecretary && (
                   <TreatmentProtocolsPage physioId={physio.uid} isManager={isManager} />
                 )}

@@ -92,7 +92,7 @@ export interface SessionPrice {
   createdAt:     Timestamp | null;
 }
 
-function docToSessionPrice(id: string, data: Record<string, unknown>): SessionPrice {
+export function docToSessionPrice(id: string, data: Record<string, unknown>): SessionPrice {
   return {
     id,
     patientId:     (data.patientId     as string)           ?? "",
@@ -209,7 +209,7 @@ export interface SessionPackage {
   createdAt:       Timestamp | null;
 }
 
-function docToPackage(id: string, data: Record<string, unknown>): SessionPackage {
+export function docToPackage(id: string, data: Record<string, unknown>): SessionPackage {
   return {
     id,
     patientId:       (data.patientId       as string)           ?? "",
