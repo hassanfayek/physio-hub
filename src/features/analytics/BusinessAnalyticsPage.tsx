@@ -23,13 +23,14 @@ const fmtDate = (d: string) => d ? new Date(d + "T00:00:00").toLocaleDateString(
 const fmtMonth = (ym: string) => new Date(ym + "-01T00:00:00").toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-type SectionKey = "overview" | "financial" | "acquisition" | "retention" | "schedule";
+type SectionKey = "overview" | "financial" | "acquisition" | "retention" | "schedule" | "expansion";
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: "overview",    label: "Executive Overview" },
   { key: "financial",   label: "Financial" },
   { key: "acquisition", label: "Acquisition" },
   { key: "retention",   label: "Retention & Attendance" },
   { key: "schedule",    label: "Schedule & Capacity" },
+  { key: "expansion",   label: "Expansion Readiness" },
 ];
 const PRESETS: { key: M.PresetKey; label: string }[] = [
   { key: "week", label: "This week" }, { key: "30d", label: "Last 30 days" }, { key: "month", label: "This month" },
@@ -188,6 +189,20 @@ function AssumptionsModal({ initial, onClose }: { initial: BusinessSettings; onC
           {numField("cashBalance", "Current cash balance (EGP)", "Used for runway only")}
           <label className="ba-field"><span>Cash balance as of</span>
             <input type="date" value={s.cashBalanceAsOf} onChange={(e) => setS({ ...s, cashBalanceAsOf: e.target.value })} /></label>
+        </div>
+        <div className="ba-form-grid">
+          <label className="ba-field"><span>Target schedule utilisation (%)</span>
+            <input type="number" min="0" max="100" value={s.targetUtilization ?? ""} placeholder="Not set"
+              onChange={(e) => setS({ ...s, targetUtilization: e.target.value === "" ? null : Math.min(100, Math.max(0, Number(e.target.value))) })} />
+            <small>Expansion criterion: demand close to current capacity</small></label>
+          <label className="ba-field"><span>Max share of sessions treated by owner (%)</span>
+            <input type="number" min="0" max="100" value={s.maxOwnerSharePct ?? ""} placeholder="Not set"
+              onChange={(e) => setS({ ...s, maxOwnerSharePct: e.target.value === "" ? null : Math.min(100, Math.max(0, Number(e.target.value))) })} />
+            <small>Owner = physios with the Manager rank</small></label>
+          <label className="ba-field"><span>Consecutive months required</span>
+            <select value={s.monthsAtTarget} onChange={(e) => setS({ ...s, monthsAtTarget: Number(e.target.value) })}>
+              {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select></label>
         </div>
         <div className="ba-field"><span>Closed weekdays (for operating days & capacity)</span>
           <div className="ba-days">
@@ -382,6 +397,7 @@ export default function BusinessAnalyticsPage() {
           {section === "acquisition" && <Acquisition m={m} data={data} cur={cur} />}
           {section === "retention" && <Retention m={m} data={data} today={today} />}
           {section === "schedule" && <Schedule data={data} cur={cur} prev={prev} cap={cap} settings={settings} />}
+          {section === "expansion" && <Expansion m={m} data={data} settings={settings} cap={cap} />}
         </>
       )}
 
@@ -527,7 +543,9 @@ function Acquisition({ m, data, cur }: { m: Computed; data: AnalyticsData; cur: 
   data.appts.filter((a) => a.status === "completed" && M.inRange(a.date, cur)).forEach((a) => {
     const s = srcByPatient.get(a.patientId) ?? ""; revBySrc[s] = (revBySrc[s] ?? 0) + (priceByAppt.get(a.id) ?? 0);
   });
-  const channels = [...new Set([...Object.keys(spend), ...Object.keys(src)])].filter(Boolean);
+  const funnel = M.leadFunnel(data.leads, data.appts, cur);
+  const a2t = M.assessmentToTreatment(data.appts, cur);
+  const channels = [...new Set([...Object.keys(spend), ...Object.keys(src), ...Object.keys(funnel.bySource)])].filter(Boolean);
   return (
     <div className="ba-stack">
       <div className="ba-grid">
@@ -539,24 +557,42 @@ function Acquisition({ m, data, cur }: { m: Computed; data: AnalyticsData; cur: 
           help="Marketing spend ÷ all new patients (blended). Per-channel figures are below where spend is tagged with a channel." />
         <Kpi label="Assessment attendance" value={pct(c.appt.assessmentAttendanceRate)} note={`${num(c.appt.assessmentsAttended)} of ${num(c.appt.assessmentsBooked)} booked`}
           help="Attended ÷ booked assessment appointments in the period." />
+        <Kpi label="Assessment → treatment" value={pct(a2t.rate)} note={`${num(a2t.converted)} of ${num(a2t.assessed)} assessed patients`}
+          help="Patients who attended an assessment in the period and then had at least one completed non-assessment session afterwards (up to today). Recent assessments may not have converted yet." />
+        <Kpi label="Inquiries" value={num(funnel.inquiries)} help="Inquiries logged on the Front Desk page with a date in the period." />
+        <Kpi label="Cost per inquiry" value={egp(M.ratio(c.exp.marketingTotal, funnel.inquiries))}
+          help="Marketing spend ÷ inquiries logged in the period (blended across channels)." />
+        <Kpi label="Cost per attended assessment" value={egp(M.ratio(c.exp.marketingTotal, c.appt.assessmentsAttended))}
+          help="Marketing spend ÷ assessment appointments attended in the period (blended)." />
       </div>
       <div className="ba-two">
         <Card title="New patients by source" help="As recorded at registration. Historical patients without a source are 'Unknown'; a recorded referring physician counts as Doctor referral.">
           <BarList fmt={(n) => num(n)} rows={rows} />
         </Card>
-        <Card title="Channel efficiency" help="Spend = marketing expenses tagged with the channel. Cost per new patient = channel spend ÷ new patients from that channel. Revenue = earned in the period from patients of that source (any join date).">
+        <Card title="Channel efficiency" help="Spend = marketing expenses tagged with the channel. Cost per inquiry / new patient = channel spend ÷ that channel's inquiries / new patients. Revenue = earned in the period from patients of that source (any join date).">
           {channels.length === 0 ? <div className="ba-empty">No sources or tagged spend in this period.</div> : (
             <div className="ba-table-wrap"><table className="ba-table">
-              <thead><tr><th>Channel</th><th className="r">New</th><th className="r">Spend</th><th className="r">Cost / new</th><th className="r">Revenue</th></tr></thead>
+              <thead><tr><th>Channel</th><th className="r">Inquiries</th><th className="r">New</th><th className="r">Spend</th><th className="r">Cost / inquiry</th><th className="r">Cost / new</th><th className="r">Revenue</th></tr></thead>
               <tbody>{channels.map((k) => (
-                <tr key={k}><td>{labelFor(ACQUISITION_SOURCES, k)}</td><td className="r">{num(src[k] ?? 0)}</td><td className="r">{spend[k] ? egp(spend[k]) : "—"}</td>
+                <tr key={k}><td>{labelFor(ACQUISITION_SOURCES, k)}</td><td className="r">{num(funnel.bySource[k] ?? 0)}</td><td className="r">{num(src[k] ?? 0)}</td><td className="r">{spend[k] ? egp(spend[k]) : "—"}</td>
+                  <td className="r">{spend[k] && funnel.bySource[k] ? egp(M.ratio(spend[k], funnel.bySource[k])) : "—"}</td>
                   <td className="r">{spend[k] ? egp(M.ratio(spend[k], src[k] ?? 0)) : "—"}</td><td className="r">{egp(revBySrc[k] ?? 0)}</td></tr>
               ))}</tbody>
             </table></div>
           )}
         </Card>
       </div>
-      <div className="ba-banner"><Info size={15} /> Inquiry (lead) tracking and the full inquiry → treatment funnel arrive in the next update. Until then the funnel starts at "assessment booked".</div>
+      <Card title="Inquiry → treatment funnel" wide help="Inquiries are logged on the Front Desk page. Stages after 'booked' come from the linked patient's real appointments on/after the inquiry date. Inquiries not yet linked to a patient can only reach 'booked' (by status). Each stage is counted on its own, so 'treatment started' can exceed 'assessment attended' when a patient starts without a recorded assessment.">
+        {funnel.inquiries === 0 ? <div className="ba-empty">No inquiries logged in this period. The secretary can log them under Front Desk → Inquiries.</div> : (
+          <>
+            <BarList fmt={(n) => num(n)} rows={[
+              ["Inquiries", funnel.inquiries], ["Assessment booked", funnel.booked], ["Assessment attended", funnel.attended],
+              ["Treatment started", funnel.started], ["2+ treatment sessions", funnel.continuing],
+            ]} />
+            <div className="ba-muted" style={{ marginTop: 8 }}>{funnel.linked} of {funnel.inquiries} inquiries are linked to a patient record.</div>
+          </>
+        )}
+      </Card>
     </div>
   );
 }
@@ -564,7 +600,9 @@ function Acquisition({ m, data, cur }: { m: Computed; data: AnalyticsData; cur: 
 function Retention({ m, data, today }: { m: Computed; data: AnalyticsData; today: string }) {
   const { c, p } = m;
   const obl = M.packageObligations(data.pkgs);
-  const follow = M.followUpCandidates(data.appts, data.patients, today, 60);
+  const reviewed = new Map(data.patients.map((p) => [p.uid, p.followUpReviewedFor ?? ""] as const));
+  const follow = M.followUpCandidates(data.appts, data.patients, today, 60)
+    .map((f) => ({ ...f, isReviewed: (reviewed.get(f.uid) ?? "") >= f.lastSession }));
   return (
     <div className="ba-stack">
       <div className="ba-grid">
@@ -580,12 +618,13 @@ function Retention({ m, data, today }: { m: Computed; data: AnalyticsData; today
           help="Average of sessions used ÷ package size across active packages." />
         <Kpi label="Patients with upcoming bookings" value={num(M.upcomingPatients(data.appts, today))} help="Distinct patients with a scheduled appointment from today on." />
       </div>
-      <Card title={`For administrative review (${follow.length})`} wide
+      <Card title={`For administrative review (${follow.filter((f) => !f.isReviewed).length} open · ${follow.filter((f) => f.isReviewed).length} reviewed)`} wide
         help="Active patients whose last completed session was within the last 60 days and who have nothing booked. This is NOT a 'lost patient' list — some have finished treatment or paused appropriately. Review before contacting anyone; nothing is sent automatically.">
         {follow.length === 0 ? <div className="ba-empty">No patients to review.</div> : (
           <div className="ba-table-wrap"><table className="ba-table">
-            <thead><tr><th>Patient</th><th>Last session</th><th className="r">Days since</th></tr></thead>
-            <tbody>{follow.map((f) => <tr key={f.uid}><td>{f.name}</td><td>{fmtDate(f.lastSession)}</td><td className="r">{f.daysSince}</td></tr>)}</tbody>
+            <thead><tr><th>Patient</th><th>Last session</th><th className="r">Days since</th><th>Review</th></tr></thead>
+            <tbody>{follow.map((f) => <tr key={f.uid}><td>{f.name}</td><td>{fmtDate(f.lastSession)}</td><td className="r">{f.daysSince}</td>
+              <td>{f.isReviewed ? "Reviewed" : <span className="ba-muted">Open (record a decision on Front Desk)</span>}</td></tr>)}</tbody>
           </table></div>
         )}
       </Card>
@@ -634,6 +673,87 @@ function Schedule({ data, cur, prev, cap, settings }: { data: AnalyticsData; cur
         <Card title="Completed by weekday"><BarList fmt={(n) => num(n)} rows={byWeekday} /></Card>
         <Card title="Completed by hour"><BarList fmt={(n) => num(n)} rows={byHour} /></Card>
       </div>
+    </div>
+  );
+}
+
+function Expansion({ m, data, settings, cap }: { m: Computed; data: AnalyticsData; settings: BusinessSettings; cap: M.Capacity }) {
+  // Full calendar months only (the current month is partial).
+  const full = m.monthly.slice(0, -1);
+  const span: M.Range | null = full.length ? { from: full[0].r.from, to: full[full.length - 1].r.to } : null;
+  const earned = full.reduce((a, x) => a + x.earned.total, 0);
+  const priced = full.reduce((a, x) => a + x.earned.pricedSessions, 0);
+  const be = M.breakEven({
+    fixedMonthlyCosts: settings.fixedMonthlyCosts, variableCostPerSession: settings.variableCostPerSession,
+    variableIncludedInExpenses: settings.variableIncludedInExpenses, avgRevenuePerSession: M.ratio(earned, priced),
+    operatingDaysInMonth: span ? M.operatingDays(full[full.length - 1].r, cap.closedWeekdays) : 0,
+  });
+  const owner = span ? M.ownerShare(data.appts, data.managerIds, span) : null;
+  const run = M.runway(settings.cashBalance, full.slice(-3).map((x) => x.result));
+  const criteria = M.expansionCriteria({
+    fullMonths: full.map((x) => ({ ym: x.ym, result: x.result, completed: x.appt.completed, capacity: x.capacity, newPatients: x.newPts.length, expensesRecorded: x.exp.total > 0 })),
+    monthsAtTarget: settings.monthsAtTarget,
+    targetMonthlyResult: settings.targetMonthlyResult,
+    breakEvenSessionsPerMonth: be.ok ? be.sessionsPerMonth : null,
+    targetUtilization: settings.targetUtilization === null ? null : settings.targetUtilization / 100,
+    cashBalance: settings.cashBalance, minCashReserve: settings.minCashReserve,
+    ownerShare: owner?.share ?? null, maxOwnerShare: settings.maxOwnerSharePct === null ? null : settings.maxOwnerSharePct / 100,
+  });
+  const met = criteria.filter((c) => c.state === "met").length;
+  const missing = criteria.filter((c) => c.state === "missing").length;
+  const months = full.map((x) => x.ym);
+  return (
+    <div className="ba-stack">
+      <div className="ba-banner"><Info size={15} />
+        {met} of {criteria.length} criteria met{missing ? `, ${missing} can't be assessed yet` : ""}. This is evidence for your decision, not a verdict. Second-branch costs (rent, salaries, fit-out, start-up capital) aren't modelled here.
+      </div>
+      <Card title="Criteria" wide help="Thresholds come from Assumptions and are your targets. Measured values come from recorded data over full calendar months.">
+        <div className="ba-crit">
+          {criteria.map((c) => (
+            <div key={c.key} className={`ba-crit-row ${c.state}`}>
+              <span className="ba-crit-badge">{c.state === "met" ? "Met" : c.state === "not_met" ? "Not met" : "Missing data"}</span>
+              <div><div className="ba-crit-label">{c.label}</div><div className="ba-muted">{c.evidence}</div></div>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <div className="ba-grid">
+        <Kpi label="Owner dependence" value={pct(owner?.share ?? null)} note={owner ? `${num(owner.owner)} of ${num(owner.total)} sessions (full months)` : undefined}
+          help="Share of completed sessions in the full months shown that were treated by a physio with the Manager rank." />
+        <Kpi label="Cash runway" kind="estimate"
+          value={run.burning === null ? "—" : run.burning ? `${num(run.months, 1)} months` : "Not burning cash"}
+          note={settings.cashBalance === null ? "Enter a cash balance in Assumptions" : `Balance ${egp(settings.cashBalance)}${settings.cashBalanceAsOf ? ` as of ${fmtDate(settings.cashBalanceAsOf)}` : ""}`}
+          help="Owner-entered cash balance ÷ average monthly loss over the last 3 full months. If the average result is positive, the clinic isn't drawing down cash." />
+        <Kpi label="Break-even / month" kind="estimate" value={be.ok ? `${num(be.sessionsPerMonth)} sessions` : "—"} note={be.ok ? undefined : be.reason}
+          help="Monthly fixed costs ÷ contribution per session, using revenue per session across the full months shown." />
+      </div>
+      {full.length === 0 ? <div className="ba-empty">Not enough history yet.</div> : (
+        <div className="ba-two">
+          <Card title="Revenue, expenses & result" help="Full months. Result = cash collected − recorded expenses.">
+            <MonthBars months={months} fmt={egp} series={[
+              { label: "Cash collected", color: "#2E8BC0", values: full.map((x) => x.cash.total) },
+              { label: "Expenses", color: "#E8A93B", values: full.map((x) => x.exp.total) },
+              { label: "Result", color: "#16a34a", values: full.map((x) => x.result) },
+            ]} />
+          </Card>
+          <Card title="Completed sessions vs break-even" help={be.ok ? `Break-even: ${be.sessionsPerMonth} sessions/month (estimate).` : "Break-even not available; see Financial."}>
+            <MonthBars months={months} fmt={(n) => num(n)} series={[
+              { label: "Completed sessions", color: "#5BC0BE", values: full.map((x) => x.appt.completed) },
+              ...(be.ok ? [{ label: "Break-even", color: "#c0bbb4", values: full.map(() => be.sessionsPerMonth) }] : []),
+            ]} />
+          </Card>
+          <Card title="Utilisation" help="Completed ÷ bookable slots per month (current schedule settings).">
+            <BarList fmt={pct} rows={full.map((x) => [fmtMonth(x.ym), M.ratio(x.appt.completed, x.capacity) ?? 0] as [string, number])} />
+          </Card>
+          <Card title="New patients & cost per new patient" help="New patient records per month; marketing spend ÷ new patients.">
+            <div className="ba-table-wrap"><table className="ba-table">
+              <thead><tr><th>Month</th><th className="r">New</th><th className="r">Marketing</th><th className="r">Cost / new</th></tr></thead>
+              <tbody>{full.map((x) => <tr key={x.ym}><td>{fmtMonth(x.ym)}</td><td className="r">{num(x.newPts.length)}</td>
+                <td className="r">{egp(x.exp.marketingTotal)}</td><td className="r">{egp(M.ratio(x.exp.marketingTotal, x.newPts.length))}</td></tr>)}</tbody>
+            </table></div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
@@ -731,6 +851,13 @@ const CSS = `
 .ba-inline { display: flex; align-items: center; gap: 6px; }
 .ba-inline select { flex: 1; }
 .ba-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.ba-crit { display: flex; flex-direction: column; gap: 8px; }
+.ba-crit-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 10px; background: #fafaf8; border: 1px solid #f0ede8; }
+.ba-crit-label { font-size: 13px; font-weight: 600; }
+.ba-crit-badge { flex-shrink: 0; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 8px; border-radius: 100px; min-width: 86px; text-align: center; }
+.ba-crit-row.met .ba-crit-badge { background: #dcfce7; color: #166534; }
+.ba-crit-row.not_met .ba-crit-badge { background: #fee2e2; color: #991b1b; }
+.ba-crit-row.missing .ba-crit-badge { background: #f3f4f6; color: #4b5563; }
 @media (max-width: 640px) {
   .ba-two { grid-template-columns: 1fr; }
   .ba-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

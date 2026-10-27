@@ -170,3 +170,59 @@ describe("utils", () => {
     expect(dedupeById([{ id: "a" }, { id: "a" }, { id: "b" }])).toHaveLength(2);
   });
 });
+
+import { leadFunnel, assessmentToTreatment, ownerShare, runway, expansionCriteria } from "./metrics";
+
+describe("inquiry funnel", () => {
+  it("measures stages from the linked patient's real appointments after the inquiry", () => {
+    const appts = [
+      appt({ patientId: "x", sessionType: "Assessment Session", date: "2026-10-03" }),
+      appt({ patientId: "x", date: "2026-10-06" }), appt({ patientId: "x", date: "2026-10-09" }),
+      appt({ patientId: "y", sessionType: "Assessment Session", status: "no_show", date: "2026-10-04" }),
+      appt({ patientId: "z", date: "2026-09-01" }), // before the inquiry — ignored
+    ];
+    const f = leadFunnel([
+      { id: "1", date: "2026-10-01", source: "meta_ads", status: "converted", patientId: "x" },
+      { id: "2", date: "2026-10-02", source: "google", status: "new", patientId: "y" },
+      { id: "3", date: "2026-10-02", source: "", status: "new", patientId: "z" },
+      { id: "4", date: "2026-09-02", source: "", status: "new", patientId: "" },
+    ], appts, OCT);
+    expect(f).toMatchObject({ inquiries: 3, booked: 2, attended: 1, started: 1, continuing: 1 });
+  });
+  it("assessment → treatment conversion", () => {
+    const r = assessmentToTreatment([
+      appt({ patientId: "a", sessionType: "Assessment Session", date: "2026-10-02" }), appt({ patientId: "a", date: "2026-10-05" }),
+      appt({ patientId: "b", sessionType: "Assessment Session", date: "2026-10-02" }),
+    ], OCT);
+    expect([r.assessed, r.converted, r.rate]).toEqual([2, 1, 0.5]);
+  });
+});
+
+describe("expansion", () => {
+  const months = [1, 2, 3].map((i) => ({ ym: `2026-0${i}`, result: 10000, completed: 200, capacity: 250, newPatients: 10 + i, expensesRecorded: true }));
+  const base = { fullMonths: months, monthsAtTarget: 3, targetMonthlyResult: 8000, breakEvenSessionsPerMonth: 150, targetUtilization: 0.75,
+    cashBalance: 50000, minCashReserve: 40000, ownerShare: 0.3, maxOwnerShare: 0.4 };
+  it("all criteria met with complete data", () => {
+    expect(expansionCriteria(base).every((c) => c.state === "met")).toBe(true);
+  });
+  it("missing inputs are 'missing', never 'met'", () => {
+    const c = expansionCriteria({ ...base, targetMonthlyResult: null, cashBalance: null, maxOwnerShare: null });
+    expect(c.find((x) => x.key === "result")!.state).toBe("missing");
+    expect(c.find((x) => x.key === "cash")!.state).toBe("missing");
+    expect(c.find((x) => x.key === "owner")!.state).toBe("missing");
+  });
+  it("result criterion requires complete expense records", () => {
+    const c = expansionCriteria({ ...base, fullMonths: months.map((m, i) => ({ ...m, expensesRecorded: i !== 1 })) });
+    expect(c.find((x) => x.key === "result")!.state).toBe("missing");
+  });
+  it("one bad month fails a consecutive-months criterion", () => {
+    const c = expansionCriteria({ ...base, fullMonths: months.map((m, i) => ({ ...m, result: i === 2 ? 1000 : m.result })) });
+    expect(c.find((x) => x.key === "result")!.state).toBe("not_met");
+  });
+  it("owner share and runway", () => {
+    expect(ownerShare([appt({ physioId: "m" }), appt({ physioId: "o" })], new Set(["m"]), OCT).share).toBe(0.5);
+    expect(runway(30000, [-10000, -5000])).toEqual({ months: 4, burning: true });
+    expect(runway(30000, [5000]).burning).toBe(false);
+    expect(runway(null, [5000]).months).toBeNull();
+  });
+});

@@ -183,6 +183,10 @@ export interface BusinessSettings {
   morningStart: number; morningEnd: number;   // hour range [start, end)
   eveningStart: number; eveningEnd: number;
   closedWeekdays: number[];                    // 0 = Sun … 6 = Sat; drives operating days & capacity
+  // Expansion thresholds (owner-set; null = criterion shows "not set")
+  targetUtilization:    number | null;         // 0–100 %
+  maxOwnerSharePct:     number | null;         // 0–100 % of completed sessions treated by the owner
+  monthsAtTarget:       number;                // consecutive full months required
 }
 
 export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
@@ -190,6 +194,7 @@ export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
   targetMonthlyResult: null, minCashReserve: null, cashBalance: null, cashBalanceAsOf: "",
   morningStart: 9, morningEnd: 13, eveningStart: 15, eveningEnd: 22,
   closedWeekdays: [],
+  targetUtilization: null, maxOwnerSharePct: null, monthsAtTarget: 3,
 };
 
 export function subscribeToBusinessSettings(
@@ -206,4 +211,79 @@ export async function saveBusinessSettings(s: BusinessSettings): Promise<{ error
     await setDoc(doc(db, "businessSettings", "main"), { ...s, updatedAt: serverTimestamp() }, { merge: true });
     return {};
   } catch (err) { return { error: parseError(err) }; }
+}
+
+// ─── Inquiries (leads) ────────────────────────────────────────────────────────
+// Logged by the front desk when someone asks about treatment. Name/phone are
+// optional and restricted to manager + secretary.
+
+export const LEAD_STATUSES = [
+  { value: "new",               label: "New inquiry" },
+  { value: "assessment_booked", label: "Assessment booked" },
+  { value: "converted",         label: "Became a patient" },
+  { value: "not_interested",    label: "Not interested" },
+] as const;
+
+export interface Lead {
+  id:        string;
+  date:      string;   // clinic-local YYYY-MM-DD of the inquiry
+  source:    string;   // ACQUISITION_SOURCES value or ""
+  name:      string;
+  phone:     string;
+  note:      string;
+  status:    string;   // LEAD_STATUSES value
+  patientId: string;   // linked patient once they register
+  createdAt: Timestamp | null;
+}
+
+export function docToLead(id: string, d: Record<string, unknown>): Lead {
+  return {
+    id,
+    date:      (d.date      as string) ?? "",
+    source:    (d.source    as string) ?? "",
+    name:      (d.name      as string) ?? "",
+    phone:     (d.phone     as string) ?? "",
+    note:      (d.note      as string) ?? "",
+    status:    (d.status    as string) ?? "new",
+    patientId: (d.patientId as string) ?? "",
+    createdAt: (d.createdAt as Timestamp | null) ?? null,
+  };
+}
+
+export function subscribeToLeads(from: string, onData: (rows: Lead[]) => void, onError?: (err: Error) => void): () => void {
+  const q = query(collection(db, "leads"), where("date", ">=", from), orderBy("date", "desc"));
+  return onSnapshot(q, (s) => onData(s.docs.map((d) => docToLead(d.id, d.data()))), (e) => onError?.(e));
+}
+
+export async function addLead(l: Omit<Lead, "id" | "createdAt">): Promise<{ error?: string }> {
+  try { await addDoc(collection(db, "leads"), { ...l, createdAt: serverTimestamp() }); return {}; }
+  catch (err) { return { error: parseError(err) }; }
+}
+
+export async function updateLead(id: string, l: Partial<Omit<Lead, "id" | "createdAt">>): Promise<{ error?: string }> {
+  try { await updateDoc(doc(db, "leads", id), { ...l, updatedAt: serverTimestamp() }); return {}; }
+  catch (err) { return { error: parseError(err) }; }
+}
+
+export async function deleteLead(id: string): Promise<{ error?: string }> {
+  try { await deleteDoc(doc(db, "leads", id)); return {}; }
+  catch (err) { return { error: parseError(err) }; }
+}
+
+// ─── Follow-up review (administrative, never clinical) ────────────────────────
+// Stored on the patient doc. `reviewedFor` is the last-session date the review
+// applies to, so a new completed session automatically re-opens the item.
+
+export const FOLLOW_UP_OUTCOMES = [
+  { value: "contacted",          label: "Contacted" },
+  { value: "treatment_complete", label: "Treatment complete / discharged" },
+  { value: "paused",             label: "Paused on purpose" },
+  { value: "no_action",          label: "No action needed" },
+] as const;
+
+export interface FollowUp { outcome: string; note: string; reviewedFor: string; reviewedAt: string; }
+
+export async function setPatientFollowUp(patientId: string, f: FollowUp): Promise<{ error?: string }> {
+  try { await updateDoc(doc(db, "patients", patientId), { followUp: f }); return {}; }
+  catch (err) { return { error: parseError(err) }; }
 }

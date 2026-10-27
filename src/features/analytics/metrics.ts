@@ -23,6 +23,7 @@ export interface APkgPayment { id: string; packageId: string; amount: number; da
 export interface AExpense { id: string; date: string; category: string; amount: number; marketingSource: string; }
 export interface APatient {
   uid: string; name: string; createdDate: string; status: string; acquisitionSource: string; referredByPhysicianId: string;
+  followUpReviewedFor?: string;   // last-session date an administrative follow-up decision was recorded for
 }
 export interface Capacity { openingHour: number; closingHour: number; maxPerHour: number; closedWeekdays: number[]; }
 export interface Range { from: string; to: string; }
@@ -384,3 +385,107 @@ export const monthRange = (ym: string, today: string): Range => {
   const end = `${ym}-${String(daysInMonth(ym)).padStart(2, "0")}`;
   return { from: `${ym}-01`, to: end > today ? today : end };
 };
+
+// ─── Inquiry funnel ───────────────────────────────────────────────────────────
+
+export interface ALead { id: string; date: string; source: string; status: string; patientId: string; }
+
+/** Inquiry → assessment booked → assessment attended → treatment started → continuing.
+ *  Stages after "booked" are measured from the linked patient's real appointments
+ *  (on/after the inquiry date), so they can't be overstated by a status click. */
+export function leadFunnel(leads: ALead[], appts: AAppt[], r: Range) {
+  const inP = leads.filter((l) => inRange(l.date, r));
+  const byPatient = new Map<string, AAppt[]>();
+  appts.forEach((a) => { if (a.patientId) (byPatient.get(a.patientId) ?? byPatient.set(a.patientId, []).get(a.patientId)!).push(a); });
+  let booked = 0, attended = 0, started = 0, continuing = 0, linked = 0;
+  for (const l of inP) {
+    const own = l.patientId ? (byPatient.get(l.patientId) ?? []).filter((a) => a.date >= l.date) : [];
+    if (l.patientId) linked++;
+    const hasAssessBooking = own.some((a) => isAssessment(a.sessionType) && a.status !== "rescheduled");
+    if (hasAssessBooking || l.status === "assessment_booked" || l.status === "converted") booked++;
+    if (own.some((a) => isAssessment(a.sessionType) && a.status === "completed")) attended++;
+    const treat = own.filter((a) => !isAssessment(a.sessionType) && a.status === "completed").length;
+    if (treat >= 1) started++;
+    if (treat >= 2) continuing++;
+  }
+  return { inquiries: inP.length, linked, booked, attended, started, continuing, bySource: groupSum(inP, (l) => l.source || "", () => 1) };
+}
+
+/** Of patients who attended an assessment in `r`, how many went on to a completed
+ *  treatment session afterwards (up to `today`). */
+export function assessmentToTreatment(appts: AAppt[], r: Range) {
+  const firstAssess = new Map<string, string>();
+  for (const a of appts) {
+    if (a.status !== "completed" || !isAssessment(a.sessionType) || !inRange(a.date, r) || !a.patientId) continue;
+    if (!firstAssess.has(a.patientId) || a.date < firstAssess.get(a.patientId)!) firstAssess.set(a.patientId, a.date);
+  }
+  let converted = 0;
+  firstAssess.forEach((d, pid) => {
+    if (appts.some((a) => a.patientId === pid && a.status === "completed" && !isAssessment(a.sessionType) && a.date >= d)) converted++;
+  });
+  return { assessed: firstAssess.size, converted, rate: ratio(converted, firstAssess.size) };
+}
+
+// ─── Expansion readiness ──────────────────────────────────────────────────────
+
+export function ownerShare(appts: AAppt[], managerIds: Set<string>, r: Range) {
+  const done = appts.filter((a) => a.status === "completed" && inRange(a.date, r));
+  return { owner: done.filter((a) => managerIds.has(a.physioId)).length, total: done.length,
+    share: ratio(done.filter((a) => managerIds.has(a.physioId)).length, done.length) };
+}
+
+/** Months of cash left at the recent average monthly result. null result = can't tell. */
+export function runway(cashBalance: number | null, monthlyResults: number[]): { months: number | null; burning: boolean | null } {
+  if (cashBalance === null || monthlyResults.length === 0) return { months: null, burning: null };
+  const avg = sum(monthlyResults) / monthlyResults.length;
+  if (avg >= 0) return { months: null, burning: false };
+  return { months: cashBalance / -avg, burning: true };
+}
+
+export type CriterionState = "met" | "not_met" | "missing";
+export interface Criterion { key: string; label: string; state: CriterionState; evidence: string; }
+
+export interface ExpansionInput {
+  fullMonths: { ym: string; result: number; completed: number; capacity: number; newPatients: number; expensesRecorded: boolean }[];
+  monthsAtTarget: number;
+  targetMonthlyResult: number | null;
+  breakEvenSessionsPerMonth: number | null;
+  targetUtilization: number | null;   // 0–1
+  cashBalance: number | null; minCashReserve: number | null;
+  ownerShare: number | null; maxOwnerShare: number | null;  // 0–1
+}
+
+/** Each criterion reports met / not met / missing data with its evidence. The
+ *  scorecard never turns this into a "ready" verdict on its own. */
+export function expansionCriteria(i: ExpansionInput): Criterion[] {
+  const n = Math.max(1, i.monthsAtTarget);
+  const last = i.fullMonths.slice(-n);
+  const enough = last.length >= n;
+  const out: Criterion[] = [];
+  const allExp = enough && last.every((m) => m.expensesRecorded);
+  out.push({ key: "expenses", label: `Expenses recorded for the last ${n} full months`,
+    state: allExp ? "met" : "missing",
+    evidence: enough ? `${last.filter((m) => m.expensesRecorded).length} of ${n} months have expenses logged` : `Only ${last.length} full month(s) of history in view` });
+  out.push({ key: "result", label: `Operating result ≥ target for ${n} consecutive months`,
+    state: i.targetMonthlyResult === null || !allExp ? "missing" : last.every((m) => m.result >= i.targetMonthlyResult!) ? "met" : "not_met",
+    evidence: i.targetMonthlyResult === null ? "Target not set" : !allExp ? "Needs complete expense records" : `Results: ${last.map((m) => Math.round(m.result)).join(", ")} vs target ${Math.round(i.targetMonthlyResult)}` });
+  out.push({ key: "breakeven", label: `Break-even sessions reached for ${n} consecutive months`,
+    state: i.breakEvenSessionsPerMonth === null || !enough ? "missing" : last.every((m) => m.completed >= i.breakEvenSessionsPerMonth!) ? "met" : "not_met",
+    evidence: i.breakEvenSessionsPerMonth === null ? "Break-even not computable (see Financial)" : `Sessions: ${last.map((m) => m.completed).join(", ")} vs ${i.breakEvenSessionsPerMonth}` });
+  const lastM = i.fullMonths[i.fullMonths.length - 1];
+  const util = lastM ? ratio(lastM.completed, lastM.capacity) : null;
+  out.push({ key: "utilization", label: "Schedule utilisation at target (demand near current capacity)",
+    state: i.targetUtilization === null || util === null ? "missing" : util >= i.targetUtilization ? "met" : "not_met",
+    evidence: i.targetUtilization === null ? "Target not set" : util === null ? "No capacity data" : `Last full month ${(util * 100).toFixed(0)}% vs target ${(i.targetUtilization * 100).toFixed(0)}%` });
+  const np = i.fullMonths.slice(-3).map((m) => m.newPatients);
+  out.push({ key: "acquisition", label: "New-patient trend not declining (last 3 full months)",
+    state: np.length < 3 ? "missing" : np[2] >= np[0] ? "met" : "not_met",
+    evidence: np.length < 3 ? "Needs 3 full months" : `New patients: ${np.join(" → ")}` });
+  out.push({ key: "cash", label: "Cash balance above minimum reserve",
+    state: i.cashBalance === null || i.minCashReserve === null ? "missing" : i.cashBalance >= i.minCashReserve ? "met" : "not_met",
+    evidence: i.cashBalance === null || i.minCashReserve === null ? "Cash balance and reserve must both be entered" : `${Math.round(i.cashBalance)} vs reserve ${Math.round(i.minCashReserve)} (owner-entered)` });
+  out.push({ key: "owner", label: "Clinic runs without depending on the owner",
+    state: i.maxOwnerShare === null || i.ownerShare === null ? "missing" : i.ownerShare <= i.maxOwnerShare ? "met" : "not_met",
+    evidence: i.ownerShare === null ? "No completed sessions" : i.maxOwnerShare === null ? `Owner treats ${(i.ownerShare * 100).toFixed(0)}% of sessions; limit not set` : `Owner treats ${(i.ownerShare * 100).toFixed(0)}% vs limit ${(i.maxOwnerShare * 100).toFixed(0)}%` });
+  return out;
+}

@@ -9,11 +9,11 @@ import { db } from "../../firebase";
 import { docToAppointment } from "../../services/appointmentService";
 import { docToSessionPrice, docToPackage } from "../../services/priceService";
 import { CLINIC_TIMEZONE } from "../../services/businessService";
-import { dedupeById, type AAppt, type APrice, type APackage, type APkgPayment, type AExpense, type APatient } from "./metrics";
+import { dedupeById, type AAppt, type APrice, type APackage, type APkgPayment, type AExpense, type APatient, type ALead } from "./metrics";
 
 export interface AnalyticsData {
   appts: AAppt[]; prices: APrice[]; unpaidPrices: APrice[]; pkgs: APackage[];
-  pkgPayments: APkgPayment[]; expenses: AExpense[]; patients: APatient[]; managerIds: Set<string>;
+  pkgPayments: APkgPayment[]; expenses: AExpense[]; patients: APatient[]; managerIds: Set<string>; leads: ALead[];
 }
 
 const tsToLocalDate = (ts: unknown): string => {
@@ -31,7 +31,7 @@ const toPrice = (id: string, d: Record<string, unknown>): APrice => {
 };
 
 export async function loadAnalyticsData(loadFrom: string): Promise<AnalyticsData> {
-  const [apptDocs, priceByDate, priceByPaid, unpaidDocs, pkgDocs, payDocs, expDocs, patientDocs, physioDocs] = await Promise.all([
+  const [apptDocs, priceByDate, priceByPaid, unpaidDocs, pkgDocs, payDocs, expDocs, patientDocs, physioDocs, leadDocs] = await Promise.all([
     fetchAll("appointments", where("date", ">=", loadFrom)),          // includes all future bookings
     fetchAll("patientSessionPrices", where("date", ">=", loadFrom)),
     fetchAll("patientSessionPrices", where("paidDate", ">=", loadFrom)),
@@ -41,6 +41,7 @@ export async function loadAnalyticsData(loadFrom: string): Promise<AnalyticsData
     fetchAll("clinicExpenses", where("date", ">=", loadFrom)),
     fetchAll("patients"),
     fetchAll("physiotherapists"),
+    fetchAll("leads", where("date", ">=", loadFrom)),
   ]);
 
   const appts: AAppt[] = apptDocs.map((d) => {
@@ -73,10 +74,16 @@ export async function loadAnalyticsData(loadFrom: string): Promise<AnalyticsData
     const x = d.data();
     return { uid: d.id, name: `${x.firstName ?? ""} ${x.lastName ?? ""}`.trim() || "Unnamed",
       createdDate: tsToLocalDate(x.createdAt), status: (x.status as string) ?? "active",
-      acquisitionSource: (x.acquisitionSource as string) ?? "", referredByPhysicianId: (x.referredByPhysicianId as string) ?? "" };
+      acquisitionSource: (x.acquisitionSource as string) ?? "", referredByPhysicianId: (x.referredByPhysicianId as string) ?? "",
+      followUpReviewedFor: ((x.followUp as { reviewedFor?: string } | undefined)?.reviewedFor) ?? "" };
   });
 
   const managerIds = new Set(physioDocs.filter((d) => d.data().rank === "manager").map((d) => d.id));
 
-  return { appts, prices, unpaidPrices, pkgs, pkgPayments, expenses, patients, managerIds };
+  const leads: ALead[] = leadDocs.map((d) => {
+    const x = d.data();
+    return { id: d.id, date: (x.date as string) ?? "", source: (x.source as string) ?? "", status: (x.status as string) ?? "new", patientId: (x.patientId as string) ?? "" };
+  });
+
+  return { appts, prices, unpaidPrices, pkgs, pkgPayments, expenses, patients, managerIds, leads };
 }

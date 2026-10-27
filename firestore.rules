@@ -236,6 +236,11 @@ service cloud.firestore {
       allow read, write: if isManager();
     }
 
+    // Front-desk inquiry log (may hold a name/phone) — manager + secretary only.
+    match /leads/{docId} {
+      allow read, write: if isManager() || isSecretary();
+    }
+
     // Dated log of package paidAmount changes — written by whoever edits a
     // package (same roles as patientPackages), corrected only by the manager.
     match /packagePayments/{docId} {
