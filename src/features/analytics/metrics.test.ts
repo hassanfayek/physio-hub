@@ -226,3 +226,21 @@ describe("expansion", () => {
     expect(runway(null, [5000]).months).toBeNull();
   });
 });
+
+import { firstSessionByPackage } from "./metrics";
+
+describe("older package payments", () => {
+  it("count on the package's first session date; unpaid packages add nothing", () => {
+    const first = firstSessionByPackage([
+      price({ packageId: "k1", date: "2026-09-20" }), price({ packageId: "k1", date: "2026-09-15" }), price({ packageId: "k2", date: "2026-09-18" }),
+    ]);
+    expect(first).toEqual({ k1: "2026-09-15", k2: "2026-09-18" });
+    const lines = cashLines([], [
+      pkg({ id: "k1", paidAmount: 1500, startDate: "2026-08-30" }),
+      pkg({ id: "k2", paidAmount: 0, startDate: "2026-08-30" }),        // not paid → nothing
+      pkg({ id: "k3", paidAmount: 900, startDate: "2026-09-01" }),      // no session yet → start date
+    ], [], first);
+    expect(lines.map((l) => [l.date, l.amount])).toEqual([["2026-09-15", 1500], ["2026-09-01", 900]]);
+    expect(cashStats(lines, { from: "2026-08-01", to: "2026-08-31" }).total).toBe(0);
+  });
+});

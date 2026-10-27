@@ -331,7 +331,7 @@ export default function BusinessAnalyticsPage() {
   // ── All metrics for current + previous period ──────────────────────────────
   const m = useMemo(() => {
     if (!data) return null;
-    const lines = M.cashLines(data.prices, data.pkgs, data.pkgPayments);
+    const lines = M.cashLines(data.prices, data.pkgs, data.pkgPayments, data.firstSessionByPkg);
     const per = (r: M.Range) => {
       const appt = M.apptStats(data.appts, r, NO_SHOW_TRACKING_SINCE);
       const cash = M.cashStats(lines, r);
@@ -388,7 +388,7 @@ export default function BusinessAnalyticsPage() {
           {(approxCash || preTracking) && (section === "overview" || section === "financial") && (
             <div className="ba-banner">
               <Info size={15} /> Data capture for payment dates, payment methods and no-shows began on {fmtDate(PAYMENT_LOG_TRACKING_SINCE)}.
-              {approxCash && <> {egp(m.c.cash.approximate)} of this period's cash comes from older package payments counted on the package start date (approximate).</>}
+              {approxCash && <> {egp(m.c.cash.approximate)} of this period's cash comes from older package payments, counted on the date of each package's first session (approximate).</>}
             </div>
           )}
 
@@ -477,7 +477,7 @@ function Financial({ m, data, settings, cur, cap, months, onExpensesChanged }: {
     <div className="ba-stack">
       <div className="ba-grid">
         <Kpi label="Cash — sessions" value={egp(c.cash.sessions)} help="Paid pay-per-session charges (not linked to a package), by paid date." />
-        <Kpi label="Cash — packages" value={egp(c.cash.packages)} help="Package payments by payment date (older packages: on start date, approximate)." />
+        <Kpi label="Cash — packages" value={egp(c.cash.packages)} help="Package payments by payment date. Money paid on older packages (before payment dates were recorded) counts on the date of the package's first session, or its start date if it has no session yet." />
         <Kpi label="Package sales" value={`${num(c.pkgSales.count)} · ${egp(c.pkgSales.value)}`} help="Packages starting in the period: count and total package price (sold, not necessarily paid)." />
         <Kpi label="Package sessions used" value={`${num(c.earned.packageRedemptions)} · ${egp(c.earned.packageRedemptionValue)}`}
           help="Completed sessions in the period whose price record is linked to a package, valued at the per-session price. Counted from linked records, not the manual +/− counter." />

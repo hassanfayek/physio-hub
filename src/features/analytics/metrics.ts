@@ -147,8 +147,9 @@ export interface CashLine { date: string; amount: number; method: string; kind: 
  *  - Pay-per-session: paid, non-package price records, on their paid date.
  *    (Package-linked price records are excluded — that money arrives via the package.)
  *  - Packages: each logged payment on its date. Money paid before the log existed
- *    (paidAmount − Σ logged) is attributed to the package start date and flagged approximate. */
-export function cashLines(prices: APrice[], pkgs: APackage[], pkgPayments: APkgPayment[]): CashLine[] {
+ *    (paidAmount − Σ logged) is attributed to the date of the package's first session,
+ *    or its start date if no session is recorded yet, and flagged approximate. */
+export function cashLines(prices: APrice[], pkgs: APackage[], pkgPayments: APkgPayment[], firstSessionByPkg: Record<string, string> = {}): CashLine[] {
   const lines: CashLine[] = [];
   for (const p of prices) {
     if (p.packageId || !p.paid || !(p.amount > 0)) continue;
@@ -158,9 +159,16 @@ export function cashLines(prices: APrice[], pkgs: APackage[], pkgPayments: APkgP
   for (const x of pkgPayments) lines.push({ date: x.date, amount: x.amount, method: x.method, kind: "package", approximate: false });
   for (const k of pkgs) {
     const legacy = (k.paidAmount || 0) - (logged[k.id] ?? 0);
-    if (legacy > 0.0001) lines.push({ date: k.startDate, amount: legacy, method: "", kind: "package", approximate: true });
+    if (legacy > 0.0001) lines.push({ date: firstSessionByPkg[k.id] || k.startDate, amount: legacy, method: "", kind: "package", approximate: true });
   }
   return lines;
+}
+
+/** Date of each package's first recorded session (earliest linked price record). */
+export function firstSessionByPackage(pkgPrices: APrice[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const p of pkgPrices) if (p.packageId && p.date && (!out[p.packageId] || p.date < out[p.packageId])) out[p.packageId] = p.date;
+  return out;
 }
 
 export interface CashStats { total: number; sessions: number; packages: number; approximate: number; byMethod: Record<string, number>; }
