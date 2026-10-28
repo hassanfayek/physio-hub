@@ -462,6 +462,7 @@ export default function SchedulePage({
               currentPhysio={currentPhysio}
               isManager={showAll}
               canBook={canBook}
+              canEditSessionInfo={isManager || isSecretary}
               onBack={() => setView("week")}
               onViewPatient={onViewPatient}
               onViewPatientSection={onViewPatientSection}

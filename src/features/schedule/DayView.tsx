@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Plus, Trash2, Check, UserCheck, Phone, MessageCircle, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Check, UserCheck, Phone, MessageCircle, MoreHorizontal, Pencil } from "lucide-react";
 import { formatPhoneDisplay, phoneForLink } from "../../utils/phone";
 import {
   subscribeToAppointmentsByDay,
@@ -10,7 +10,9 @@ import {
   updateAppointmentStatus,
   updateAppointmentConfirmation,
   assignAppointmentToPatient,
+  updateAppointmentDetails,
   fmtHour12,
+  SESSION_TYPES,
   type Appointment,
   type ClinicSettings,
 } from "../../services/appointmentService";
@@ -41,6 +43,7 @@ interface DayViewProps {
   currentPhysio:   { uid: string; firstName: string; lastName: string };
   isManager:       boolean;
   canBook?:        boolean;  // false for juniors
+  canEditSessionInfo?: boolean;  // manager + secretary: change the physio / session type of a booking
   onBack?:         () => void;
   onViewPatient?:        (patientId: string) => void;
   onViewPatientSection?: (patientId: string, section: string) => void;
@@ -55,6 +58,7 @@ export default function DayView({
   physios,
   currentPhysio,
   isManager,
+  canEditSessionInfo = false,
   canBook = true,
   onBack,
   onViewPatient,
@@ -65,6 +69,11 @@ export default function DayView({
   const [modalSlot,     setModalSlot]     = useState<number | null>(null);
   const [deletingId,    setDeletingId]    = useState<string | null>(null);
   const [updatingId,    setUpdatingId]    = useState<string | null>(null);
+  // Quick edit of who treated the session and its type
+  const [infoAppt,   setInfoAppt]   = useState<Appointment | null>(null);
+  const [infoForm,   setInfoForm]   = useState({ physioId: "", sessionType: "" });
+  const [infoSaving, setInfoSaving] = useState(false);
+  const [infoError,  setInfoError]  = useState<string | null>(null);
   const [confirmingId,  setConfirmingId]  = useState<string | null>(null);
   const [toast,         setToast]         = useState<string | null>(null);
   const [openContactId, setOpenContactId] = useState<string | null>(null);
@@ -115,6 +124,26 @@ export default function DayView({
     );
     return () => unsub();
   }, [date, isManager, currentPhysio.uid]);
+
+  const openInfoEdit = (a: Appointment) => {
+    setInfoAppt(a);
+    setInfoForm({ physioId: a.physioId, sessionType: a.sessionType || "" });
+    setInfoError(null);
+  };
+
+  const handleInfoSave = async () => {
+    if (!infoAppt) return;
+    const physio = physios.find((p) => p.uid === infoForm.physioId);
+    if (!infoForm.physioId || (!physio && infoForm.physioId !== infoAppt.physioId)) { setInfoError("Choose a physiotherapist."); return; }
+    if (!infoForm.sessionType) { setInfoError("Choose a session type."); return; }
+    const physioName = physio ? `Dr. ${physio.firstName} ${physio.lastName}` : infoAppt.physioName;
+    setInfoSaving(true); setInfoError(null);
+    const { error } = await updateAppointmentDetails(infoAppt.id, { physioId: infoForm.physioId, physioName, sessionType: infoForm.sessionType });
+    setInfoSaving(false);
+    if (error) { setInfoError(error); return; }
+    showToast(`✓ ${infoAppt.patientName || "Session"} updated: ${physioName} · ${infoForm.sessionType}`);
+    setInfoAppt(null);
+  };
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -524,6 +553,12 @@ export default function DayView({
         .dv-appt-status.in_progress { background: #fef3c7; color: #92400e; }
         .dv-appt-status.rescheduled { background: #ede9fe; color: #4c1d95; }
         .dv-appt-status.no_show     { background: #ffedd5; color: #9a3412; }
+        .dv-info-edit-btn {
+          display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; padding: 2px 8px;
+          border-radius: 100px; border: 1px solid #B3DEF0; background: #EAF5FC; color: #2E8BC0;
+          font-family: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer;
+        }
+        .dv-info-edit-btn:hover { background: #D6EEF8; }
 
         .dv-status-select {
           font-family: 'Outfit', sans-serif;
@@ -805,6 +840,11 @@ export default function DayView({
                                   <div className="dv-appt-physio">{a.physioName}</div>
                                   {a.sessionType && (
                                     <div className="dv-appt-session">{a.sessionType}</div>
+                                  )}
+                                  {canEditSessionInfo && (
+                                    <button className="dv-info-edit-btn" type="button" onClick={() => openInfoEdit(a)} title="Change physiotherapist or session type">
+                                      <Pencil size={10} strokeWidth={2.5} /> Edit physio / type
+                                    </button>
                                   )}
                                 </div>
                               </div>
@@ -1102,6 +1142,41 @@ export default function DayView({
                 onClick={handleAssignSave}
               >
                 {assignSaving ? "Saving…" : "Assign Patient"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {infoAppt && createPortal(
+        <div className="dv-modal-overlay" style={{ position: "fixed", inset: 0, zIndex: 1001, background: "rgba(10,15,10,0.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={(e) => { if (e.target === e.currentTarget && !infoSaving) setInfoAppt(null); }}>
+          <div className="dv-assign-modal dv-modal-sheet">
+            <div className="dv-assign-title">Edit session info</div>
+            <div className="dv-assign-sub">
+              {infoAppt.patientName || "Walk-in"} · {infoAppt.date} · {fmtHour12(infoAppt.hour)}
+            </div>
+            <label className="dv-assign-label">Physiotherapist</label>
+            <select className="dv-assign-select" value={infoForm.physioId}
+              onChange={(e) => { setInfoForm({ ...infoForm, physioId: e.target.value }); setInfoError(null); }}>
+              {!physios.some((p) => p.uid === infoAppt.physioId) && <option value={infoAppt.physioId}>{infoAppt.physioName || "Current physio"}</option>}
+              {physios.filter((p) => p.active || p.uid === infoAppt.physioId).map((p) => (
+                <option key={p.uid} value={p.uid}>Dr. {p.firstName} {p.lastName}{p.active ? "" : " (deactivated)"}</option>
+              ))}
+            </select>
+            <label className="dv-assign-label" style={{ marginTop: 12 }}>Session type</label>
+            <select className="dv-assign-select" value={infoForm.sessionType}
+              onChange={(e) => { setInfoForm({ ...infoForm, sessionType: e.target.value }); setInfoError(null); }}>
+              {!infoForm.sessionType && <option value="">— Choose —</option>}
+              {infoAppt.sessionType && !SESSION_TYPES.includes(infoAppt.sessionType) && <option value={infoAppt.sessionType}>{infoAppt.sessionType}</option>}
+              {SESSION_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <div className="dv-assign-sub" style={{ marginTop: 10, marginBottom: 0 }}>If this session has already been billed, its charge is updated too.</div>
+            {infoError && <div className="dv-assign-error">{infoError}</div>}
+            <div className="dv-assign-actions">
+              <button className="dv-assign-cancel" onClick={() => setInfoAppt(null)} disabled={infoSaving}>Cancel</button>
+              <button className="dv-assign-save" disabled={infoSaving || (infoForm.physioId === infoAppt.physioId && infoForm.sessionType === (infoAppt.sessionType || ""))} onClick={handleInfoSave}>
+                {infoSaving ? "Saving…" : "Save changes"}
               </button>
             </div>
           </div>

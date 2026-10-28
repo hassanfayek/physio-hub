@@ -8,6 +8,7 @@ import {
   updateDoc,
   setDoc,
   getDoc,
+  getDocs,
   query,
   where,
   orderBy,
@@ -472,6 +473,26 @@ export async function updateAppointmentSessionType(
 ): Promise<{ error?: string }> {
   try {
     await updateDoc(doc(db, "appointments", appointmentId), { sessionType });
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+// ─── Update who treated the session and/or its type (manager + secretary) ─────
+// Also keeps any billing record for this session in sync, since the price sheet
+// and billing pages show the physio and session type stored on the charge.
+
+export async function updateAppointmentDetails(
+  appointmentId: string,
+  updates: { physioId: string; physioName: string; sessionType: string }
+): Promise<{ error?: string }> {
+  try {
+    await updateDoc(doc(db, "appointments", appointmentId), {
+      physioId: updates.physioId, physioName: updates.physioName, sessionType: updates.sessionType,
+    });
+    const charges = await getDocs(query(collection(db, "patientSessionPrices"), where("appointmentId", "==", appointmentId)));
+    await Promise.all(charges.docs.map((d) => updateDoc(d.ref, { physioName: updates.physioName, sessionType: updates.sessionType })));
     return {};
   } catch (err) {
     return { error: parseError(err) };
