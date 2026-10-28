@@ -114,3 +114,33 @@ describe("monthly expenses are independent of these warnings", () => {
     expect(expenseGap(expensesForRange(saved, cats, OCT))).toBeNull();
   });
 });
+
+describe("owner's rule: older package money counts on the first session date", () => {
+  const pkgs = [pkg({ id: "a", paidAmount: 1500 }), pkg({ id: "b", paidAmount: 800, startDate: "2026-10-10" }), pkg({ id: "c", paidAmount: 0 })];
+  const first = { a: "2026-09-12" };   // b has no session yet; c is unpaid
+  it("with the rule on, dated packages count in cash on their first session", () => {
+    const lines = cashLines([], pkgs, [], first, { legacyAtFirstSession: true });
+    const sep = cashStats(lines, SEP);
+    expect([sep.verified, sep.packages, sep.estimated]).toEqual([1500, 1500, 0]);
+    expect(sep.assumedPackages).toEqual({ amount: 1500, count: 1 });
+  });
+  it("packages with no session yet stay estimated (no date to use); unpaid ones add nothing", () => {
+    const oct = cashStats(cashLines([], pkgs, [], first, { legacyAtFirstSession: true }), OCT);
+    expect([oct.verified, oct.estimated]).toEqual([0, 800]);
+    expect(oct.estimatedLines.map((l) => l.sourceId)).toEqual(["b"]);
+  });
+  it("the warning disappears for a period once every package in it has a first session", () => {
+    const lines = cashLines([], pkgs, [], first, { legacyAtFirstSession: true });
+    const ns = { untracked: 0, tracked: 1 };
+    expect(dataQuality(cashStats(lines, SEP), cashStats(lines, { from: "2026-08-01", to: "2026-08-31" }), ns, ns).paymentDates).toBeNull();
+  });
+  it("with the rule off, nothing changes (estimated, not counted)", () => {
+    const sep = cashStats(cashLines([], pkgs, [], first), SEP);
+    expect([sep.verified, sep.estimated]).toEqual([0, 1500]);
+  });
+  it("logged payments are never double counted with the rule", () => {
+    const pays: APkgPayment[] = [{ id: "p", packageId: "a", amount: 500, date: "2026-10-28", method: "cash" }];
+    const lines = cashLines([], [pkg({ id: "a", paidAmount: 1500 })], pays, first, { legacyAtFirstSession: true });
+    expect(cashStats(lines, SEP).verified + cashStats(lines, OCT).verified).toBe(1500);
+  });
+});

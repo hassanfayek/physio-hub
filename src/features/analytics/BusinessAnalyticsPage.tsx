@@ -200,6 +200,10 @@ function AssumptionsModal({ initial, onClose }: { initial: BusinessSettings; onC
           <input type="checkbox" checked={s.variableIncludedInExpenses} onChange={(e) => setS({ ...s, variableIncludedInExpenses: e.target.checked })} />
           My monthly expenses already include per-session costs such as consumables (don't subtract them again)
         </label>
+        <label className="ba-check">
+          <input type="checkbox" checked={s.legacyPackagesAtFirstSession} onChange={(e) => setS({ ...s, legacyPackagesAtFirstSession: e.target.checked })} />
+          Count money paid on packages before 27 Oct 2026 (when payment dates weren't recorded) as paid on each package's first session date
+        </label>
         <div className="ba-form-grid">
           {numField("targetMonthlyResult", "Target monthly operating result (EGP)")}
           {numField("minCashReserve", "Minimum cash reserve (EGP)")}
@@ -291,7 +295,7 @@ export default function BusinessAnalyticsPage() {
   // ── All metrics for current + previous period ──────────────────────────────
   const m = useMemo(() => {
     if (!data) return null;
-    const lines = M.cashLines(data.prices, data.pkgs, data.pkgPayments, data.firstSessionByPkg);
+    const lines = M.cashLines(data.prices, data.pkgs, data.pkgPayments, data.firstSessionByPkg, { legacyAtFirstSession: settings.legacyPackagesAtFirstSession });
     const per = (r: M.Range) => {
       const appt = M.apptStats(data.appts, r, NO_SHOW_TRACKING_SINCE);
       const cash = M.cashStats(lines, r);
@@ -309,7 +313,7 @@ export default function BusinessAnalyticsPage() {
     const c = per(cur), p = per(prev);
     const monthly = months.map((ym) => { const r = M.monthRange(ym, today); return { ym, r, ...per(r) }; });
     return { lines, c, p, monthly };
-  }, [data, cur, prev, months, today, cap, monthlyExp, settings.expenseCategories]);
+  }, [data, cur, prev, months, today, cap, monthlyExp, settings.expenseCategories, settings.legacyPackagesAtFirstSession]);
 
   // Data-quality issues for the selected and comparison periods, from the records the metrics use.
   const dq = m ? M.dataQuality(m.c.cash, m.p.cash, m.c.ns, m.p.ns) : null;
@@ -349,7 +353,7 @@ export default function BusinessAnalyticsPage() {
 
       {m && data && (
         <>
-          {dq && <DataQualityNotes dq={dq} section={section} data={data} />}
+          {dq && <DataQualityNotes dq={dq} section={section} data={data} legacyRule={settings.legacyPackagesAtFirstSession} />}
 
           {section === "overview" && <Overview m={m} />}
           {section === "financial" && <Financial m={m} data={data} settings={settings} cur={cur} cap={cap} months={months} monthly={monthlyExp ?? []} today={today} onOpenExpenses={() => setSection("expenses")} />}
@@ -391,7 +395,7 @@ const DQ_SECTIONS: Record<keyof M.DataQuality, SectionKey[]> = {
   noShow:         ["overview", "retention", "schedule"],
 };
 
-function DataQualityNotes({ dq, section, data }: { dq: M.DataQuality; section: SectionKey; data: AnalyticsData }) {
+function DataQualityNotes({ dq, section, data, legacyRule }: { dq: M.DataQuality; section: SectionKey; data: AnalyticsData; legacyRule: boolean }) {
   const show = (k: keyof M.DataQuality) => dq[k] !== null && DQ_SECTIONS[k].includes(section);
   if (!show("paymentDates") && !show("paymentMethods") && !show("noShow")) return null;
   const names = new Map(data.patients.map((p) => [p.uid, p.name] as const));
@@ -404,7 +408,9 @@ function DataQualityNotes({ dq, section, data }: { dq: M.DataQuality; section: S
         <div className="ba-banner warn"><AlertTriangle size={15} /><div>
           <b>Payment date unknown</b>{" "}
           {pd.cur.estimated > 0 ? <>for {egp(pd.cur.estimated)} in this period, shown separately and <b>not</b> included in Cash collected:</> : <>for nothing in this period;</>}
-          {pd.cur.estimatedPackages.count > 0 && <> {egp(pd.cur.estimatedPackages.amount)} from {pd.cur.estimatedPackages.count} package{pd.cur.estimatedPackages.count === 1 ? "" : "s"} paid before {since}, when payment dates weren't recorded (placed on each package's first session). These dates were never recorded, so they remain estimates.</>}
+          {pd.cur.estimatedPackages.count > 0 && (legacyRule
+            ? <> {egp(pd.cur.estimatedPackages.amount)} from {pd.cur.estimatedPackages.count} package{pd.cur.estimatedPackages.count === 1 ? "" : "s"} paid before {since} that {pd.cur.estimatedPackages.count === 1 ? "hasn't" : "haven't"} had a session yet, so there's no first-session date to count {pd.cur.estimatedPackages.count === 1 ? "it" : "them"} on (placed on the start date). {pd.cur.estimatedPackages.count === 1 ? "It counts" : "They count"} automatically once the first session is billed.</>
+            : <> {egp(pd.cur.estimatedPackages.amount)} from {pd.cur.estimatedPackages.count} package{pd.cur.estimatedPackages.count === 1 ? "" : "s"} paid before {since}, when payment dates weren't recorded (placed on each package's first session). Turn on "count older package payments on the first session date" in Assumptions to count them.</>)}
           {pd.cur.estimatedSessions.count > 0 && <> {egp(pd.cur.estimatedSessions.amount)} from {pd.cur.estimatedSessions.count} session charge{pd.cur.estimatedSessions.count === 1 ? "" : "s"} marked paid without a paid date (placed on the session date). Set the paid date on the patient's price sheet to fix these.</>}
           {pd.prev.estimated > 0 && <> The comparison period has {egp(pd.prev.estimated)} with unknown dates; comparisons use recorded-date cash only.</>}
           {pd.cur.estimatedLines.length > 0 && (
@@ -415,7 +421,7 @@ function DataQualityNotes({ dq, section, data }: { dq: M.DataQuality; section: S
                   const k = l.kind === "package" ? pkgById.get(l.sourceId) : undefined;
                   return <tr key={`${l.sourceId}-${i}`}>
                     <td>{names.get(l.patientId) ?? "Unknown patient"}</td>
-                    <td>{l.estimated === "package_legacy" ? `${k?.packageSize ?? "?"}-session package (started ${fmtDate(k?.startDate ?? "")}), paid before ${since}` : "Session charge, paid, no paid date"}</td>
+                    <td>{l.estimated === "package_legacy" ? `${k?.packageSize ?? "?"}-session package (started ${fmtDate(k?.startDate ?? "")}), paid before ${since}${legacyRule ? ", no session yet" : ""}` : "Session charge, paid, no paid date"}</td>
                     <td>{fmtDate(l.date)}</td><td className="r">{egp(l.amount)}</td>
                   </tr>;
                 })}</tbody>
@@ -461,7 +467,7 @@ function Overview({ m }: { m: Computed }) {
     <div className="ba-grid">
       <Kpi label="Cash collected" value={egp(c.cash.verified)} cur={c.cash.verified} prev={p.cash.verified}
         note={c.cash.estimated > 0 ? `+ ${egp(c.cash.estimated)} with unknown payment date (not included)` : undefined}
-        help="Payments with a recorded payment date in the period: paid pay-per-session charges on their paid date + logged package payments. Package-covered sessions are not counted again. Payments whose date was never recorded are shown separately, not here." />
+        help="Payments in the period: paid pay-per-session charges on their paid date + logged package payments, plus (if the Assumptions rule is on) money paid on packages before 27 Oct 2026 counted on each package's first session date. Package-covered sessions are not counted again. Payments with no usable date are shown separately, not here." />
       <Kpi label="Earned revenue" value={egp(c.earned.total)} cur={c.earned.total} prev={p.earned.total}
         note={c.earned.unpricedSessions ? `${c.earned.unpricedSessions} completed session(s) have no price recorded` : undefined}
         help="Value of treatment actually delivered: each completed session × its price record (package sessions at the package's per-session price). Differs from cash when packages are prepaid." />
@@ -524,8 +530,8 @@ function Financial({ m, data, settings, cur, cap, months, monthly, today, onOpen
           note={c.cash.estimatedSessions.amount > 0 ? `+ ${egp(c.cash.estimatedSessions.amount)} paid with no paid date` : undefined}
           help="Paid pay-per-session charges (not linked to a package) with a recorded paid date in the period." />
         <Kpi label="Cash — packages" value={egp(c.cash.packages)}
-          note={c.cash.estimatedPackages.amount > 0 ? `+ ${egp(c.cash.estimatedPackages.amount)} older payments, date unknown` : undefined}
-          help="Logged package payments, by payment date. Money paid on packages before payment dates were recorded is shown separately (its date is unknown)." />
+          note={[c.cash.assumedPackages.amount > 0 ? `Includes ${egp(c.cash.assumedPackages.amount)} older payments counted on first session` : "", c.cash.estimatedPackages.amount > 0 ? `+ ${egp(c.cash.estimatedPackages.amount)} not counted (no session yet / rule off)` : ""].filter(Boolean).join(" · ") || undefined}
+          help="Logged package payments by payment date. With the Assumptions rule on, money paid on packages before 27 Oct 2026 (when payment dates weren't recorded) counts on each package's first session date; packages with no session yet can't be dated and are shown separately." />
         <Kpi label="Package sales" value={`${num(c.pkgSales.count)} · ${egp(c.pkgSales.value)}`} help="Packages starting in the period: count and total package price (sold, not necessarily paid)." />
         <Kpi label="Package sessions used" value={`${num(c.earned.packageRedemptions)} · ${egp(c.earned.packageRedemptionValue)}`}
           help="Completed sessions in the period whose price record is linked to a package, valued at the per-session price. Counted from linked records, not the manual +/− counter." />

@@ -249,6 +249,9 @@ export interface BusinessSettings {
   monthsAtTarget:       number;                // consecutive full months required
   expenseCategories:    ExpenseCategory[];
   fixedCostsSource:     "recorded" | "manual"; // break-even fixed costs: avg of recorded months, or the manual figure
+  // Owner's rule: money paid on packages before payment dates were logged counts as
+  // paid on each package's first session date.
+  legacyPackagesAtFirstSession: boolean;
 }
 
 export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
@@ -258,6 +261,7 @@ export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
   closedWeekdays: [],
   targetUtilization: null, maxOwnerSharePct: null, monthsAtTarget: 3,
   expenseCategories: DEFAULT_EXPENSE_CATEGORIES, fixedCostsSource: "recorded",
+  legacyPackagesAtFirstSession: true,
 };
 
 export function subscribeToBusinessSettings(

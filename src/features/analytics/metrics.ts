@@ -148,6 +148,8 @@ export interface CashLine {
   date: string; amount: number; method: string; kind: "session" | "package";
   /** Set when the real payment date is unknown and `date` is a stand-in. */
   estimated: EstimateReason | null;
+  /** Counted on a date set by the owner's rule (older package money → first session), not a recorded date. */
+  assumed?: "first_session";
   sourceId: string; patientId: string;
 }
 
@@ -156,9 +158,11 @@ export interface CashLine {
  *    (Package-linked price records are excluded — that money arrives via the package.)
  *    Paid with no paid date → the session date is used as a stand-in, flagged estimated.
  *  - Packages: each logged payment on its date (verified). Money paid before the log
- *    existed (paidAmount − Σ logged) has no recorded date: it's placed on the package's
- *    first session (or start date) as a stand-in and flagged estimated. */
-export function cashLines(prices: APrice[], pkgs: APackage[], pkgPayments: APkgPayment[], firstSessionByPkg: Record<string, string> = {}): CashLine[] {
+ *    existed (paidAmount − Σ logged) has no recorded date. With the owner's rule
+ *    `legacyAtFirstSession`, it counts as paid on the package's first session; otherwise
+ *    (or if the package has no session yet) it's placed on the first session / start date
+ *    as a stand-in and flagged estimated. */
+export function cashLines(prices: APrice[], pkgs: APackage[], pkgPayments: APkgPayment[], firstSessionByPkg: Record<string, string> = {}, opts: { legacyAtFirstSession?: boolean } = {}): CashLine[] {
   const lines: CashLine[] = [];
   for (const p of prices) {
     if (p.packageId || !p.paid || !(p.amount > 0)) continue;
@@ -170,7 +174,13 @@ export function cashLines(prices: APrice[], pkgs: APackage[], pkgPayments: APkgP
   for (const x of pkgPayments) lines.push({ date: x.date, amount: x.amount, method: x.method, kind: "package", estimated: null, sourceId: x.packageId, patientId: patientOfPkg.get(x.packageId) ?? "" });
   for (const k of pkgs) {
     const legacy = (k.paidAmount || 0) - (logged[k.id] ?? 0);
-    if (legacy > 0.0001) lines.push({ date: firstSessionByPkg[k.id] || k.startDate, amount: legacy, method: "", kind: "package", estimated: "package_legacy", sourceId: k.id, patientId: k.patientId });
+    if (!(legacy > 0.0001)) continue;
+    const first = firstSessionByPkg[k.id];
+    if (opts.legacyAtFirstSession && first) {
+      lines.push({ date: first, amount: legacy, method: "", kind: "package", estimated: null, assumed: "first_session", sourceId: k.id, patientId: k.patientId });
+    } else {
+      lines.push({ date: first || k.startDate, amount: legacy, method: "", kind: "package", estimated: "package_legacy", sourceId: k.id, patientId: k.patientId });
+    }
   }
   return lines;
 }
@@ -184,11 +194,12 @@ export function firstSessionByPackage(pkgPrices: APrice[]): Record<string, strin
 
 export interface AmountCount { amount: number; count: number; }
 export interface CashStats {
-  verified: number;            // payments with a recorded date in the period
+  verified: number;            // payments counted in the period: recorded dates + the owner's first-session rule
   estimated: number;           // payments whose real date is unknown, placed in the period by a stand-in date
   total: number;               // verified + estimated (only ever shown labelled)
   sessions: number; packages: number;                       // verified, by kind
   estimatedPackages: AmountCount; estimatedSessions: AmountCount;
+  assumedPackages: AmountCount;                             // older package money counted on its first session (owner's rule)
   methodMissing: AmountCount;                               // all payments in the period with no payment method
   byMethod: Record<string, number>;                         // all payments ("" = not recorded)
   estimatedLines: CashLine[];                               // the records behind `estimated`, for drill-down
@@ -206,6 +217,7 @@ export function cashStats(lines: CashLine[], r: Range): CashStats {
     packages: sum(ver.filter((l) => l.kind === "package").map((l) => l.amount)),
     estimatedPackages: ac(est.filter((l) => l.estimated === "package_legacy")),
     estimatedSessions: ac(est.filter((l) => l.estimated === "session_no_paid_date")),
+    assumedPackages: ac(ver.filter((l) => l.assumed === "first_session")),
     methodMissing: ac(inP.filter((l) => !l.method && l.amount > 0)),
     byMethod: groupSum(inP, (l) => l.method || "", (l) => l.amount),
     estimatedLines: [...est].sort((a, b) => b.amount - a.amount),
