@@ -299,7 +299,8 @@ export default function BusinessAnalyticsPage() {
       const exp = M.expensesForRange(monthlyExp ?? [], settings.expenseCategories, r);
       const expGap = M.expenseGap(exp);
       const newPts = M.newPatients(data.patients, r);
-      return { appt, cash, earned, exp, expGap, newPts,
+      const ns = M.noShowCoverage(data.appts, r, NO_SHOW_TRACKING_SINCE);
+      return { appt, cash, earned, exp, expGap, newPts, ns,
         // Results only when the period is whole months with every category entered.
         result: expGap ? null : cash.total - exp.operating, earnedResult: expGap ? null : earned.total - exp.operating,
         capacity: M.slotCapacity(r, cap), opDays: M.operatingDays(r, cap.closedWeekdays),
@@ -310,8 +311,8 @@ export default function BusinessAnalyticsPage() {
     return { lines, c, p, monthly };
   }, [data, cur, prev, months, today, cap, monthlyExp, settings.expenseCategories]);
 
-  const approxCash = m && m.c.cash.approximate > 0;
-  const preTracking = cur.from < PAYMENT_LOG_TRACKING_SINCE;
+  // Data-quality issues for the selected and comparison periods, from the records the metrics use.
+  const dq = m ? M.dataQuality(m.c.cash, m.p.cash, m.c.ns, m.p.ns) : null;
 
   return (
     <div className="ba-page">
@@ -348,12 +349,7 @@ export default function BusinessAnalyticsPage() {
 
       {m && data && (
         <>
-          {(approxCash || preTracking) && (section === "overview" || section === "financial") && (
-            <div className="ba-banner">
-              <Info size={15} /> Data capture for payment dates, payment methods and no-shows began on {fmtDate(PAYMENT_LOG_TRACKING_SINCE)}.
-              {approxCash && <> {egp(m.c.cash.approximate)} of this period's cash comes from older package payments, counted on the date of each package's first session (approximate).</>}
-            </div>
-          )}
+          {dq && <DataQualityNotes dq={dq} section={section} data={data} />}
 
           {section === "overview" && <Overview m={m} />}
           {section === "financial" && <Financial m={m} data={data} settings={settings} cur={cur} cap={cap} months={months} monthly={monthlyExp ?? []} today={today} onOpenExpenses={() => setSection("expenses")} />}
@@ -379,10 +375,75 @@ interface Computed {
   monthly: (PeriodStats & { ym: string; r: M.Range })[];
 }
 interface PeriodStats {
-  appt: M.ApptStats; cash: M.CashStats; earned: M.EarnedStats; exp: M.ExpensePeriod; expGap: string | null; newPts: M.APatient[];
+  appt: M.ApptStats; cash: M.CashStats; earned: M.EarnedStats; exp: M.ExpensePeriod; expGap: string | null; newPts: M.APatient[]; ns: M.NoShowCoverage;
   result: number | null; earnedResult: number | null; capacity: number; opDays: number;
   pkgSales: { count: number; value: number; sessions: number };
   retention: { treated: number; newTreated: number; returningTreated: number; sessionsPerPatient: number | null };
+}
+
+// ─── Data-quality notes ───────────────────────────────────────────────────────
+// Independent issues, each shown only on sections whose numbers it affects and
+// only when the selected (or comparison) period actually contains affected records.
+
+const DQ_SECTIONS: Record<keyof M.DataQuality, SectionKey[]> = {
+  paymentDates:   ["overview", "financial"],
+  paymentMethods: ["financial"],
+  noShow:         ["overview", "retention", "schedule"],
+};
+
+function DataQualityNotes({ dq, section, data }: { dq: M.DataQuality; section: SectionKey; data: AnalyticsData }) {
+  const show = (k: keyof M.DataQuality) => dq[k] !== null && DQ_SECTIONS[k].includes(section);
+  if (!show("paymentDates") && !show("paymentMethods") && !show("noShow")) return null;
+  const names = new Map(data.patients.map((p) => [p.uid, p.name] as const));
+  const pkgById = new Map(data.pkgs.map((k) => [k.id, k] as const));
+  const since = fmtDate(PAYMENT_LOG_TRACKING_SINCE);
+  const pd = dq.paymentDates, pm = dq.paymentMethods, ns = dq.noShow;
+  return (
+    <div className="ba-dq">
+      {show("paymentDates") && pd && (
+        <div className="ba-banner warn"><AlertTriangle size={15} /><div>
+          <b>Payment date unknown</b>{" "}
+          {pd.cur.estimated > 0 ? <>for {egp(pd.cur.estimated)} in this period, shown separately and <b>not</b> included in Cash collected:</> : <>for nothing in this period;</>}
+          {pd.cur.estimatedPackages.count > 0 && <> {egp(pd.cur.estimatedPackages.amount)} from {pd.cur.estimatedPackages.count} package{pd.cur.estimatedPackages.count === 1 ? "" : "s"} paid before {since}, when payment dates weren't recorded (placed on each package's first session). These dates were never recorded, so they remain estimates.</>}
+          {pd.cur.estimatedSessions.count > 0 && <> {egp(pd.cur.estimatedSessions.amount)} from {pd.cur.estimatedSessions.count} session charge{pd.cur.estimatedSessions.count === 1 ? "" : "s"} marked paid without a paid date (placed on the session date). Set the paid date on the patient's price sheet to fix these.</>}
+          {pd.prev.estimated > 0 && <> The comparison period has {egp(pd.prev.estimated)} with unknown dates; comparisons use recorded-date cash only.</>}
+          {pd.cur.estimatedLines.length > 0 && (
+            <details className="ba-dq-details"><summary>Show the {pd.cur.estimatedLines.length} record{pd.cur.estimatedLines.length === 1 ? "" : "s"}</summary>
+              <div className="ba-table-wrap"><table className="ba-table">
+                <thead><tr><th>Patient</th><th>Record</th><th>Stand-in date</th><th className="r">Amount</th></tr></thead>
+                <tbody>{pd.cur.estimatedLines.slice(0, 100).map((l, i) => {
+                  const k = l.kind === "package" ? pkgById.get(l.sourceId) : undefined;
+                  return <tr key={`${l.sourceId}-${i}`}>
+                    <td>{names.get(l.patientId) ?? "Unknown patient"}</td>
+                    <td>{l.estimated === "package_legacy" ? `${k?.packageSize ?? "?"}-session package (started ${fmtDate(k?.startDate ?? "")}), paid before ${since}` : "Session charge, paid, no paid date"}</td>
+                    <td>{fmtDate(l.date)}</td><td className="r">{egp(l.amount)}</td>
+                  </tr>;
+                })}</tbody>
+              </table></div>
+              {pd.cur.estimatedLines.length > 100 && <div className="ba-muted">…and {pd.cur.estimatedLines.length - 100} more.</div>}
+            </details>
+          )}
+        </div></div>
+      )}
+      {show("paymentMethods") && pm && (
+        <div className="ba-banner warn"><AlertTriangle size={15} /><div>
+          <b>Payment method not recorded</b>{" "}
+          {pm.cur.count > 0 ? <>for {egp(pm.cur.amount)} ({pm.cur.count} payment{pm.cur.count === 1 ? "" : "s"}) in this period. They appear as "Not recorded" in Cash by payment method.</> : <>for nothing in this period.</>}
+          {pm.prev.count > 0 && <> Comparison period: {egp(pm.prev.amount)} ({pm.prev.count}).</>}
+          {" "}Methods have been recorded since {since}; for session charges you can still add one on the patient's price sheet, but older package payments have no method on record.
+        </div></div>
+      )}
+      {show("noShow") && ns && (
+        <div className="ba-banner warn"><AlertTriangle size={15} /><div>
+          <b>No-show tracking incomplete.</b>{" "}
+          {ns.cur.untracked > 0
+            ? <>{ns.cur.untracked} of {ns.cur.untracked + ns.cur.tracked} booked appointments in this period predate {since}, when the No-show status was added, so {ns.cur.tracked > 0 ? <>the no-show rate covers only the {ns.cur.tracked} since then</> : <>there is no no-show data for this period</>}. Earlier no-shows may have been recorded as cancelled or left as scheduled.</>
+            : <>Every appointment in this period is on or after {since}.</>}
+          {ns.prev.untracked > 0 && <> The comparison period has {ns.prev.untracked} appointment{ns.prev.untracked === 1 ? "" : "s"} from before tracking began.</>}
+        </div></div>
+      )}
+    </div>
+  );
 }
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
@@ -398,16 +459,18 @@ function Overview({ m }: { m: Computed }) {
   const { c, p } = m;
   return (
     <div className="ba-grid">
-      <Kpi label="Cash collected" value={egp(c.cash.total)} cur={c.cash.total} prev={p.cash.total}
-        help="Money received in the period: paid pay-per-session charges on their paid date + package payments on their payment date. Package-covered sessions are not counted again." />
+      <Kpi label="Cash collected" value={egp(c.cash.verified)} cur={c.cash.verified} prev={p.cash.verified}
+        note={c.cash.estimated > 0 ? `+ ${egp(c.cash.estimated)} with unknown payment date (not included)` : undefined}
+        help="Payments with a recorded payment date in the period: paid pay-per-session charges on their paid date + logged package payments. Package-covered sessions are not counted again. Payments whose date was never recorded are shown separately, not here." />
       <Kpi label="Earned revenue" value={egp(c.earned.total)} cur={c.earned.total} prev={p.earned.total}
         note={c.earned.unpricedSessions ? `${c.earned.unpricedSessions} completed session(s) have no price recorded` : undefined}
         help="Value of treatment actually delivered: each completed session × its price record (package sessions at the package's per-session price). Differs from cash when packages are prepaid." />
       <Kpi label="Operating expenses" value={c.expGap ? "—" : egp(c.exp.operating)} cur={c.expGap ? null : c.exp.operating} prev={p.expGap ? null : p.exp.operating} lowerIsBetter
         note={c.expGap ?? (c.exp.capital ? `+ ${egp(c.exp.capital)} equipment purchases (capital)` : undefined)}
         help="Operating expenses PAID in the period's months, from Monthly Expenses (equipment purchases excluded as capital). Shown only for whole months with every category entered; never prorated, and a missing month is never treated as 0." />
-      <Kpi label="Cash-basis result" value={egp(c.result)} cur={c.result} prev={p.result} kind="estimate" note={c.expGap ?? undefined}
-        help="Cash collected − operating expenses paid. An operating estimate, not accounting profit: no accruals, depreciation, taxes or unrecorded costs; equipment purchases are excluded." />
+      <Kpi label="Cash-basis result" value={egp(c.result)} cur={c.result} prev={p.result} kind="estimate"
+        note={c.expGap ?? (c.cash.estimated > 0 ? `Includes ${egp(c.cash.estimated)} of payments with estimated dates` : undefined)}
+        help="Cash in the period (recorded-date payments + any payments with estimated dates, as noted) − operating expenses paid. An operating estimate, not accounting profit: no accruals, depreciation, taxes or unrecorded costs; equipment purchases are excluded." />
       <Kpi label="Earned-basis result" value={egp(c.earnedResult)} cur={c.earnedResult} prev={p.earnedResult} kind="estimate" note={c.expGap ?? undefined}
         help="Earned revenue (value of sessions delivered) − operating expenses paid. Mixes an earned figure with cash expenses, so treat it as an estimate, not accounting profit." />
       <Kpi label="Completed sessions" value={num(c.appt.completed)} cur={c.appt.completed} prev={p.appt.completed}
@@ -457,8 +520,12 @@ function Financial({ m, data, settings, cur, cap, months, monthly, today, onOpen
   return (
     <div className="ba-stack">
       <div className="ba-grid">
-        <Kpi label="Cash — sessions" value={egp(c.cash.sessions)} help="Paid pay-per-session charges (not linked to a package), by paid date." />
-        <Kpi label="Cash — packages" value={egp(c.cash.packages)} help="Package payments by payment date. Money paid on older packages (before payment dates were recorded) counts on the date of the package's first session, or its start date if it has no session yet." />
+        <Kpi label="Cash — sessions" value={egp(c.cash.sessions)}
+          note={c.cash.estimatedSessions.amount > 0 ? `+ ${egp(c.cash.estimatedSessions.amount)} paid with no paid date` : undefined}
+          help="Paid pay-per-session charges (not linked to a package) with a recorded paid date in the period." />
+        <Kpi label="Cash — packages" value={egp(c.cash.packages)}
+          note={c.cash.estimatedPackages.amount > 0 ? `+ ${egp(c.cash.estimatedPackages.amount)} older payments, date unknown` : undefined}
+          help="Logged package payments, by payment date. Money paid on packages before payment dates were recorded is shown separately (its date is unknown)." />
         <Kpi label="Package sales" value={`${num(c.pkgSales.count)} · ${egp(c.pkgSales.value)}`} help="Packages starting in the period: count and total package price (sold, not necessarily paid)." />
         <Kpi label="Package sessions used" value={`${num(c.earned.packageRedemptions)} · ${egp(c.earned.packageRedemptionValue)}`}
           help="Completed sessions in the period whose price record is linked to a package, valued at the per-session price. Counted from linked records, not the manual +/− counter." />
@@ -469,9 +536,10 @@ function Financial({ m, data, settings, cur, cap, months, monthly, today, onOpen
           help="Sessions remaining in active packages (size − sessions used) × per-session price: treatment the clinic still owes patients." />
       </div>
 
-      <Card title="Monthly trend" wide help="Last 6 months (current month to date). Expenses and result appear only for whole months with every category entered. Result = cash collected − operating expenses paid.">
+      <Card title="Monthly trend" wide help="Last 6 months (current month to date). 'Cash, date unknown' = payments whose real date was never recorded, placed in the month of a stand-in date. Expenses and result appear only for whole months with every category entered; the result uses all cash (including date-unknown) − operating expenses paid.">
         <MonthBars months={months} fmt={egp} series={[
-          { label: "Cash collected", color: "#2E8BC0", values: m.monthly.map((x) => x.cash.total) },
+          { label: "Cash collected", color: "#2E8BC0", values: m.monthly.map((x) => x.cash.verified) },
+          { label: "Cash, date unknown", color: "#A9D3EA", values: m.monthly.map((x) => x.cash.estimated || null) },
           { label: "Earned revenue", color: "#5BC0BE", values: m.monthly.map((x) => x.earned.total) },
           { label: "Operating expenses", color: "#E8A93B", values: m.monthly.map((x) => x.expGap ? null : x.exp.operating) },
           { label: "Cash-basis result", color: "#16a34a", values: m.monthly.map((x) => x.result) },
@@ -483,7 +551,7 @@ function Financial({ m, data, settings, cur, cap, months, monthly, today, onOpen
         <Card title="Earned revenue by physiotherapist" help="Attributed to the physio on the completed appointment.">
           <BarList fmt={egp} rows={physioRows} />
         </Card>
-        <Card title="Cash by payment method" help={`Recorded from ${fmtDate(PAYMENT_LOG_TRACKING_SINCE)}; earlier payments show as "Not recorded".`}>
+        <Card title="Cash by payment method" help="All payments in the period, including those with an estimated date. 'Not recorded' = no payment method on the record.">
           <BarList fmt={egp} rows={Object.entries(c.cash.byMethod).map(([k, v]) => [labelFor(PAYMENT_METHODS, k, "Not recorded"), v] as [string, number]).sort((a, b) => b[1] - a[1])} />
         </Card>
         <Card title="Expenses by category" help={c.exp.wholeMonths ? c.exp.coverage.map((cv) => `${cv.month}: ${cv.entered} of ${cv.required} categories entered`).join(" · ") : undefined}>
@@ -674,6 +742,7 @@ function Expansion({ m, data, settings, cap, monthly, today }: { m: Computed; da
     operatingDaysInMonth: span ? M.operatingDays(full[full.length - 1].r, cap.closedWeekdays) : 0,
   });
   const owner = span ? M.ownerShare(data.appts, data.managerIds, span) : null;
+  const spanCash = span ? M.cashStats(m.lines, span) : null;
   // Runway needs the last 3 full months to have complete expenses; otherwise it can't be judged.
   const last3 = full.slice(-3).map((x) => x.result);
   const run = last3.length === 3 && last3.every((v) => v !== null) ? M.runway(settings.cashBalance, last3 as number[]) : { months: null, burning: null };
@@ -694,6 +763,11 @@ function Expansion({ m, data, settings, cap, monthly, today }: { m: Computed; da
       <div className="ba-banner"><Info size={15} />
         {met} of {criteria.length} criteria met{missing ? `, ${missing} can't be assessed yet` : ""}. This is evidence for your decision, not a verdict. Second-branch costs (rent, salaries, fit-out, start-up capital) aren't modelled here.
       </div>
+      {spanCash && spanCash.estimated > 0 && (
+        <div className="ba-banner warn"><AlertTriangle size={15} /><div>
+          The monthly results below include {egp(spanCash.estimated)} of payments whose real dates were never recorded ({spanCash.estimatedPackages.count} older package payment{spanCash.estimatedPackages.count === 1 ? "" : "s"}, {spanCash.estimatedSessions.count} session charge{spanCash.estimatedSessions.count === 1 ? "" : "s"} without a paid date), placed in a month by a stand-in date. Month-by-month results are approximate where that applies.
+        </div></div>
+      )}
       <Card title="Criteria" wide help="Thresholds come from Assumptions and are your targets. Measured values come from recorded data over full calendar months.">
         <div className="ba-crit">
           {criteria.map((c) => (
@@ -718,7 +792,8 @@ function Expansion({ m, data, settings, cap, monthly, today }: { m: Computed; da
         <div className="ba-two">
           <Card title="Revenue, expenses & result" help="Full months. Result = cash collected − recorded expenses.">
             <MonthBars months={months} fmt={egp} series={[
-              { label: "Cash collected", color: "#2E8BC0", values: full.map((x) => x.cash.total) },
+              { label: "Cash collected", color: "#2E8BC0", values: full.map((x) => x.cash.verified) },
+              { label: "Cash, date unknown", color: "#A9D3EA", values: full.map((x) => x.cash.estimated || null) },
               { label: "Operating expenses", color: "#E8A93B", values: full.map((x) => x.expGap ? null : x.exp.operating) },
               { label: "Cash-basis result", color: "#16a34a", values: full.map((x) => x.result) },
             ]} />
@@ -881,6 +956,12 @@ const CSS = `
 .ba-banner svg { flex-shrink: 0; margin-top: 1px; }
 .ba-stack .ba-banner, .ba-card .ba-banner { margin-bottom: 0; }
 .ba-banner.err { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+.ba-banner.warn { background: #fffbeb; border-color: #fde68a; color: #78350f; }
+.ba-dq { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.ba-dq .ba-banner { margin-bottom: 0; }
+.ba-dq-details { margin-top: 6px; }
+.ba-dq-details summary { cursor: pointer; font-weight: 600; }
+.ba-dq-details .ba-table-wrap { background: #fff; border-radius: 8px; margin-top: 6px; max-height: 320px; overflow-y: auto; }
 .ba-link { background: none; border: none; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
 .ba-loading { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
 .ba-skel { height: 96px; border-radius: 14px; background: linear-gradient(90deg,#f0ede8 0%,#e5e0d8 50%,#f0ede8 100%); background-size: 200% 100%; animation: baShim 1.4s ease infinite; }

@@ -143,25 +143,34 @@ export function apptStats(appts: AAppt[], r: Range, noShowSince: string): ApptSt
 
 // ─── Money ────────────────────────────────────────────────────────────────────
 
-export interface CashLine { date: string; amount: number; method: string; kind: "session" | "package"; approximate: boolean; }
+export type EstimateReason = "package_legacy" | "session_no_paid_date";
+export interface CashLine {
+  date: string; amount: number; method: string; kind: "session" | "package";
+  /** Set when the real payment date is unknown and `date` is a stand-in. */
+  estimated: EstimateReason | null;
+  sourceId: string; patientId: string;
+}
 
 /** Cash actually received.
- *  - Pay-per-session: paid, non-package price records, on their paid date.
+ *  - Pay-per-session: paid, non-package price records, on their recorded paid date.
  *    (Package-linked price records are excluded — that money arrives via the package.)
- *  - Packages: each logged payment on its date. Money paid before the log existed
- *    (paidAmount − Σ logged) is attributed to the date of the package's first session,
- *    or its start date if no session is recorded yet, and flagged approximate. */
+ *    Paid with no paid date → the session date is used as a stand-in, flagged estimated.
+ *  - Packages: each logged payment on its date (verified). Money paid before the log
+ *    existed (paidAmount − Σ logged) has no recorded date: it's placed on the package's
+ *    first session (or start date) as a stand-in and flagged estimated. */
 export function cashLines(prices: APrice[], pkgs: APackage[], pkgPayments: APkgPayment[], firstSessionByPkg: Record<string, string> = {}): CashLine[] {
   const lines: CashLine[] = [];
   for (const p of prices) {
     if (p.packageId || !p.paid || !(p.amount > 0)) continue;
-    lines.push({ date: p.paidDate || p.date, amount: p.amount, method: p.paymentMethod, kind: "session", approximate: !p.paidDate });
+    lines.push({ date: p.paidDate || p.date, amount: p.amount, method: p.paymentMethod, kind: "session",
+      estimated: p.paidDate ? null : "session_no_paid_date", sourceId: p.id, patientId: p.patientId });
   }
+  const patientOfPkg = new Map(pkgs.map((k) => [k.id, k.patientId] as const));
   const logged = groupSum(pkgPayments, (x) => x.packageId, (x) => x.amount);
-  for (const x of pkgPayments) lines.push({ date: x.date, amount: x.amount, method: x.method, kind: "package", approximate: false });
+  for (const x of pkgPayments) lines.push({ date: x.date, amount: x.amount, method: x.method, kind: "package", estimated: null, sourceId: x.packageId, patientId: patientOfPkg.get(x.packageId) ?? "" });
   for (const k of pkgs) {
     const legacy = (k.paidAmount || 0) - (logged[k.id] ?? 0);
-    if (legacy > 0.0001) lines.push({ date: firstSessionByPkg[k.id] || k.startDate, amount: legacy, method: "", kind: "package", approximate: true });
+    if (legacy > 0.0001) lines.push({ date: firstSessionByPkg[k.id] || k.startDate, amount: legacy, method: "", kind: "package", estimated: "package_legacy", sourceId: k.id, patientId: k.patientId });
   }
   return lines;
 }
@@ -173,15 +182,57 @@ export function firstSessionByPackage(pkgPrices: APrice[]): Record<string, strin
   return out;
 }
 
-export interface CashStats { total: number; sessions: number; packages: number; approximate: number; byMethod: Record<string, number>; }
+export interface AmountCount { amount: number; count: number; }
+export interface CashStats {
+  verified: number;            // payments with a recorded date in the period
+  estimated: number;           // payments whose real date is unknown, placed in the period by a stand-in date
+  total: number;               // verified + estimated (only ever shown labelled)
+  sessions: number; packages: number;                       // verified, by kind
+  estimatedPackages: AmountCount; estimatedSessions: AmountCount;
+  methodMissing: AmountCount;                               // all payments in the period with no payment method
+  byMethod: Record<string, number>;                         // all payments ("" = not recorded)
+  estimatedLines: CashLine[];                               // the records behind `estimated`, for drill-down
+}
 export function cashStats(lines: CashLine[], r: Range): CashStats {
   const inP = lines.filter((l) => inRange(l.date, r));
+  const ver = inP.filter((l) => !l.estimated);
+  const est = inP.filter((l) => l.estimated);
+  const ac = (xs: CashLine[]): AmountCount => ({ amount: sum(xs.map((l) => l.amount)), count: xs.length });
   return {
+    verified: sum(ver.map((l) => l.amount)),
+    estimated: sum(est.map((l) => l.amount)),
     total: sum(inP.map((l) => l.amount)),
-    sessions: sum(inP.filter((l) => l.kind === "session").map((l) => l.amount)),
-    packages: sum(inP.filter((l) => l.kind === "package").map((l) => l.amount)),
-    approximate: sum(inP.filter((l) => l.approximate).map((l) => l.amount)),
+    sessions: sum(ver.filter((l) => l.kind === "session").map((l) => l.amount)),
+    packages: sum(ver.filter((l) => l.kind === "package").map((l) => l.amount)),
+    estimatedPackages: ac(est.filter((l) => l.estimated === "package_legacy")),
+    estimatedSessions: ac(est.filter((l) => l.estimated === "session_no_paid_date")),
+    methodMissing: ac(inP.filter((l) => !l.method && l.amount > 0)),
     byMethod: groupSum(inP, (l) => l.method || "", (l) => l.amount),
+    estimatedLines: [...est].sort((a, b) => b.amount - a.amount),
+  };
+}
+
+// ─── Data-quality issues (per selected period) ────────────────────────────────
+// Each issue is computed from the records the metrics actually use; null means
+// it doesn't affect the period (or has been resolved for every relevant record).
+
+export interface NoShowCoverage { untracked: number; tracked: number; }
+/** Booked (non-rescheduled) appointments in `r` dated before / since no-show tracking began. */
+export function noShowCoverage(appts: AAppt[], r: Range, since: string): NoShowCoverage {
+  const inP = appts.filter((a) => inRange(a.date, r) && a.status !== "rescheduled");
+  return { untracked: inP.filter((a) => a.date < since).length, tracked: inP.filter((a) => a.date >= since).length };
+}
+
+export interface DataQuality {
+  paymentDates:   { cur: CashStats; prev: CashStats } | null;
+  paymentMethods: { cur: AmountCount; prev: AmountCount } | null;
+  noShow:         { cur: NoShowCoverage; prev: NoShowCoverage } | null;
+}
+export function dataQuality(cur: CashStats, prev: CashStats, curNS: NoShowCoverage, prevNS: NoShowCoverage): DataQuality {
+  return {
+    paymentDates:   cur.estimated > 0 || prev.estimated > 0 ? { cur, prev } : null,
+    paymentMethods: cur.methodMissing.count > 0 || prev.methodMissing.count > 0 ? { cur: cur.methodMissing, prev: prev.methodMissing } : null,
+    noShow:         curNS.untracked > 0 || prevNS.untracked > 0 ? { cur: curNS, prev: prevNS } : null,
   };
 }
 

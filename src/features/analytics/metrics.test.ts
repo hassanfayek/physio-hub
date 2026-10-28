@@ -69,8 +69,10 @@ describe("cash vs earned revenue", () => {
     const lines = cashLines([], [pkg({ paidAmount: 1500, startDate: "2026-09-10" })], pays);
     expect(cashStats(lines, OCT).packages).toBe(500);
     const sep = cashStats(lines, { from: "2026-09-01", to: "2026-09-30" });
-    expect(sep.packages).toBe(1000);
-    expect(sep.approximate).toBe(1000);
+    expect(sep.packages).toBe(0);                       // verified package cash only
+    expect(sep.estimatedPackages).toEqual({ amount: 1000, count: 1 });
+    expect(sep.estimated).toBe(1000);
+    expect(sep.verified).toBe(0);
   });
   it("corrections (negative log entries) reconcile", () => {
     const pays: APkgPayment[] = [
