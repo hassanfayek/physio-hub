@@ -41,7 +41,8 @@ interface DayViewProps {
   patients:        Patient[];
   physios:         Physiotherapist[];
   currentPhysio:   { uid: string; firstName: string; lastName: string };
-  isManager:       boolean;
+  isManager:       boolean;  // manager or secretary: delete, assign, change any booking
+  showAll?:        boolean;  // see every physio's bookings (managers, secretaries, juniors)
   canBook?:        boolean;  // false for juniors
   canEditSessionInfo?: boolean;  // manager + secretary: change the physio / session type of a booking
   onBack?:         () => void;
@@ -59,6 +60,7 @@ export default function DayView({
   currentPhysio,
   isManager,
   canEditSessionInfo = false,
+  showAll = isManager,
   canBook = true,
   onBack,
   onViewPatient,
@@ -118,12 +120,12 @@ export default function DayView({
     setLoading(true);
     const unsub = subscribeToAppointmentsByDay(
       date,
-      isManager ? null : currentPhysio.uid,
+      showAll ? null : currentPhysio.uid,
       (data) => { setAppointments(data); setLoading(false); },
       ()     => setLoading(false)
     );
     return () => unsub();
-  }, [date, isManager, currentPhysio.uid]);
+  }, [date, showAll, currentPhysio.uid]);
 
   const openInfoEdit = (a: Appointment) => {
     setInfoAppt(a);
@@ -586,6 +588,7 @@ export default function DayView({
         .dv-confirm-btn.unconfirmed { border-color: #e5e0d8; color: #9a9590; background: #fafaf8; }
         .dv-confirm-btn.unconfirmed:hover { border-color: #2E8BC0; color: #2E8BC0; background: #EAF5FC; }
         .dv-confirm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .dv-confirm-btn.readonly:disabled { opacity: 1; cursor: default; }
         .dv-status-select.completed   { border-color: #b7e4c7; background-color: #f0fdf4; color: #1b4332; }
         .dv-status-select.cancelled   { border-color: #fca5a5; background-color: #fff5f5; color: #991b1b; }
         .dv-status-select.rescheduled { border-color: #c4b5fd; background-color: #f5f3ff; color: #4c1d95; }
@@ -850,11 +853,11 @@ export default function DayView({
                               </div>
                               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5 }}>
                                 <button
-                                  className={`dv-confirm-btn ${a.confirmedByPatient ? "confirmed" : "unconfirmed"}`}
-                                  disabled={confirmingId === a.id}
+                                  className={`dv-confirm-btn ${a.confirmedByPatient ? "confirmed" : "unconfirmed"} ${isManager || a.physioId === currentPhysio.uid ? "" : "readonly"}`}
+                                  disabled={confirmingId === a.id || !(isManager || a.physioId === currentPhysio.uid)}
                                   onClick={() => handleToggleConfirm(a)}
                                   type="button"
-                                  title={a.confirmedByPatient ? "Patient confirmed — click to remove" : "Mark as confirmed by patient"}
+                                  title={!(isManager || a.physioId === currentPhysio.uid) ? undefined : a.confirmedByPatient ? "Patient confirmed — click to remove" : "Mark as confirmed by patient"}
                                 >
                                   {a.confirmedByPatient ? "✓ Patient Confirmed" : "Unconfirmed"}
                                 </button>

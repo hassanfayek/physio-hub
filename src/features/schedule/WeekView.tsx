@@ -21,7 +21,9 @@ interface WeekViewProps {
   patients:      Patient[];
   physios:       Physiotherapist[];
   currentPhysio: { uid: string; firstName: string; lastName: string };
-  isManager:     boolean;
+  isManager:     boolean;   // manager or secretary: book for any patient / physio
+  showAll?:      boolean;   // see every physio's bookings
+  canBook?:      boolean;   // false for juniors: no booking from empty slots
   onDayClick:    (date: string) => void;
 }
 
@@ -36,6 +38,8 @@ export default function WeekView({
   physios,
   currentPhysio,
   isManager,
+  showAll = isManager,
+  canBook = true,
   onDayClick,
 }: WeekViewProps) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -57,12 +61,12 @@ export default function WeekView({
     const unsub = subscribeToAppointmentsByWeek(
       weekStart,
       weekEnd,
-      isManager ? null : currentPhysio.uid,
+      showAll ? null : currentPhysio.uid,
       (data) => { setAppointments(data); setLoading(false); },
       ()     => setLoading(false)
     );
     return () => unsub();
-  }, [weekStart, weekEnd, isManager, currentPhysio.uid]);
+  }, [weekStart, weekEnd, showAll, currentPhysio.uid]);
 
   const hours = Array.from(
     { length: settings.closingHour - settings.openingHour },
@@ -226,8 +230,9 @@ export default function WeekView({
                         <div
                           key={di}
                           className={`wv-cell ${isFull ? "full" : ""}`}
-                          onClick={() => !isFull && setModalSlot({ date: dateStr, hour: h })}
-                          title={isFull ? "Slot full" : `Book at ${fmtHour12(h)}`}
+                          onClick={() => canBook && !isFull && setModalSlot({ date: dateStr, hour: h })}
+                          title={isFull ? "Slot full" : canBook ? `Book at ${fmtHour12(h)}` : undefined}
+                          style={canBook ? undefined : { cursor: "default" }}
                         >
                           {slotAppt.map((a) => (
                             <div key={a.id} className="wv-pill">

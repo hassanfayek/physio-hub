@@ -135,6 +135,8 @@ export default function SchedulePage({
 }: SchedulePageProps) {
   // Juniors see all clinic appointments but cannot book
   const showAll = isManager || isSecretary || !canBook;
+  // Changing/deleting/assigning bookings and booking for anyone: manager + secretary only.
+  const canManage = isManager || isSecretary;
   // ── State ─────────────────────────────────────────────────────────────────
   const today     = new Date();
   const [view,    setView]    = useState<ViewMode>(initialDayDate ? "day" : "month");
@@ -448,7 +450,9 @@ export default function SchedulePage({
               patients={patients}
               physios={physios}
               currentPhysio={currentPhysio}
-              isManager={showAll}
+              isManager={canManage}
+              showAll={showAll}
+              canBook={canBook}
               onDayClick={openDay}
             />
           )}
@@ -460,9 +464,10 @@ export default function SchedulePage({
               patients={patients}
               physios={physios}
               currentPhysio={currentPhysio}
-              isManager={showAll}
+              isManager={canManage}
+              showAll={showAll}
               canBook={canBook}
-              canEditSessionInfo={isManager || isSecretary}
+              canEditSessionInfo={canManage}
               onBack={() => setView("week")}
               onViewPatient={onViewPatient}
               onViewPatientSection={onViewPatientSection}
