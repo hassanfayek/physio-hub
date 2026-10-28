@@ -228,8 +228,18 @@ service cloud.firestore {
     }
 
     // ── Business Analytics data (manager-only financials) ────────────────────
+    // Monthly expense totals: one doc per month + category, id `${month}__${categoryId}`
+    // (so duplicates are impossible), amount ≥ 0. Older per-transaction docs can
+    // still be read and deleted, but not created or edited.
     match /clinicExpenses/{docId} {
-      allow read, write: if isManager();
+      allow read, delete: if isManager();
+      allow create, update: if isManager()
+        && request.resource.data.month is string
+        && request.resource.data.month.matches('^[0-9]{4}-[0-9]{2}$')
+        && request.resource.data.categoryId is string
+        && docId == request.resource.data.month + '__' + request.resource.data.categoryId
+        && request.resource.data.amount is number
+        && request.resource.data.amount >= 0;
     }
 
     match /businessSettings/{docId} {

@@ -15,6 +15,7 @@ import {
   orderBy,
   onSnapshot,
   serverTimestamp,
+  runTransaction,
   type Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
@@ -55,72 +56,131 @@ export const ACQUISITION_SOURCES = [
   { value: "other",              label: "Other" },
 ] as const;
 
-export const EXPENSE_CATEGORIES = [
-  { value: "rent",        label: "Rent" },
-  { value: "salaries",    label: "Salaries & wages" },
-  { value: "utilities",   label: "Utilities" },
-  { value: "supplies",    label: "Supplies & consumables" },
-  { value: "equipment",   label: "Equipment" },
-  { value: "marketing",   label: "Marketing" },
-  { value: "maintenance", label: "Maintenance" },
-  { value: "software",    label: "Software & subscriptions" },
-  { value: "other",       label: "Other" },
-] as const;
-
 export const labelFor = (list: readonly { value: string; label: string }[], value: string | undefined | null, fallback = "Unknown") =>
   list.find((o) => o.value === value)?.label ?? fallback;
 
-// ─── Expenses ─────────────────────────────────────────────────────────────────
+// ─── Monthly expenses ─────────────────────────────────────────────────────────
+// One record per (month, category) holding the total PAID that month, entered by
+// the owner (often from their own spreadsheet). Doc id `${month}__${categoryId}`
+// makes duplicates impossible. A missing record means "not entered" — never 0.
+// Amounts are cash paid, not accrual-basis expenses or depreciation.
 
-export interface Expense {
-  id:              string;
-  date:            string;   // YYYY-MM-DD
-  category:        string;   // EXPENSE_CATEGORIES value
-  amount:          number;   // EGP, positive
-  note:            string;
-  marketingSource: string;   // ACQUISITION_SOURCES value, only for category "marketing"
-  createdAt:       Timestamp | null;
+export interface ExpenseCategory {
+  id:     string;                      // stable; labels can be renamed freely
+  label:  string;
+  kind:   "operating" | "capital";     // capital (e.g. equipment purchases) is kept out of operating results
+  active: boolean;                     // inactive: hidden for new months, history kept
 }
 
-function docToExpense(id: string, d: Record<string, unknown>): Expense {
+export const DEFAULT_EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  { id: "rent",                  label: "Rent",                              kind: "operating", active: true },
+  { id: "salaries",              label: "Salaries and staff compensation",   kind: "operating", active: true },
+  { id: "marketing",             label: "Marketing and advertising",         kind: "operating", active: true },
+  { id: "utilities",             label: "Utilities and internet",            kind: "operating", active: true },
+  { id: "equipment_purchase",    label: "Equipment purchases",               kind: "capital",   active: true },
+  { id: "equipment_maintenance", label: "Equipment maintenance",             kind: "operating", active: true },
+  { id: "consumables",           label: "Consumables and clinical supplies", kind: "operating", active: true },
+  { id: "software",              label: "Software and subscriptions",        kind: "operating", active: true },
+  { id: "other",                 label: "Other operating expenses",          kind: "operating", active: true },
+];
+
+export const expenseDocId = (month: string, categoryId: string) => `${month}__${categoryId}`;
+
+export interface ExpenseHistoryEntry { amount: number; notes: string; changedAt: string; by: string; }
+
+export interface MonthlyExpense {
+  id:         string;
+  month:      string;   // YYYY-MM
+  categoryId: string;
+  amount:     number;   // EGP paid that month; 0 = explicitly entered zero
+  notes:      string;
+  createdAt:  Timestamp | null;
+  updatedAt:  Timestamp | null;
+  createdBy:  string;
+  updatedBy:  string;
+  history:    ExpenseHistoryEntry[];   // previous values, oldest first
+}
+
+function docToMonthlyExpense(id: string, d: Record<string, unknown>): MonthlyExpense {
   return {
     id,
-    date:            (d.date            as string) ?? "",
-    category:        (d.category        as string) ?? "other",
-    amount:          (d.amount          as number) ?? 0,
-    note:            (d.note            as string) ?? "",
-    marketingSource: (d.marketingSource as string) ?? "",
-    createdAt:       (d.createdAt       as Timestamp | null) ?? null,
+    month:      (d.month      as string) ?? "",
+    categoryId: (d.categoryId as string) ?? "",
+    amount:     Number(d.amount) || 0,
+    notes:      (d.notes      as string) ?? "",
+    createdAt:  (d.createdAt  as Timestamp | null) ?? null,
+    updatedAt:  (d.updatedAt  as Timestamp | null) ?? null,
+    createdBy:  (d.createdBy  as string) ?? "",
+    updatedBy:  (d.updatedBy  as string) ?? "",
+    history:    Array.isArray(d.history) ? (d.history as ExpenseHistoryEntry[]) : [],
   };
 }
 
-export function subscribeToExpenses(
-  from: string, to: string,
-  onData: (rows: Expense[]) => void,
+export function subscribeToMonthlyExpenses(
+  fromMonth: string,
+  onData: (rows: MonthlyExpense[]) => void,
   onError?: (err: Error) => void
 ): () => void {
-  const q = query(collection(db, "clinicExpenses"), where("date", ">=", from), where("date", "<=", to), orderBy("date", "desc"));
-  return onSnapshot(q, (s) => onData(s.docs.map((d) => docToExpense(d.id, d.data()))), (e) => onError?.(e));
+  const q = query(collection(db, "clinicExpenses"), where("month", ">=", fromMonth));
+  return onSnapshot(q, (s) => onData(s.docs.map((d) => docToMonthlyExpense(d.id, d.data()))), (e) => onError?.(e));
 }
 
-export async function addExpense(e: Omit<Expense, "id" | "createdAt">): Promise<{ error?: string }> {
-  try {
-    if (!(e.amount > 0)) return { error: "Amount must be greater than zero." };
-    await addDoc(collection(db, "clinicExpenses"), { ...e, createdAt: serverTimestamp() });
-    return {};
-  } catch (err) { return { error: parseError(err) }; }
+/** Old per-transaction entries (shape: date/category/amount) from before monthly totals. */
+export interface LegacyExpense { id: string; date: string; category: string; amount: number; note: string; }
+export function subscribeToLegacyExpenses(onData: (rows: LegacyExpense[]) => void, onError?: (err: Error) => void): () => void {
+  const q = query(collection(db, "clinicExpenses"), where("date", ">=", ""));
+  return onSnapshot(q, (s) => onData(s.docs.map((d) => {
+    const x = d.data();
+    return { id: d.id, date: (x.date as string) ?? "", category: (x.category as string) ?? "", amount: Number(x.amount) || 0, note: (x.note as string) ?? "" };
+  })), (e) => onError?.(e));
 }
-
-export async function updateExpense(id: string, e: Partial<Omit<Expense, "id" | "createdAt">>): Promise<{ error?: string }> {
-  try {
-    await updateDoc(doc(db, "clinicExpenses", id), { ...e, updatedAt: serverTimestamp() });
-    return {};
-  } catch (err) { return { error: parseError(err) }; }
-}
-
-export async function deleteExpense(id: string): Promise<{ error?: string }> {
+export async function deleteLegacyExpense(id: string): Promise<{ error?: string }> {
   try { await deleteDoc(doc(db, "clinicExpenses", id)); return {}; }
   catch (err) { return { error: parseError(err) }; }
+}
+
+export interface ExpenseChange {
+  month: string; categoryId: string;
+  amount: number | null;          // null = clear (back to "not entered")
+  notes: string;
+  expectedUpdatedAtMs: number | null;   // what the editor saw; null = expected not to exist
+}
+
+/** Saves a set of month/category values atomically. Refuses if any record changed
+ *  since the editor loaded it (someone else edited) so nothing is overwritten
+ *  unseen. Previous values are appended to the record's history. */
+export async function saveExpenseChanges(changes: ExpenseChange[], uid: string): Promise<{ error?: string }> {
+  if (!changes.length) return {};
+  for (const c of changes) {
+    if (!/^\d{4}-\d{2}$/.test(c.month)) return { error: `Invalid month "${c.month}".` };
+    if (c.amount !== null && !(Number.isFinite(c.amount) && c.amount >= 0)) return { error: `Invalid amount for ${c.categoryId} in ${c.month}.` };
+  }
+  try {
+    await runTransaction(db, async (tx) => {
+      const refs = changes.map((c) => doc(db, "clinicExpenses", expenseDocId(c.month, c.categoryId)));
+      const snaps = await Promise.all(refs.map((r) => tx.get(r)));
+      snaps.forEach((snap, i) => {
+        const cur = snap.exists() ? docToMonthlyExpense(snap.id, snap.data()) : null;
+        const curMs = cur?.updatedAt?.toMillis?.() ?? null;
+        const exp = changes[i].expectedUpdatedAtMs;
+        if ((exp === null && cur) || (exp !== null && curMs !== exp)) {
+          throw new Error(`${changes[i].month} · ${changes[i].categoryId} was changed by someone else. Reload and try again.`);
+        }
+      });
+      snaps.forEach((snap, i) => {
+        const c = changes[i];
+        const cur = snap.exists() ? docToMonthlyExpense(snap.id, snap.data()) : null;
+        if (c.amount === null) { if (cur) tx.delete(refs[i]); return; }
+        const history = cur ? [...cur.history, { amount: cur.amount, notes: cur.notes, changedAt: new Date().toISOString(), by: cur.updatedBy }].slice(-20) : [];
+        tx.set(refs[i], {
+          month: c.month, categoryId: c.categoryId, amount: c.amount, notes: c.notes.trim(),
+          createdAt: cur ? cur.createdAt : serverTimestamp(), createdBy: cur ? cur.createdBy : uid,
+          updatedAt: serverTimestamp(), updatedBy: uid, history,
+        });
+      });
+    });
+    return {};
+  } catch (err) { return { error: parseError(err) }; }
 }
 
 // ─── Package payment log ──────────────────────────────────────────────────────
@@ -187,6 +247,8 @@ export interface BusinessSettings {
   targetUtilization:    number | null;         // 0–100 %
   maxOwnerSharePct:     number | null;         // 0–100 % of completed sessions treated by the owner
   monthsAtTarget:       number;                // consecutive full months required
+  expenseCategories:    ExpenseCategory[];
+  fixedCostsSource:     "recorded" | "manual"; // break-even fixed costs: avg of recorded months, or the manual figure
 }
 
 export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
@@ -195,6 +257,7 @@ export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
   morningStart: 9, morningEnd: 13, eveningStart: 15, eveningEnd: 22,
   closedWeekdays: [],
   targetUtilization: null, maxOwnerSharePct: null, monthsAtTarget: 3,
+  expenseCategories: DEFAULT_EXPENSE_CATEGORIES, fixedCostsSource: "recorded",
 };
 
 export function subscribeToBusinessSettings(

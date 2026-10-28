@@ -4,14 +4,15 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Info, RefreshCw, Settings2, Plus, Trash2, X, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+import { Info, RefreshCw, Settings2, X, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { subscribeToClinicSettings, DEFAULT_SETTINGS, fmtHour12, type ClinicSettings } from "../../services/appointmentService";
 import {
-  subscribeToBusinessSettings, saveBusinessSettings, addExpense, deleteExpense, clinicToday, labelFor,
-  DEFAULT_BUSINESS_SETTINGS, EXPENSE_CATEGORIES, ACQUISITION_SOURCES, PAYMENT_METHODS,
-  NO_SHOW_TRACKING_SINCE, PAYMENT_LOG_TRACKING_SINCE, type BusinessSettings,
+  subscribeToBusinessSettings, saveBusinessSettings, subscribeToMonthlyExpenses, subscribeToLegacyExpenses, clinicToday, labelFor,
+  DEFAULT_BUSINESS_SETTINGS, ACQUISITION_SOURCES, PAYMENT_METHODS,
+  NO_SHOW_TRACKING_SINCE, PAYMENT_LOG_TRACKING_SINCE, type BusinessSettings, type MonthlyExpense, type LegacyExpense,
 } from "../../services/businessService";
 import { loadAnalyticsData, type AnalyticsData } from "./analyticsData";
+import MonthlyExpensesPanel from "./MonthlyExpensesPanel";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
 import { docToAppointment } from "../../services/appointmentService";
@@ -29,10 +30,11 @@ const fmtDate = (d: string) => d ? new Date(d + "T00:00:00").toLocaleDateString(
 const fmtMonth = (ym: string) => new Date(ym + "-01T00:00:00").toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-type SectionKey = "overview" | "financial" | "acquisition" | "retention" | "schedule" | "expansion" | "checks";
+type SectionKey = "overview" | "financial" | "expenses" | "acquisition" | "retention" | "schedule" | "expansion" | "checks";
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: "overview",    label: "Executive Overview" },
   { key: "financial",   label: "Financial" },
+  { key: "expenses",    label: "Monthly Expenses" },
   { key: "acquisition", label: "Acquisition" },
   { key: "retention",   label: "Retention & Attendance" },
   { key: "schedule",    label: "Schedule & Capacity" },
@@ -111,8 +113,8 @@ function MonthBars({ months, series, fmt }: { months: string[]; series: { label:
             <div className="ba-mstack">
               {series.map((s) => {
                 const v = s.values[i];
-                return <div key={s.label} className={`ba-mbar ${v !== null && v < 0 ? "neg" : ""}`} title={`${s.label} · ${fmtMonth(m)}: ${v === null ? "—" : fmt(v)}`}
-                  style={{ height: `${(Math.abs(v ?? 0) / max) * 100}%`, background: s.color }} />;
+                return <div key={s.label} className={`ba-mbar ${v !== null && v < 0 ? "neg" : ""}`} title={`${s.label} · ${fmtMonth(m)}: ${v === null ? "not available" : fmt(v)}`}
+                  style={{ height: `${(Math.abs(v ?? 0) / max) * 100}%`, background: s.color, visibility: v === null ? "hidden" : undefined }} />;
               })}
             </div>
             <div className="ba-mlabel">{fmtMonth(m)}</div>
@@ -183,12 +185,20 @@ function AssumptionsModal({ initial, onClose }: { initial: BusinessSettings; onC
         <div className="ba-modal-head"><b>Assumptions & targets</b><button className="ba-x" onClick={onClose}><X size={16} /></button></div>
         <p className="ba-modal-note">These are <b>your estimates</b>. They never change recorded transactions and are always labelled "Estimate" on the dashboard.</p>
         <div className="ba-form-grid">
-          {numField("fixedMonthlyCosts", "Monthly fixed operating costs (EGP)", "Rent, salaries, utilities, subscriptions…")}
-          {numField("variableCostPerSession", "Variable cost per completed session (EGP)", "Consumables etc. per session")}
+          <div className="ba-field"><span>Break-even fixed costs</span>
+            <select value={s.fixedCostsSource} onChange={(e) => setS({ ...s, fixedCostsSource: e.target.value as BusinessSettings["fixedCostsSource"] })}>
+              <option value="recorded">Average of my recorded monthly expenses</option>
+              <option value="manual">A manual figure</option>
+            </select>
+            <small>Recorded = average operating expenses of the last up to 3 complete months.</small></div>
+          {s.fixedCostsSource === "manual"
+            ? numField("fixedMonthlyCosts", "Manual monthly fixed costs (EGP)", "Rent, salaries, utilities, subscriptions…")
+            : <div />}
+          {numField("variableCostPerSession", "Variable cost per completed session (EGP)", "Only costs NOT already in your monthly expenses")}
         </div>
         <label className="ba-check">
           <input type="checkbox" checked={s.variableIncludedInExpenses} onChange={(e) => setS({ ...s, variableIncludedInExpenses: e.target.checked })} />
-          My recorded expenses already include these per-session costs (don't subtract them again)
+          My monthly expenses already include per-session costs such as consumables (don't subtract them again)
         </label>
         <div className="ba-form-grid">
           {numField("targetMonthlyResult", "Target monthly operating result (EGP)")}
@@ -234,68 +244,6 @@ function AssumptionsModal({ initial, onClose }: { initial: BusinessSettings; onC
     </div>, document.body);
 }
 
-// ─── Expenses panel ───────────────────────────────────────────────────────────
-
-function ExpensesPanel({ expenses, range, onChanged }: { expenses: M.AExpense[]; range: M.Range; onChanged: () => void }) {
-  const [form, setForm] = useState({ date: clinicToday(), category: "rent", amount: "", marketingSource: "", note: "" });
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const rows = expenses.filter((e) => M.inRange(e.date, range)).sort((a, b) => b.date.localeCompare(a.date));
-  const add = async () => {
-    const amount = Number(form.amount);
-    if (!form.date || !(amount > 0)) { setErr("Enter a date and an amount above zero."); return; }
-    setBusy(true); setErr(null);
-    const r = await addExpense({ date: form.date, category: form.category, amount, note: form.note.trim(),
-      marketingSource: form.category === "marketing" ? form.marketingSource : "" });
-    setBusy(false);
-    if (r.error) { setErr(r.error); return; }
-    setForm({ ...form, amount: "", note: "" });
-    onChanged();
-  };
-  const remove = async (id: string) => {
-    if (!window.confirm("Delete this expense?")) return;
-    const r = await deleteExpense(id);
-    if (r.error) alert(r.error); else onChanged();
-  };
-  return (
-    <Card title="Expenses log" wide help="Recorded operating expenses. Tag marketing spend with its channel to unlock cost per new patient.">
-      <div className="ba-exp-form">
-        <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-          {EXPENSE_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-        </select>
-        {form.category === "marketing" && (
-          <select value={form.marketingSource} onChange={(e) => setForm({ ...form, marketingSource: e.target.value })}>
-            <option value="">Channel (optional)</option>
-            {ACQUISITION_SOURCES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-          </select>
-        )}
-        <input type="number" min="0" placeholder="Amount (EGP)" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-        <input placeholder="Note (optional)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
-        <button className="ba-btn" onClick={add} disabled={busy}><Plus size={14} /> Add</button>
-      </div>
-      {err && <div className="ba-err">{err}</div>}
-      {rows.length === 0 ? <div className="ba-empty">No expenses recorded in this period.</div> : (
-        <div className="ba-table-wrap">
-          <table className="ba-table">
-            <thead><tr><th>Date</th><th>Category</th><th className="r">Amount</th><th /></tr></thead>
-            <tbody>
-              {rows.map((e) => (
-                <tr key={e.id}>
-                  <td>{fmtDate(e.date)}</td>
-                  <td>{labelFor(EXPENSE_CATEGORIES, e.category)}{e.marketingSource ? ` · ${labelFor(ACQUISITION_SOURCES, e.marketingSource)}` : ""}</td>
-                  <td className="r">{egp(e.amount)}</td>
-                  <td className="r"><button className="ba-icon" onClick={() => remove(e.id)} title="Delete"><Trash2 size={13} /></button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
-  );
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function BusinessAnalyticsPage() {
@@ -312,6 +260,11 @@ export default function BusinessAnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => subscribeToBusinessSettings(setSettings, (e) => setError(e.message)), []);
+  // Monthly expenses are live, so edits in the Monthly Expenses tab update every figure immediately.
+  const [monthlyExp, setMonthlyExp] = useState<MonthlyExpense[] | null>(null);
+  const [legacy, setLegacy] = useState<LegacyExpense[]>([]);
+  useEffect(() => subscribeToMonthlyExpenses("2000-01", setMonthlyExp, (e) => setError(e.message)), []);
+  useEffect(() => subscribeToLegacyExpenses(setLegacy, () => {}), []);
   // Fill any missing fields with the app defaults so capacity never becomes NaN.
   useEffect(() => subscribeToClinicSettings((c) => setClinic({ ...DEFAULT_SETTINGS, ...c })), []);
 
@@ -343,16 +296,19 @@ export default function BusinessAnalyticsPage() {
       const appt = M.apptStats(data.appts, r, NO_SHOW_TRACKING_SINCE);
       const cash = M.cashStats(lines, r);
       const earned = M.earnedStats(data.appts, data.prices, r);
-      const exp = M.expenseStats(data.expenses, r);
+      const exp = M.expensesForRange(monthlyExp ?? [], settings.expenseCategories, r);
+      const expGap = M.expenseGap(exp);
       const newPts = M.newPatients(data.patients, r);
-      return { appt, cash, earned, exp, newPts, result: cash.total - exp.total,
+      return { appt, cash, earned, exp, expGap, newPts,
+        // Results only when the period is whole months with every category entered.
+        result: expGap ? null : cash.total - exp.operating, earnedResult: expGap ? null : earned.total - exp.operating,
         capacity: M.slotCapacity(r, cap), opDays: M.operatingDays(r, cap.closedWeekdays),
         pkgSales: M.packageSales(data.pkgs, r), retention: M.retention(data.appts, data.patients, r) };
     };
     const c = per(cur), p = per(prev);
     const monthly = months.map((ym) => { const r = M.monthRange(ym, today); return { ym, r, ...per(r) }; });
     return { lines, c, p, monthly };
-  }, [data, cur, prev, months, today, cap]);
+  }, [data, cur, prev, months, today, cap, monthlyExp, settings.expenseCategories]);
 
   const approxCash = m && m.c.cash.approximate > 0;
   const preTracking = cur.from < PAYMENT_LOG_TRACKING_SINCE;
@@ -400,11 +356,14 @@ export default function BusinessAnalyticsPage() {
           )}
 
           {section === "overview" && <Overview m={m} />}
-          {section === "financial" && <Financial m={m} data={data} settings={settings} cur={cur} cap={cap} months={months} onExpensesChanged={reload} />}
+          {section === "financial" && <Financial m={m} data={data} settings={settings} cur={cur} cap={cap} months={months} monthly={monthlyExp ?? []} today={today} onOpenExpenses={() => setSection("expenses")} />}
           {section === "acquisition" && <Acquisition m={m} data={data} cur={cur} />}
           {section === "retention" && <Retention m={m} data={data} today={today} />}
           {section === "schedule" && <Schedule data={data} cur={cur} prev={prev} cap={cap} settings={settings} />}
-          {section === "expansion" && <Expansion m={m} data={data} settings={settings} cap={cap} />}
+          {section === "expansion" && <Expansion m={m} data={data} settings={settings} cap={cap} monthly={monthlyExp ?? []} today={today} />}
+          {section === "expenses" && (monthlyExp === null
+            ? <div className="ba-loading"><div className="ba-skel" /></div>
+            : <MonthlyExpensesPanel entries={monthlyExp} legacy={legacy} settings={settings} today={today} />)}
           {section === "checks" && <DataChecks data={data} today={today} />}
         </>
       )}
@@ -420,13 +379,20 @@ interface Computed {
   monthly: (PeriodStats & { ym: string; r: M.Range })[];
 }
 interface PeriodStats {
-  appt: M.ApptStats; cash: M.CashStats; earned: M.EarnedStats; exp: M.ExpenseStats; newPts: M.APatient[];
-  result: number; capacity: number; opDays: number;
+  appt: M.ApptStats; cash: M.CashStats; earned: M.EarnedStats; exp: M.ExpensePeriod; expGap: string | null; newPts: M.APatient[];
+  result: number | null; earnedResult: number | null; capacity: number; opDays: number;
   pkgSales: { count: number; value: number; sessions: number };
   retention: { treated: number; newTreated: number; returningTreated: number; sessionsPerPatient: number | null };
 }
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
+
+/** Break-even fixed costs: recorded monthly average (default) or the manual figure. */
+function fixedCosts(settings: BusinessSettings, monthly: MonthlyExpense[], today: string) {
+  if (settings.fixedCostsSource === "manual") return { value: settings.fixedMonthlyCosts, label: "manual figure", months: [] as string[] };
+  const r = M.recordedFixedCosts(monthly, settings.expenseCategories, today.slice(0, 7));
+  return { value: r.average, label: r.months.length ? `average of ${r.months.join(", ")}` : "no complete month entered yet", months: r.months };
+}
 
 function Overview({ m }: { m: Computed }) {
   const { c, p } = m;
@@ -437,10 +403,13 @@ function Overview({ m }: { m: Computed }) {
       <Kpi label="Earned revenue" value={egp(c.earned.total)} cur={c.earned.total} prev={p.earned.total}
         note={c.earned.unpricedSessions ? `${c.earned.unpricedSessions} completed session(s) have no price recorded` : undefined}
         help="Value of treatment actually delivered: each completed session × its price record (package sessions at the package's per-session price). Differs from cash when packages are prepaid." />
-      <Kpi label="Operating expenses" value={egp(c.exp.total)} cur={c.exp.total} prev={p.exp.total} lowerIsBetter
-        help="Sum of expenses recorded in the Expenses log for the period. Not set up = 0 recorded, so add expenses for a meaningful result." />
-      <Kpi label="Operating result" value={egp(c.result)} cur={c.result} prev={p.result} kind="estimate"
-        help="Cash collected − recorded expenses. An operating estimate, not accounting profit: excludes depreciation, taxes, owner salary not recorded as an expense, and any unrecorded costs." />
+      <Kpi label="Operating expenses" value={c.expGap ? "—" : egp(c.exp.operating)} cur={c.expGap ? null : c.exp.operating} prev={p.expGap ? null : p.exp.operating} lowerIsBetter
+        note={c.expGap ?? (c.exp.capital ? `+ ${egp(c.exp.capital)} equipment purchases (capital)` : undefined)}
+        help="Operating expenses PAID in the period's months, from Monthly Expenses (equipment purchases excluded as capital). Shown only for whole months with every category entered; never prorated, and a missing month is never treated as 0." />
+      <Kpi label="Cash-basis result" value={egp(c.result)} cur={c.result} prev={p.result} kind="estimate" note={c.expGap ?? undefined}
+        help="Cash collected − operating expenses paid. An operating estimate, not accounting profit: no accruals, depreciation, taxes or unrecorded costs; equipment purchases are excluded." />
+      <Kpi label="Earned-basis result" value={egp(c.earnedResult)} cur={c.earnedResult} prev={p.earnedResult} kind="estimate" note={c.expGap ?? undefined}
+        help="Earned revenue (value of sessions delivered) − operating expenses paid. Mixes an earned figure with cash expenses, so treat it as an estimate, not accounting profit." />
       <Kpi label="Completed sessions" value={num(c.appt.completed)} cur={c.appt.completed} prev={p.appt.completed}
         help="Appointments in the period with status Completed. In-progress, cancelled, no-show and rescheduled never count." />
       <Kpi label="Patients treated" value={num(c.appt.uniquePatients)} cur={c.appt.uniquePatients} prev={p.appt.uniquePatients}
@@ -464,9 +433,13 @@ function Overview({ m }: { m: Computed }) {
   );
 }
 
-function Financial({ m, data, settings, cur, cap, months, onExpensesChanged }: {
-  m: Computed; data: AnalyticsData; settings: BusinessSettings; cur: M.Range; cap: M.Capacity; months: string[]; onExpensesChanged: () => void;
+function Financial({ m, data, settings, cur, cap, months, monthly, today, onOpenExpenses }: {
+  m: Computed; data: AnalyticsData; settings: BusinessSettings; cur: M.Range; cap: M.Capacity; months: string[];
+  monthly: MonthlyExpense[]; today: string; onOpenExpenses: () => void;
 }) {
+  const fc = fixedCosts(settings, monthly, today);
+  const consumablesRecorded = fc.months.some((mo) => monthly.some((e) => e.month === mo && e.categoryId === "consumables"));
+  const doubleCountRisk = settings.fixedCostsSource === "recorded" && consumablesRecorded && !settings.variableIncludedInExpenses && (settings.variableCostPerSession ?? 0) > 0;
   const { c } = m;
   const out = M.outstanding(data.unpaidPrices, data.pkgs);
   const obl = M.packageObligations(data.pkgs);
@@ -474,7 +447,7 @@ function Financial({ m, data, settings, cur, cap, months, onExpensesChanged }: {
   const ym = M.monthKey(cur.to);
   const fullMonth = { from: `${ym}-01`, to: M.monthRange(ym, "9999-12-31").to };
   const be = M.breakEven({
-    fixedMonthlyCosts: settings.fixedMonthlyCosts, variableCostPerSession: settings.variableCostPerSession,
+    fixedMonthlyCosts: fc.value, variableCostPerSession: settings.variableCostPerSession,
     variableIncludedInExpenses: settings.variableIncludedInExpenses, avgRevenuePerSession: c.earned.avgPerSession,
     operatingDaysInMonth: M.operatingDays(fullMonth, cap.closedWeekdays),
   });
@@ -496,12 +469,12 @@ function Financial({ m, data, settings, cur, cap, months, onExpensesChanged }: {
           help="Sessions remaining in active packages (size − sessions used) × per-session price: treatment the clinic still owes patients." />
       </div>
 
-      <Card title="Monthly trend" wide help="Last 6 months (current month to date). Result = cash collected − recorded expenses.">
+      <Card title="Monthly trend" wide help="Last 6 months (current month to date). Expenses and result appear only for whole months with every category entered. Result = cash collected − operating expenses paid.">
         <MonthBars months={months} fmt={egp} series={[
           { label: "Cash collected", color: "#2E8BC0", values: m.monthly.map((x) => x.cash.total) },
           { label: "Earned revenue", color: "#5BC0BE", values: m.monthly.map((x) => x.earned.total) },
-          { label: "Expenses", color: "#E8A93B", values: m.monthly.map((x) => x.exp.total) },
-          { label: "Result", color: "#16a34a", values: m.monthly.map((x) => x.result) },
+          { label: "Operating expenses", color: "#E8A93B", values: m.monthly.map((x) => x.expGap ? null : x.exp.operating) },
+          { label: "Cash-basis result", color: "#16a34a", values: m.monthly.map((x) => x.result) },
         ]} />
       </Card>
 
@@ -513,18 +486,24 @@ function Financial({ m, data, settings, cur, cap, months, onExpensesChanged }: {
         <Card title="Cash by payment method" help={`Recorded from ${fmtDate(PAYMENT_LOG_TRACKING_SINCE)}; earlier payments show as "Not recorded".`}>
           <BarList fmt={egp} rows={Object.entries(c.cash.byMethod).map(([k, v]) => [labelFor(PAYMENT_METHODS, k, "Not recorded"), v] as [string, number]).sort((a, b) => b[1] - a[1])} />
         </Card>
-        <Card title="Expenses by category">
-          <BarList fmt={egp} empty="No expenses recorded — add them below." rows={Object.entries(c.exp.byCategory).map(([k, v]) => [labelFor(EXPENSE_CATEGORIES, k), v] as [string, number]).sort((a, b) => b[1] - a[1])} />
+        <Card title="Expenses by category" help={c.exp.wholeMonths ? c.exp.coverage.map((cv) => `${cv.month}: ${cv.entered} of ${cv.required} categories entered`).join(" · ") : undefined}>
+          {!c.exp.wholeMonths ? <div className="ba-empty">{c.expGap}</div> : !c.exp.anyEntered
+            ? <div className="ba-empty">Expenses not entered. <button className="ba-link" onClick={onOpenExpenses}>Enter them</button></div>
+            : <BarList fmt={egp} rows={Object.entries(c.exp.byCategory).map(([k, v]) => [
+                `${settings.expenseCategories.find((x) => x.id === k)?.label ?? k}${settings.expenseCategories.find((x) => x.id === k)?.kind === "capital" ? " (capital)" : ""}`, v] as [string, number]).sort((a, b) => b[1] - a[1])} />}
         </Card>
       </div>
 
-      <Card title="Break-even" wide help="Contribution per session = revenue per session − variable cost per session. Break-even sessions = monthly fixed costs ÷ contribution. Daily = monthly ÷ operating days in the month.">
-        {!be.ok ? <div className="ba-banner"><Info size={15} /> {be.reason}</div> : (
+      <Card title="Break-even" wide help={`Contribution per session = revenue per session − variable cost per session. Break-even sessions = monthly fixed costs ÷ contribution. Daily = monthly ÷ operating days in the month. Fixed costs: ${fc.label}.`}>
+        {doubleCountRisk && <div className="ba-banner err" style={{ marginBottom: 10 }}><AlertTriangle size={15} /> Consumables are already in your monthly expenses, and a variable cost per session is also set, so they may be counted twice. Clear the variable cost or tick "already included" in Assumptions.</div>}
+        {!be.ok ? <div className="ba-banner"><Info size={15} /> {settings.fixedCostsSource === "recorded" && fc.value === null ? "Enter at least one complete month in Monthly Expenses (or choose a manual figure in Assumptions)." : be.reason}</div> : (
           <div className="ba-grid">
             <Kpi label="Revenue per session" value={egp(c.earned.avgPerSession)} help="Measured: earned revenue ÷ priced completed sessions in the selected period." />
             <Kpi label="Variable cost / session" value={settings.variableIncludedInExpenses ? "In expenses" : egp(be.variableUsed)} kind="estimate" help="Your estimate (Assumptions)." />
             <Kpi label="Contribution / session" value={egp(be.contribution)} kind="estimate" help="Revenue per session − variable cost per session." />
-            <Kpi label="Break-even / month" value={`${num(be.sessionsPerMonth)} sessions`} kind="estimate" help="Monthly fixed costs (your estimate) ÷ contribution per session, rounded up." />
+            <Kpi label="Fixed costs / month" value={egp(fc.value)} kind={settings.fixedCostsSource === "manual" ? "estimate" : "plain"} note={fc.label}
+              help="Recorded: average operating expenses of the last up to 3 complete months (capital excluded). Manual: your figure from Assumptions." />
+            <Kpi label="Break-even / month" value={`${num(be.sessionsPerMonth)} sessions`} kind="estimate" help="Monthly fixed costs ÷ contribution per session, rounded up." />
             <Kpi label="Break-even / day" value={num(be.sessionsPerDay, 1)} kind="estimate" help="Monthly break-even ÷ operating days in the month (closed weekdays excluded)." />
             <Kpi label="Actual vs target (period)" value={`${num(c.appt.completed)} / ${num(targetForPeriod, 0)}`}
               note={targetForPeriod ? `${pct(M.ratio(c.appt.completed, targetForPeriod))} of break-even pace` : undefined}
@@ -533,7 +512,6 @@ function Financial({ m, data, settings, cur, cap, months, onExpensesChanged }: {
         )}
       </Card>
 
-      <ExpensesPanel expenses={data.expenses} range={cur} onChanged={onExpensesChanged} />
     </div>
   );
 }
@@ -543,7 +521,7 @@ function Acquisition({ m, data, cur }: { m: Computed; data: AnalyticsData; cur: 
   const src = M.bySource(c.newPts);
   const unknown = src[""] ?? 0;
   const rows = Object.entries(src).map(([k, v]) => [labelFor(ACQUISITION_SOURCES, k), v] as [string, number]).sort((a, b) => b[1] - a[1]);
-  const spend = c.exp.marketingBySource;
+  const mkt = c.expGap ? null : c.exp.marketing;   // blended monthly total; never prorated
   // Earned revenue in the period from patients grouped by their source.
   const srcByPatient = new Map(data.patients.map((p) => [p.uid, M.sourceOf(p)] as const));
   const priceByAppt = new Map(data.prices.map((p) => [p.appointmentId, p.amount] as const));
@@ -553,38 +531,36 @@ function Acquisition({ m, data, cur }: { m: Computed; data: AnalyticsData; cur: 
   });
   const funnel = M.leadFunnel(data.leads, data.appts, cur);
   const a2t = M.assessmentToTreatment(data.appts, cur);
-  const channels = [...new Set([...Object.keys(spend), ...Object.keys(src), ...Object.keys(funnel.bySource)])].filter(Boolean);
+  const channels = [...new Set([...Object.keys(src), ...Object.keys(funnel.bySource)])].filter(Boolean);
   return (
     <div className="ba-stack">
       <div className="ba-grid">
         <Kpi label="New patients" value={num(c.newPts.length)} help="Patient records created in the period." />
         <Kpi label="Source unknown" value={`${num(unknown)} of ${num(c.newPts.length)}`} lowerIsBetter
           help="New patients with no recorded 'How did they hear about us?'. Fill it in on the patient sheet to improve attribution." />
-        <Kpi label="Marketing spend" value={egp(c.exp.marketingTotal)} help="Expenses in the Marketing category for the period." />
-        <Kpi label="Cost per new patient" value={egp(M.ratio(c.exp.marketingTotal, c.newPts.length))}
-          help="Marketing spend ÷ all new patients (blended). Per-channel figures are below where spend is tagged with a channel." />
+        <Kpi label="Marketing spend" value={egp(mkt)} note={c.expGap ?? undefined} help="The 'Marketing and advertising' monthly total from Monthly Expenses. Whole months only." />
+        <Kpi label="Cost per new patient" value={egp(mkt === null ? null : M.ratio(mkt, c.newPts.length))}
+          help="Marketing spend ÷ all new patients (blended across channels; spend isn't split by channel)." />
         <Kpi label="Assessment attendance" value={pct(c.appt.assessmentAttendanceRate)} note={`${num(c.appt.assessmentsAttended)} of ${num(c.appt.assessmentsBooked)} booked`}
           help="Attended ÷ booked assessment appointments in the period." />
         <Kpi label="Assessment → treatment" value={pct(a2t.rate)} note={`${num(a2t.converted)} of ${num(a2t.assessed)} assessed patients`}
           help="Patients who attended an assessment in the period and then had at least one completed non-assessment session afterwards (up to today). Recent assessments may not have converted yet." />
         <Kpi label="Inquiries" value={num(funnel.inquiries)} help="Inquiries logged on the Front Desk page with a date in the period." />
-        <Kpi label="Cost per inquiry" value={egp(M.ratio(c.exp.marketingTotal, funnel.inquiries))}
+        <Kpi label="Cost per inquiry" value={egp(mkt === null ? null : M.ratio(mkt, funnel.inquiries))}
           help="Marketing spend ÷ inquiries logged in the period (blended across channels)." />
-        <Kpi label="Cost per attended assessment" value={egp(M.ratio(c.exp.marketingTotal, c.appt.assessmentsAttended))}
+        <Kpi label="Cost per attended assessment" value={egp(mkt === null ? null : M.ratio(mkt, c.appt.assessmentsAttended))}
           help="Marketing spend ÷ assessment appointments attended in the period (blended)." />
       </div>
       <div className="ba-two">
         <Card title="New patients by source" help="As recorded at registration. Historical patients without a source are 'Unknown'; a recorded referring physician counts as Doctor referral.">
           <BarList fmt={(n) => num(n)} rows={rows} />
         </Card>
-        <Card title="Channel efficiency" help="Spend = marketing expenses tagged with the channel. Cost per inquiry / new patient = channel spend ÷ that channel's inquiries / new patients. Revenue = earned in the period from patients of that source (any join date).">
-          {channels.length === 0 ? <div className="ba-empty">No sources or tagged spend in this period.</div> : (
+        <Card title="Channels" help="Inquiries and new patients by recorded source. Revenue = earned in the period from patients of that source (any join date). Marketing spend is one monthly total, so cost isn't split by channel.">
+          {channels.length === 0 ? <div className="ba-empty">No recorded sources in this period.</div> : (
             <div className="ba-table-wrap"><table className="ba-table">
-              <thead><tr><th>Channel</th><th className="r">Inquiries</th><th className="r">New</th><th className="r">Spend</th><th className="r">Cost / inquiry</th><th className="r">Cost / new</th><th className="r">Revenue</th></tr></thead>
+              <thead><tr><th>Channel</th><th className="r">Inquiries</th><th className="r">New</th><th className="r">Revenue</th></tr></thead>
               <tbody>{channels.map((k) => (
-                <tr key={k}><td>{labelFor(ACQUISITION_SOURCES, k)}</td><td className="r">{num(funnel.bySource[k] ?? 0)}</td><td className="r">{num(src[k] ?? 0)}</td><td className="r">{spend[k] ? egp(spend[k]) : "—"}</td>
-                  <td className="r">{spend[k] && funnel.bySource[k] ? egp(M.ratio(spend[k], funnel.bySource[k])) : "—"}</td>
-                  <td className="r">{spend[k] ? egp(M.ratio(spend[k], src[k] ?? 0)) : "—"}</td><td className="r">{egp(revBySrc[k] ?? 0)}</td></tr>
+                <tr key={k}><td>{labelFor(ACQUISITION_SOURCES, k)}</td><td className="r">{num(funnel.bySource[k] ?? 0)}</td><td className="r">{num(src[k] ?? 0)}</td><td className="r">{egp(revBySrc[k] ?? 0)}</td></tr>
               ))}</tbody>
             </table></div>
           )}
@@ -685,21 +661,24 @@ function Schedule({ data, cur, prev, cap, settings }: { data: AnalyticsData; cur
   );
 }
 
-function Expansion({ m, data, settings, cap }: { m: Computed; data: AnalyticsData; settings: BusinessSettings; cap: M.Capacity }) {
+function Expansion({ m, data, settings, cap, monthly, today }: { m: Computed; data: AnalyticsData; settings: BusinessSettings; cap: M.Capacity; monthly: MonthlyExpense[]; today: string }) {
+  const fc = fixedCosts(settings, monthly, today);
   // Full calendar months only (the current month is partial).
   const full = m.monthly.slice(0, -1);
   const span: M.Range | null = full.length ? { from: full[0].r.from, to: full[full.length - 1].r.to } : null;
   const earned = full.reduce((a, x) => a + x.earned.total, 0);
   const priced = full.reduce((a, x) => a + x.earned.pricedSessions, 0);
   const be = M.breakEven({
-    fixedMonthlyCosts: settings.fixedMonthlyCosts, variableCostPerSession: settings.variableCostPerSession,
+    fixedMonthlyCosts: fc.value, variableCostPerSession: settings.variableCostPerSession,
     variableIncludedInExpenses: settings.variableIncludedInExpenses, avgRevenuePerSession: M.ratio(earned, priced),
     operatingDaysInMonth: span ? M.operatingDays(full[full.length - 1].r, cap.closedWeekdays) : 0,
   });
   const owner = span ? M.ownerShare(data.appts, data.managerIds, span) : null;
-  const run = M.runway(settings.cashBalance, full.slice(-3).map((x) => x.result));
+  // Runway needs the last 3 full months to have complete expenses; otherwise it can't be judged.
+  const last3 = full.slice(-3).map((x) => x.result);
+  const run = last3.length === 3 && last3.every((v) => v !== null) ? M.runway(settings.cashBalance, last3 as number[]) : { months: null, burning: null };
   const criteria = M.expansionCriteria({
-    fullMonths: full.map((x) => ({ ym: x.ym, result: x.result, completed: x.appt.completed, capacity: x.capacity, newPatients: x.newPts.length, expensesRecorded: x.exp.total > 0 })),
+    fullMonths: full.map((x) => ({ ym: x.ym, result: x.result, completed: x.appt.completed, capacity: x.capacity, newPatients: x.newPts.length, expensesRecorded: !x.expGap })),
     monthsAtTarget: settings.monthsAtTarget,
     targetMonthlyResult: settings.targetMonthlyResult,
     breakEvenSessionsPerMonth: be.ok ? be.sessionsPerMonth : null,
@@ -731,7 +710,7 @@ function Expansion({ m, data, settings, cap }: { m: Computed; data: AnalyticsDat
         <Kpi label="Cash runway" kind="estimate"
           value={run.burning === null ? "—" : run.burning ? `${num(run.months, 1)} months` : "Not burning cash"}
           note={settings.cashBalance === null ? "Enter a cash balance in Assumptions" : `Balance ${egp(settings.cashBalance)}${settings.cashBalanceAsOf ? ` as of ${fmtDate(settings.cashBalanceAsOf)}` : ""}`}
-          help="Owner-entered cash balance ÷ average monthly loss over the last 3 full months. If the average result is positive, the clinic isn't drawing down cash." />
+          help="Owner-entered cash balance ÷ average monthly cash-basis loss over the last 3 full months (all three need complete expenses). If the average result is positive, the clinic isn't drawing down cash." />
         <Kpi label="Break-even / month" kind="estimate" value={be.ok ? `${num(be.sessionsPerMonth)} sessions` : "—"} note={be.ok ? undefined : be.reason}
           help="Monthly fixed costs ÷ contribution per session, using revenue per session across the full months shown." />
       </div>
@@ -740,8 +719,8 @@ function Expansion({ m, data, settings, cap }: { m: Computed; data: AnalyticsDat
           <Card title="Revenue, expenses & result" help="Full months. Result = cash collected − recorded expenses.">
             <MonthBars months={months} fmt={egp} series={[
               { label: "Cash collected", color: "#2E8BC0", values: full.map((x) => x.cash.total) },
-              { label: "Expenses", color: "#E8A93B", values: full.map((x) => x.exp.total) },
-              { label: "Result", color: "#16a34a", values: full.map((x) => x.result) },
+              { label: "Operating expenses", color: "#E8A93B", values: full.map((x) => x.expGap ? null : x.exp.operating) },
+              { label: "Cash-basis result", color: "#16a34a", values: full.map((x) => x.result) },
             ]} />
           </Card>
           <Card title="Completed sessions vs break-even" help={be.ok ? `Break-even: ${be.sessionsPerMonth} sessions/month (estimate).` : "Break-even not available; see Financial."}>
@@ -757,7 +736,7 @@ function Expansion({ m, data, settings, cap }: { m: Computed; data: AnalyticsDat
             <div className="ba-table-wrap"><table className="ba-table">
               <thead><tr><th>Month</th><th className="r">New</th><th className="r">Marketing</th><th className="r">Cost / new</th></tr></thead>
               <tbody>{full.map((x) => <tr key={x.ym}><td>{fmtMonth(x.ym)}</td><td className="r">{num(x.newPts.length)}</td>
-                <td className="r">{egp(x.exp.marketingTotal)}</td><td className="r">{egp(M.ratio(x.exp.marketingTotal, x.newPts.length))}</td></tr>)}</tbody>
+                <td className="r">{x.expGap ? "—" : egp(x.exp.marketing)}</td><td className="r">{x.expGap ? "—" : egp(M.ratio(x.exp.marketing, x.newPts.length))}</td></tr>)}</tbody>
             </table></div>
           </Card>
         </div>
@@ -794,8 +773,8 @@ function DataChecks({ data, today }: { data: AnalyticsData; today: string }) {
   return (
     <div className="ba-stack">
       <div className="ba-banner"><Info size={15} />
-        Session charges that need a human look, across all patients and all dates. Nothing here changes on its own: open the patient's price sheet to Keep or Delete a charge, or Go to day to check the session in the schedule.
-        <button className="ba-link" onClick={() => { setIssues(null); setNonce((n) => n + 1); }}>Re-run checks</button>
+        <div>Session charges that need a human look, across all patients and all dates. Nothing here changes on its own: open the patient's price sheet to Keep or Delete a charge, or Go to day to check the session in the schedule.{" "}
+          <button className="ba-link" onClick={() => { setIssues(null); setNonce((n) => n + 1); }}>Re-run checks</button></div>
       </div>
       {error && <div className="ba-banner err"><AlertTriangle size={15} /> {error}</div>}
       {!issues && !error && <div className="ba-loading">{Array.from({ length: 3 }, (_, i) => <div key={i} className="ba-skel" />)}</div>}

@@ -20,7 +20,9 @@ export interface APackage {
   totalAmount: number; paidAmount: number; startDate: string; sessionsUsed: number; active: boolean;
 }
 export interface APkgPayment { id: string; packageId: string; amount: number; date: string; method: string; }
-export interface AExpense { id: string; date: string; category: string; amount: number; marketingSource: string; }
+/** One owner-entered monthly total: amount PAID in a category during a calendar month. */
+export interface AMonthlyExpense { month: string; categoryId: string; amount: number; }
+export interface ACategory { id: string; label: string; kind: "operating" | "capital"; active: boolean; }
 export interface APatient {
   uid: string; name: string; createdDate: string; status: string; acquisitionSource: string; referredByPhysicianId: string;
   followUpReviewedFor?: string;   // last-session date an administrative follow-up decision was recorded for
@@ -213,16 +215,91 @@ export function earnedStats(appts: AAppt[], prices: APrice[], r: Range): EarnedS
     avgPerSession: ratio(total, priced), byServiceType: byService, byPhysio, physioNames: names };
 }
 
-export interface ExpenseStats { total: number; byCategory: Record<string, number>; marketingBySource: Record<string, number>; marketingTotal: number; }
-export function expenseStats(expenses: AExpense[], r: Range): ExpenseStats {
-  const inP = expenses.filter((e) => inRange(e.date, r));
-  const mk = inP.filter((e) => e.category === "marketing");
+// ─── Monthly expenses ─────────────────────────────────────────────────────────
+// Expenses are monthly totals, so they only line up with periods made of whole
+// calendar months. They are never prorated, and a missing entry is "not entered",
+// never 0.
+
+/** Months (YYYY-MM) a range touches. */
+export function monthsInRange(r: Range): string[] {
+  const out: string[] = [];
+  let m = monthKey(r.from);
+  const last = monthKey(r.to);
+  while (m <= last) {
+    out.push(m);
+    const [y, mo] = m.split("-").map(Number);
+    m = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, "0")}`;
+  }
+  return out;
+}
+
+/** True when `r` starts on the 1st and ends on the last day of a month. */
+export function isWholeMonths(r: Range): boolean {
+  return r.from.slice(8) === "01" && Number(r.to.slice(8)) === daysInMonth(monthKey(r.to));
+}
+
+export interface MonthCoverage { month: string; entered: number; required: number; complete: boolean; missing: string[]; }
+
+/** Coverage for one month: every currently-active category needs an entry (0 counts). */
+export function monthCoverage(entries: AMonthlyExpense[], cats: ACategory[], month: string): MonthCoverage {
+  const have = new Set(entries.filter((e) => e.month === month).map((e) => e.categoryId));
+  const required = cats.filter((c) => c.active);
+  const missing = required.filter((c) => !have.has(c.id)).map((c) => c.id);
+  return { month, entered: required.length - missing.length, required: required.length, complete: required.length > 0 && missing.length === 0, missing };
+}
+
+export interface ExpensePeriod {
+  wholeMonths: boolean;   // the range is exactly whole calendar months
+  months: string[];       // months the range touches
+  anyEntered: boolean;
+  complete: boolean;      // whole months AND every month fully covered
+  operating: number;      // operating categories (everything except capital)
+  capital: number;        // e.g. equipment purchases, kept out of operating results
+  total: number;
+  marketing: number;      // the "marketing" category (blended across channels)
+  byCategory: Record<string, number>;
+  coverage: MonthCoverage[];
+}
+
+export function expensesForRange(entries: AMonthlyExpense[], cats: ACategory[], r: Range): ExpensePeriod {
+  const months = monthsInRange(r);
+  const inP = entries.filter((e) => months.includes(e.month));
+  const kind = new Map(cats.map((c) => [c.id, c.kind] as const));
+  const capital = sum(inP.filter((e) => kind.get(e.categoryId) === "capital").map((e) => e.amount));
+  const total = sum(inP.map((e) => e.amount));
+  const coverage = months.map((m) => monthCoverage(entries, cats, m));
+  const wholeMonths = isWholeMonths(r);
   return {
-    total: sum(inP.map((e) => e.amount)),
-    byCategory: groupSum(inP, (e) => e.category, (e) => e.amount),
-    marketingBySource: groupSum(mk, (e) => e.marketingSource || "", (e) => e.amount),
-    marketingTotal: sum(mk.map((e) => e.amount)),
+    wholeMonths, months, anyEntered: inP.length > 0,
+    complete: wholeMonths && coverage.every((c) => c.complete),
+    operating: total - capital, capital, total,
+    marketing: sum(inP.filter((e) => e.categoryId === "marketing").map((e) => e.amount)),
+    byCategory: groupSum(inP, (e) => e.categoryId, (e) => e.amount),
+    coverage,
   };
+}
+
+/** Why an expense-based figure can't be shown for a period, or null if it can. */
+export function expenseGap(e: ExpensePeriod): string | null {
+  if (!e.wholeMonths) return "Expenses are monthly totals. Select a whole month to compare.";
+  const inc = e.coverage.filter((c) => !c.complete);
+  if (inc.length === 0) return null;
+  return inc.every((c) => c.entered === 0)
+    ? `Expenses not entered for ${inc.map((c) => c.month).join(", ")}.`
+    : `Incomplete expense data: ${inc.map((c) => `${c.month} (${c.entered} of ${c.required})`).join(", ")}.`;
+}
+
+/** Average operating expenses over the most recent complete months strictly before `beforeMonth`. */
+export function recordedFixedCosts(entries: AMonthlyExpense[], cats: ACategory[], beforeMonth: string, maxMonths = 3) {
+  const months = [...new Set(entries.map((e) => e.month))].filter((m) => m < beforeMonth).sort().reverse();
+  const used: string[] = [];
+  for (const m of months) {
+    if (used.length >= maxMonths) break;
+    if (monthCoverage(entries, cats, m).complete) used.push(m);
+  }
+  if (!used.length) return { average: null as number | null, months: used };
+  const totals = used.map((m) => expensesForRange(entries, cats, { from: `${m}-01`, to: `${m}-${String(daysInMonth(m)).padStart(2, "0")}` }).operating);
+  return { average: sum(totals) / totals.length, months: used };
 }
 
 /** Money still owed to the clinic: unpaid pay-per-session charges + unpaid package balances. */
@@ -454,7 +531,7 @@ export type CriterionState = "met" | "not_met" | "missing";
 export interface Criterion { key: string; label: string; state: CriterionState; evidence: string; }
 
 export interface ExpansionInput {
-  fullMonths: { ym: string; result: number; completed: number; capacity: number; newPatients: number; expensesRecorded: boolean }[];
+  fullMonths: { ym: string; result: number | null; completed: number; capacity: number; newPatients: number; expensesRecorded: boolean }[];
   monthsAtTarget: number;
   targetMonthlyResult: number | null;
   breakEvenSessionsPerMonth: number | null;
@@ -473,10 +550,10 @@ export function expansionCriteria(i: ExpansionInput): Criterion[] {
   const allExp = enough && last.every((m) => m.expensesRecorded);
   out.push({ key: "expenses", label: `Expenses recorded for the last ${n} full months`,
     state: allExp ? "met" : "missing",
-    evidence: enough ? `${last.filter((m) => m.expensesRecorded).length} of ${n} months have expenses logged` : `Only ${last.length} full month(s) of history in view` });
+    evidence: enough ? `${last.filter((m) => m.expensesRecorded).length} of ${n} months have every expense category entered` : `Only ${last.length} full month(s) of history in view` });
   out.push({ key: "result", label: `Operating result ≥ target for ${n} consecutive months`,
-    state: i.targetMonthlyResult === null || !allExp ? "missing" : last.every((m) => m.result >= i.targetMonthlyResult!) ? "met" : "not_met",
-    evidence: i.targetMonthlyResult === null ? "Target not set" : !allExp ? "Needs complete expense records" : `Results: ${last.map((m) => Math.round(m.result)).join(", ")} vs target ${Math.round(i.targetMonthlyResult)}` });
+    state: i.targetMonthlyResult === null || !allExp ? "missing" : last.every((m) => (m.result ?? -Infinity) >= i.targetMonthlyResult!) ? "met" : "not_met",
+    evidence: i.targetMonthlyResult === null ? "Target not set" : !allExp ? "Needs complete expense records" : `Results: ${last.map((m) => m.result === null ? "—" : Math.round(m.result)).join(", ")} vs target ${Math.round(i.targetMonthlyResult)}` });
   out.push({ key: "breakeven", label: `Break-even sessions reached for ${n} consecutive months`,
     state: i.breakEvenSessionsPerMonth === null || !enough ? "missing" : last.every((m) => m.completed >= i.breakEvenSessionsPerMonth!) ? "met" : "not_met",
     evidence: i.breakEvenSessionsPerMonth === null ? "Break-even not computable (see Financial)" : `Sessions: ${last.map((m) => m.completed).join(", ")} vs ${i.breakEvenSessionsPerMonth}` });

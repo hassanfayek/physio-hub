@@ -1,5 +1,6 @@
 // FILE: src/features/analytics/analyticsData.ts
-// Loads exactly the window Business Analytics needs (selected + comparison
+// Loads exactly the window Business Analytics needs (monthly expenses are a
+// separate live subscription in the page, so edits show up immediately) (selected + comparison
 // period, 6-month trend, follow-up lookback, and future bookings) and maps it
 // to the normalised shapes in metrics.ts. Single-field range/equality queries
 // only — no composite indexes required.
@@ -9,11 +10,11 @@ import { db } from "../../firebase";
 import { docToAppointment } from "../../services/appointmentService";
 import { docToSessionPrice, docToPackage } from "../../services/priceService";
 import { CLINIC_TIMEZONE } from "../../services/businessService";
-import { dedupeById, firstSessionByPackage, type AAppt, type APrice, type APackage, type APkgPayment, type AExpense, type APatient, type ALead } from "./metrics";
+import { dedupeById, firstSessionByPackage, type AAppt, type APrice, type APackage, type APkgPayment, type APatient, type ALead } from "./metrics";
 
 export interface AnalyticsData {
   appts: AAppt[]; prices: APrice[]; unpaidPrices: APrice[]; pkgs: APackage[];
-  pkgPayments: APkgPayment[]; expenses: AExpense[]; patients: APatient[]; managerIds: Set<string>; leads: ALead[];
+  pkgPayments: APkgPayment[]; patients: APatient[]; managerIds: Set<string>; leads: ALead[];
   firstSessionByPkg: Record<string, string>;
 }
 
@@ -32,14 +33,13 @@ const toPrice = (id: string, d: Record<string, unknown>): APrice => {
 };
 
 export async function loadAnalyticsData(loadFrom: string): Promise<AnalyticsData> {
-  const [apptDocs, priceByDate, priceByPaid, unpaidDocs, pkgDocs, payDocs, expDocs, patientDocs, physioDocs, leadDocs, pkgPriceDocs] = await Promise.all([
+  const [apptDocs, priceByDate, priceByPaid, unpaidDocs, pkgDocs, payDocs, patientDocs, physioDocs, leadDocs, pkgPriceDocs] = await Promise.all([
     fetchAll("appointments", where("date", ">=", loadFrom)),          // includes all future bookings
     fetchAll("patientSessionPrices", where("date", ">=", loadFrom)),
     fetchAll("patientSessionPrices", where("paidDate", ">=", loadFrom)),
     fetchAll("patientSessionPrices", where("paid", "==", false)),      // all-time outstanding
     fetchAll("patientPackages"),
     fetchAll("packagePayments"),
-    fetchAll("clinicExpenses", where("date", ">=", loadFrom)),
     fetchAll("patients"),
     fetchAll("physiotherapists"),
     fetchAll("leads", where("date", ">=", loadFrom)),
@@ -67,11 +67,6 @@ export async function loadAnalyticsData(loadFrom: string): Promise<AnalyticsData
     return { id: d.id, packageId: (x.packageId as string) ?? "", amount: Number(x.amount) || 0, date: (x.date as string) ?? "", method: (x.method as string) ?? "" };
   });
 
-  const expenses: AExpense[] = expDocs.map((d) => {
-    const x = d.data();
-    return { id: d.id, date: (x.date as string) ?? "", category: (x.category as string) ?? "other", amount: Number(x.amount) || 0, marketingSource: (x.marketingSource as string) ?? "" };
-  });
-
   const patients: APatient[] = patientDocs.map((d) => {
     const x = d.data();
     return { uid: d.id, name: `${x.firstName ?? ""} ${x.lastName ?? ""}`.trim() || "Unnamed",
@@ -89,5 +84,5 @@ export async function loadAnalyticsData(loadFrom: string): Promise<AnalyticsData
 
   const firstSessionByPkg = firstSessionByPackage(pkgPriceDocs.map((d) => toPrice(d.id, d.data())));
 
-  return { appts, prices, unpaidPrices, pkgs, pkgPayments, expenses, patients, managerIds, leads, firstSessionByPkg };
+  return { appts, prices, unpaidPrices, pkgs, pkgPayments, patients, managerIds, leads, firstSessionByPkg };
 }
