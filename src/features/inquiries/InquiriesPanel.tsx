@@ -18,9 +18,10 @@ import { deriveLead, inQueue, byQueue, fmtShort, STAGE_LABEL, type LeadView, typ
 import InquiryForm from "./InquiryForm";
 import LogInteraction from "./LogInteraction";
 import InquiryDetail from "./InquiryDetail";
+import InquiryAnalyticsView from "./InquiryAnalyticsView";
 import type { Staff } from "./shared";
 
-type View = "dashboard" | "queue" | "records";
+type View = "dashboard" | "queue" | "records" | "analytics";
 const PAGE = 25;
 
 export default function InquiriesPanel({ patients }: { patients: Patient[] }) {
@@ -81,7 +82,7 @@ export default function InquiriesPanel({ patients }: { patients: Patient[] }) {
       <style>{CSS}</style>
       <div className="iq-top">
         <div className="iq-views">
-          {([["queue", "Work queue"], ["dashboard", "Dashboard"], ["records", "Records"]] as const).map(([k, l]) => (
+          {([["queue", "Work queue"], ["dashboard", "Dashboard"], ["records", "Records"], ["analytics", "Analytics"]] as const).map(([k, l]) => (
             <button key={k} className={`iq-view ${view === k ? "on" : ""}`} onClick={() => setView(k)}>{l}</button>
           ))}
         </div>
@@ -98,6 +99,7 @@ export default function InquiriesPanel({ patients }: { patients: Patient[] }) {
           fService={fService} setFService={setFService} fAssigned={fAssigned} setFAssigned={setFAssigned} staff={staff} />
       )}
       {!loading && view === "dashboard" && <Dashboard views={views} range={range} matches={matchesFilters} onPickQueue={() => setView("queue")} />}
+      {!loading && view === "analytics" && <InquiryAnalyticsView views={views.filter(matchesFilters)} range={range} today={today} now={now} isManager={isManager} />}
       {!loading && view === "records" && <Records views={views.filter((v) => inRange(v.lead.date, range) && matchesFilters(v))} onOpen={setOpenId} onLog={setLogFor} />}
 
       {formFor && <InquiryForm existing={formFor === "new" ? null : formFor} leads={leads ?? []} patients={patients} staff={staff} me={me}
@@ -340,6 +342,12 @@ const CSS = `
 .iq-table tbody tr { cursor: pointer; } .iq-table tbody tr:hover td { background: #fafaf8; }
 .iq-cards { display: none; flex-direction: column; gap: 8px; }
 .iq-card { background: #fff; border: 1px solid #e5e0d8; border-radius: 12px; padding: 10px 12px; cursor: pointer; }
+.iq-card-box { background: #fff; border: 1px solid #e5e0d8; border-radius: 14px; padding: 12px 14px; min-width: 0; }
+.iq-bars-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; margin-top: 14px; }
+.iq-bar { display: grid; grid-template-columns: minmax(80px, 40%) 1fr auto; gap: 8px; align-items: center; font-size: 12.5px; margin-bottom: 6px; }
+.iq-bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #5a5550; }
+.iq-bar i { height: 8px; background: #f0ede8; border-radius: 100px; overflow: hidden; } .iq-bar b { display: block; height: 100%; background: linear-gradient(90deg, #2E8BC0, #5BC0BE); border-radius: 100px; }
+.iq-bar em { font-style: normal; font-weight: 700; color: #0C3C60; }
 .iq-pager { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 10px; font-size: 12.5px; color: #5a5550; }
 @media (max-width: 760px) {
   .iq-desktop { display: none; } .iq-cards { display: flex; }
