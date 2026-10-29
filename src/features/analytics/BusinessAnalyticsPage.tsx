@@ -640,7 +640,7 @@ function Acquisition({ m, data, cur }: { m: Computed; data: AnalyticsData; cur: 
           )}
         </Card>
       </div>
-      <Card title="Inquiry → treatment funnel" wide help="Inquiries are logged on the Front Desk page. Stages after 'booked' come from the linked patient's real appointments on/after the inquiry date. Inquiries not yet linked to a patient can only reach 'booked' (by status). Each stage is counted on its own, so 'treatment started' can exceed 'assessment attended' when a patient starts without a recorded assessment.">
+      <Card title="Inquiry → treatment funnel" wide help="Inquiries are logged on the Front Desk page. Booked, attended and treatment stages come only from the linked patient's real appointments on/after the inquiry date; inquiries not linked to a patient can't be verified, so they stop at 'Inquiries'. Each stage is counted on its own, so 'treatment started' can exceed 'assessment attended' when a patient starts without a recorded assessment.">
         {funnel.inquiries === 0 ? <div className="ba-empty">No inquiries logged in this period. The secretary can log them under Front Desk → Inquiries.</div> : (
           <>
             <BarList fmt={(n) => num(n)} rows={[

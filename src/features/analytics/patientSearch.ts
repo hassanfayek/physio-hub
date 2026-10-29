@@ -5,7 +5,7 @@ import type { Patient } from "../../services/patientService";
 
 const digits = (s: string) => (s ?? "").replace(/\D/g, "");
 /** Last 9 digits, so +2010…, 0020 10… and 010… all compare equal. */
-const phoneKey = (s: string) => digits(s).slice(-9);
+export const phoneKey = (s: string) => digits(s).slice(-9);
 const norm = (s: string) => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 export const fullName = (p: Pick<Patient, "firstName" | "lastName">) => `${p.firstName} ${p.lastName}`.trim();
 

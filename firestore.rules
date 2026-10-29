@@ -248,7 +248,9 @@ service cloud.firestore {
 
     // Front-desk inquiry log (may hold a name/phone) — manager + secretary only.
     match /leads/{docId} {
-      allow read, write: if isManager() || isSecretary();
+      allow read, update, delete: if isManager() || isSecretary();
+      allow create: if (isManager() || isSecretary())
+        && request.resource.data.phone is string && request.resource.data.phone.size() > 0;
     }
 
     // Dated log of package paidAmount changes — written by whoever edits a

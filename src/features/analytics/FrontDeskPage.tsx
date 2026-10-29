@@ -1,21 +1,20 @@
 // FILE: src/features/analytics/FrontDeskPage.tsx
 // Manager + secretary tools that feed Business Analytics:
-//  • Inquiries — log who asked about treatment and where they heard of us.
+//  • Inquiries — lead management (work queue, records, dashboard): see features/inquiries.
 //  • Follow-up review — patients with nothing booked after recent treatment, for an
 //    administrative decision. Nothing is ever sent to patients automatically.
 
 import { useEffect, useMemo, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { Plus, Trash2, Info, Pencil, Check, X } from "lucide-react";
+import { Info } from "lucide-react";
 import { db } from "../../firebase";
 import { docToAppointment } from "../../services/appointmentService";
 import { subscribeToAllPatients, type Patient } from "../../services/patientService";
 import {
-  subscribeToLeads, addLead, updateLead, deleteLead, setPatientFollowUp, clinicToday, labelFor,
-  ACQUISITION_SOURCES, LEAD_STATUSES, FOLLOW_UP_OUTCOMES, type Lead, type FollowUp,
+  setPatientFollowUp, clinicToday, labelFor, FOLLOW_UP_OUTCOMES, type FollowUp,
 } from "../../services/businessService";
 import { addDays, followUpCandidates, type AAppt } from "./metrics";
-import PatientPicker from "./PatientPicker";
+import InquiriesPanel from "../inquiries/InquiriesPanel";
 
 const fmtDate = (d: string) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—";
 type PatientWithFollowUp = Patient & { followUp?: FollowUp };
@@ -33,120 +32,10 @@ export default function FrontDeskPage() {
       <div className="fd-sub">Inquiries and follow-ups. These feed the Business Analytics dashboard.</div>
       <div className="fd-tabs">
         <button className={`fd-tab ${tab === "inquiries" ? "on" : ""}`} onClick={() => setTab("inquiries")}>Inquiries</button>
-        <button className={`fd-tab ${tab === "followup" ? "on" : ""}`} onClick={() => setTab("followup")}>Follow-up review</button>
+        <button className={`fd-tab ${tab === "followup" ? "on" : ""}`} onClick={() => setTab("followup")}>Patient follow-up</button>
       </div>
-      {tab === "inquiries" ? <Inquiries today={today} patients={patients} /> : <FollowUpReview today={today} patients={patients} />}
+      {tab === "inquiries" ? <InquiriesPanel patients={patients} /> : <FollowUpReview today={today} patients={patients} />}
     </div>
-  );
-}
-
-// ─── Inquiries ────────────────────────────────────────────────────────────────
-
-function Inquiries({ today, patients }: { today: string; patients: Patient[] }) {
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ date: today, source: "", name: "", phone: "", note: "" });
-  const [busy, setBusy] = useState(false);
-  // Inline edit of an existing inquiry's date / name / phone / note
-  const [editId, setEditId] = useState<string | null>(null);
-  const [draft, setDraft] = useState({ date: "", name: "", phone: "", note: "" });
-  const [savingEdit, setSavingEdit] = useState(false);
-  const startEdit = (l: Lead) => { setEditId(l.id); setDraft({ date: l.date, name: l.name, phone: l.phone, note: l.note }); setError(null); };
-  const saveEdit = async () => {
-    if (!editId) return;
-    if (!draft.date || draft.date > today) { setError("Choose a valid inquiry date (not in the future)."); return; }
-    setSavingEdit(true);
-    const r = await updateLead(editId, { date: draft.date, name: draft.name.trim(), phone: draft.phone.trim(), note: draft.note.trim() });
-    setSavingEdit(false);
-    if (r.error) setError(r.error); else setEditId(null);
-  };
-  useEffect(() => subscribeToLeads(addDays(today, -90), setLeads, (e) => setError(e.message)), [today]);
-
-  const add = async () => {
-    if (!form.date) return;
-    setBusy(true); setError(null);
-    const r = await addLead({ ...form, name: form.name.trim(), phone: form.phone.trim(), note: form.note.trim(), status: "new", patientId: "" });
-    setBusy(false);
-    if (r.error) setError(r.error); else setForm({ ...form, name: "", phone: "", note: "" });
-  };
-  return (
-    <>
-      <div className="fd-card">
-        <div className="fd-card-title">Log an inquiry</div>
-        <div className="fd-form">
-          <input type="date" value={form.date} max={today} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-          <select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
-            <option value="">How did they hear about us?</option>
-            {ACQUISITION_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
-          <input placeholder="Name (optional)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <input placeholder="Phone (optional)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          <input placeholder="Note (optional)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
-          <button className="fd-btn" onClick={add} disabled={busy}><Plus size={14} /> Add</button>
-        </div>
-        {error && <div className="fd-err">{error}</div>}
-      </div>
-
-      <div className="fd-card">
-        <div className="fd-card-title">Last 90 days ({leads.length})</div>
-        <div className="fd-help">When an inquiry registers, link them to their patient record, so the dashboard can follow them from inquiry to treatment using their real appointments.</div>
-        {leads.length === 0 ? <div className="fd-empty">No inquiries logged yet.</div> : (
-          <div className="fd-table-wrap"><table className="fd-table">
-            <thead><tr><th>Date</th><th>Who</th><th>Source</th><th>Status</th><th>Linked patient</th><th /></tr></thead>
-            <tbody>
-              {leads.map((l) => (
-                <tr key={l.id}>
-                  {editId === l.id ? (
-                    <>
-                      <td><input className="fd-edit" type="date" value={draft.date} max={today} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></td>
-                      <td>
-                        <div className="fd-edit-stack">
-                          <input className="fd-edit" placeholder="Name" value={draft.name} autoFocus onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-                          <input className="fd-edit" placeholder="Phone" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
-                          <input className="fd-edit" placeholder="Note" value={draft.note}
-                            onChange={(e) => setDraft({ ...draft, note: e.target.value })}
-                            onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditId(null); }} />
-                          <div className="fd-edit-actions">
-                            <button className="fd-btn fd-btn-sm" onClick={saveEdit} disabled={savingEdit}><Check size={13} /> {savingEdit ? "Saving…" : "Save"}</button>
-                            <button className="fd-btn-ghost" onClick={() => setEditId(null)} disabled={savingEdit}><X size={13} /> Cancel</button>
-                          </div>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td>{fmtDate(l.date)}</td>
-                      <td>{l.name || <span className="fd-muted">—</span>}{l.phone && <div className="fd-muted">{l.phone}</div>}{l.note && <div className="fd-muted">{l.note}</div>}</td>
-                    </>
-                  )}
-                  <td>
-                    <select value={l.source} onChange={(e) => updateLead(l.id, { source: e.target.value })}>
-                      <option value="">Unknown</option>
-                      {ACQUISITION_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    <select value={l.status} onChange={(e) => updateLead(l.id, { status: e.target.value })}>
-                      {LEAD_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    <PatientPicker patients={patients} value={l.patientId} suggestName={l.name} suggestPhone={l.phone}
-                      onChange={(id) => updateLead(l.id, id
-                        ? { patientId: id, status: "converted" }
-                        : { patientId: "", ...(l.status === "converted" ? { status: "new" } : {}) })} />
-                  </td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    {editId !== l.id && <button className="fd-icon edit" title="Edit date, name, phone or note" onClick={() => startEdit(l)}><Pencil size={13} /></button>}{" "}
-                    <button className="fd-icon" title="Delete" onClick={() => { if (window.confirm("Delete this inquiry?")) deleteLead(l.id); }}><Trash2 size={13} /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
-        )}
-      </div>
-    </>
   );
 }
 

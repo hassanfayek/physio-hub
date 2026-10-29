@@ -15,6 +15,8 @@ interface AddPatientModalProps {
   physios?:  Physiotherapist[];
   onClose:   () => void;
   onCreated: (patient: Patient) => void;
+  /** Pre-fill (e.g. when converting an inquiry into a patient). */
+  initial?:  { firstName?: string; lastName?: string; phone?: string; referredBy?: string; acquisitionSource?: string };
 }
 
 
@@ -25,17 +27,18 @@ export default function AddPatientModal({
   physios = [],
   onClose,
   onCreated,
+  initial,
 }: AddPatientModalProps) {
   const isManager = physios.length > 0;
 
-  const [firstName,   setFirstName]   = useState("");
-  const [lastName,    setLastName]    = useState("");
+  const [firstName,   setFirstName]   = useState(initial?.firstName ?? "");
+  const [lastName,    setLastName]    = useState(initial?.lastName ?? "");
   const [occupation,  setOccupation]  = useState("");
   const [age,         setAge]         = useState("");
-  const [phone,       setPhone]       = useState("");
-  const [referredBy,  setReferredBy]  = useState("");
+  const [phone,       setPhone]       = useState(initial?.phone ?? "");
+  const [referredBy,  setReferredBy]  = useState(initial?.referredBy ?? "");
   const [referredByPhysicianId, setReferredByPhysicianId] = useState("");
-  const [acquisitionSource, setAcquisitionSource] = useState("");
+  const [acquisitionSource, setAcquisitionSource] = useState(initial?.acquisitionSource ?? "");
   const [physicians,  setPhysicians]  = useState<Physician[]>([]);
   const [assignedPhysioId, setAssignedPhysioId] = useState(physioId);
 

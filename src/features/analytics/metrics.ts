@@ -540,7 +540,8 @@ export interface ALead { id: string; date: string; source: string; status: strin
 
 /** Inquiry → assessment booked → assessment attended → treatment started → continuing.
  *  Stages after "booked" are measured from the linked patient's real appointments
- *  (on/after the inquiry date), so they can't be overstated by a status click. */
+ *  (on/after the inquiry date), so they can't be overstated by a status click.
+ *  Inquiries not linked to a patient can't be verified, so they never count as booked. */
 export function leadFunnel(leads: ALead[], appts: AAppt[], r: Range) {
   const inP = leads.filter((l) => inRange(l.date, r));
   const byPatient = new Map<string, AAppt[]>();
@@ -550,7 +551,7 @@ export function leadFunnel(leads: ALead[], appts: AAppt[], r: Range) {
     const own = l.patientId ? (byPatient.get(l.patientId) ?? []).filter((a) => a.date >= l.date) : [];
     if (l.patientId) linked++;
     const hasAssessBooking = own.some((a) => isAssessment(a.sessionType) && a.status !== "rescheduled");
-    if (hasAssessBooking || l.status === "assessment_booked" || l.status === "converted") booked++;
+    if (hasAssessBooking) booked++;
     if (own.some((a) => isAssessment(a.sessionType) && a.status === "completed")) attended++;
     const treat = own.filter((a) => !isAssessment(a.sessionType) && a.status === "completed").length;
     if (treat >= 1) started++;

@@ -27,6 +27,13 @@ function parseError(err: unknown): string {
 
 // Clinic-local "today" (dates/hours across the app are stored as Cairo-local strings).
 export const CLINIC_TIMEZONE = "Africa/Cairo";
+/** Clinic-local "YYYY-MM-DDTHH:MM" (for inquiry times and follow-ups). */
+export function clinicNow(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: CLINIC_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .formatToParts(new Date()).reduce<Record<string, string>>((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
 export function clinicToday(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: CLINIC_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
@@ -53,6 +60,7 @@ export const ACQUISITION_SOURCES = [
   { value: "gym",                label: "Gym" },
   { value: "sports_academy",     label: "Sports academy" },
   { value: "existing_patient",   label: "Existing patient" },
+  { value: "walk_in",            label: "Walk-in" },
   { value: "other",              label: "Other" },
 ] as const;
 
@@ -284,35 +292,121 @@ export async function saveBusinessSettings(s: BusinessSettings): Promise<{ error
 // Logged by the front desk when someone asks about treatment. Name/phone are
 // optional and restricted to manager + secretary.
 
+// Statuses staff set by hand. Booked / attended / registered / converted are never
+// set by hand: they're derived from the linked patient's real appointments
+// (see features/inquiries/leadLogic.ts), so they can't contradict the schedule.
 export const LEAD_STATUSES = [
-  { value: "new",               label: "New inquiry" },
-  { value: "assessment_booked", label: "Assessment booked" },
-  { value: "converted",         label: "Became a patient" },
-  { value: "not_interested",    label: "Not interested" },
+  { value: "new",          label: "New" },
+  { value: "contacted",    label: "Contacted — awaiting patient" },
+  { value: "replied",      label: "Patient replied" },
+  { value: "follow_up",    label: "Follow-up due" },
+  { value: "lost",         label: "Lost" },
+  { value: "unresponsive", label: "Unresponsive" },
+  { value: "invalid",      label: "Duplicate / invalid" },
 ] as const;
+export const CLOSED_LEAD_STATUSES = ["lost", "unresponsive", "invalid"];
+
+/** Older inquiries used a 4-value status; translate on read (no data rewrite). */
+const LEGACY_LEAD_STATUS: Record<string, string> = { assessment_booked: "replied", converted: "replied", not_interested: "lost" };
+
+export const LEAD_SOURCES = [
+  { value: "meta_ads",           label: "Meta Ads" },
+  { value: "clinic_instagram",   label: "Organic Instagram (clinic page)" },
+  { value: "personal_instagram", label: "Organic Instagram (personal page)" },
+  { value: "google",             label: "Google / Google Business Profile" },
+  { value: "doctor_referral",    label: "Doctor referral" },
+  { value: "existing_patient",   label: "Existing patient referral" },
+  { value: "gym",                label: "Gym" },
+  { value: "sports_academy",     label: "Sports academy" },
+  { value: "walk_in",            label: "Walk-in" },
+  { value: "other",              label: "Other" },
+  { value: "unknown",            label: "Unknown" },
+] as const;
+
+export const LEAD_CHANNELS = [
+  { value: "whatsapp",     label: "WhatsApp" },
+  { value: "phone",        label: "Phone call" },
+  { value: "instagram_dm", label: "Instagram DM" },
+  { value: "in_person",    label: "In person" },
+  { value: "other",        label: "Other" },
+] as const;
+
+export const LEAD_SERVICES = [
+  "Assessment Session", "Physiotherapy Session", "Recovery Session", "Rehabilitation Session", "Online Assessment Session",
+  "6-session package", "12-session package", "24-session package", "36-session package", "Not sure yet",
+];
+
+export const LEAD_LOSS_REASONS = [
+  { value: "price",          label: "Price too high" },
+  { value: "insurance",      label: "Insurance not accepted / insurance issue" },
+  { value: "location",       label: "Location too far" },
+  { value: "not_interested", label: "No longer interested" },
+  { value: "no_response",    label: "No response after follow-up attempts" },
+  { value: "schedule",       label: "Schedule unavailable" },
+  { value: "other_provider", label: "Chose another provider" },
+  { value: "not_treated",    label: "Condition we don't treat (e.g. neuro)" },
+  { value: "other",          label: "Other" },
+  { value: "unknown",        label: "Unknown" },
+] as const;
+export const LEAD_INVALID_REASONS = [
+  { value: "duplicate",    label: "Duplicate of another inquiry" },
+  { value: "wrong_number", label: "Wrong number" },
+  { value: "not_inquiry",  label: "Not a treatment inquiry" },
+  { value: "other",        label: "Other" },
+] as const;
+
+export interface LeadInteraction {
+  at:      string;   // clinic-local "YYYY-MM-DDTHH:MM"
+  type:    "call" | "message" | "in_person";
+  outcome: "answered" | "no_answer";
+  note:    string;
+  by:      string;   // uid
+  byName:  string;
+  dueAt:   string;   // the follow-up that was due when this was logged ("" if none) — for completion rates
+}
 
 export interface Lead {
   id:        string;
-  date:      string;   // clinic-local YYYY-MM-DD of the inquiry
-  source:    string;   // ACQUISITION_SOURCES value or ""
+  date:      string;   // clinic-local YYYY-MM-DD of the inquiry (kept for queries)
+  time:      string;   // clinic-local HH:MM ("" for older inquiries)
+  source:    string;   // LEAD_SOURCES value; "" / "unknown" = unknown
+  channel:   string;   // LEAD_CHANNELS value; "" = not recorded (older inquiries)
+  campaign:  string;
+  service:   string;
   name:      string;
-  phone:     string;
+  phone:     string;   // as typed (string, leading zero kept)
   note:      string;
-  status:    string;   // LEAD_STATUSES value
-  patientId: string;   // linked patient once they register
+  status:    string;   // LEAD_STATUSES value (manual part of the lifecycle)
+  closeReason: string; // LEAD_LOSS_REASONS / LEAD_INVALID_REASONS value when closed
+  patientId: string;   // linked patient once they register / are matched
+  assignedTo: string; assignedName: string;
+  nextFollowUpAt: string;    // clinic-local "YYYY-MM-DDTHH:MM" or ""
+  interactions: LeadInteraction[];
+  createdBy: string;
   createdAt: Timestamp | null;
 }
 
 export function docToLead(id: string, d: Record<string, unknown>): Lead {
+  const raw = (d.status as string) ?? "new";
   return {
     id,
     date:      (d.date      as string) ?? "",
+    time:      (d.time      as string) ?? "",
     source:    (d.source    as string) ?? "",
+    channel:   (d.channel   as string) ?? "",
+    campaign:  (d.campaign  as string) ?? "",
+    service:   (d.service   as string) ?? "",
     name:      (d.name      as string) ?? "",
-    phone:     (d.phone     as string) ?? "",
+    phone:     String((d.phone as string) ?? ""),
     note:      (d.note      as string) ?? "",
-    status:    (d.status    as string) ?? "new",
+    status:    LEGACY_LEAD_STATUS[raw] ?? raw,
+    closeReason: (d.closeReason as string) ?? (raw === "not_interested" ? "not_interested" : ""),
     patientId: (d.patientId as string) ?? "",
+    assignedTo:   (d.assignedTo   as string) ?? "",
+    assignedName: (d.assignedName as string) ?? "",
+    nextFollowUpAt: (d.nextFollowUpAt as string) ?? "",
+    interactions: Array.isArray(d.interactions) ? (d.interactions as LeadInteraction[]) : [],
+    createdBy: (d.createdBy as string) ?? "",
     createdAt: (d.createdAt as Timestamp | null) ?? null,
   };
 }
@@ -328,8 +422,41 @@ export async function addLead(l: Omit<Lead, "id" | "createdAt">): Promise<{ erro
 }
 
 export async function updateLead(id: string, l: Partial<Omit<Lead, "id" | "createdAt">>): Promise<{ error?: string }> {
-  try { await updateDoc(doc(db, "leads", id), { ...l, updatedAt: serverTimestamp() }); return {}; }
-  catch (err) { return { error: parseError(err) }; }
+  try {
+    // Closing an inquiry stops follow-ups: never keep chasing someone who declined.
+    const extra = l.status && CLOSED_LEAD_STATUSES.includes(l.status) ? { nextFollowUpAt: "" } : {};
+    await updateDoc(doc(db, "leads", id), { ...l, ...extra, updatedAt: serverTimestamp() });
+    return {};
+  } catch (err) { return { error: parseError(err) }; }
+}
+
+/** Atomically appends an interaction and applies the follow-up / status changes chosen
+ *  with it. A first contact moves New → Contacted (no answer) or Patient replied. */
+export async function logLeadInteraction(
+  id: string,
+  it: Omit<LeadInteraction, "dueAt">,
+  changes: { status?: string; nextFollowUpAt?: string; closeReason?: string }
+): Promise<{ error?: string }> {
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, "leads", id);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error("Inquiry not found.");
+      const cur = docToLead(snap.id, snap.data());
+      const autoStatus = cur.status === "new" || cur.status === "contacted" || cur.status === "follow_up"
+        ? (it.outcome === "answered" ? "replied" : "contacted") : cur.status;
+      const status = changes.status ?? autoStatus;
+      const closed = CLOSED_LEAD_STATUSES.includes(status);
+      tx.update(ref, {
+        interactions: [...cur.interactions, { ...it, note: it.note.trim(), dueAt: cur.nextFollowUpAt }].slice(-200),
+        status,
+        nextFollowUpAt: closed ? "" : (changes.nextFollowUpAt ?? ""),
+        ...(changes.closeReason !== undefined ? { closeReason: changes.closeReason } : {}),
+        updatedAt: serverTimestamp(),
+      });
+    });
+    return {};
+  } catch (err) { return { error: parseError(err) }; }
 }
 
 export async function deleteLead(id: string): Promise<{ error?: string }> {
@@ -349,6 +476,20 @@ export const FOLLOW_UP_OUTCOMES = [
 ] as const;
 
 export interface FollowUp { outcome: string; note: string; reviewedFor: string; reviewedAt: string; }
+
+/** Records where a patient came from, only if nothing is recorded yet (the original
+ *  acquisition source is never overwritten by a later inquiry). */
+export async function setPatientSourceIfEmpty(patientId: string, source: string): Promise<{ error?: string }> {
+  if (!source || source === "unknown") return {};
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, "patients", patientId);
+      const snap = await tx.get(ref);
+      if (snap.exists() && !snap.data().acquisitionSource) tx.update(ref, { acquisitionSource: source });
+    });
+    return {};
+  } catch (err) { return { error: parseError(err) }; }
+}
 
 export async function setPatientFollowUp(patientId: string, f: FollowUp): Promise<{ error?: string }> {
   try { await updateDoc(doc(db, "patients", patientId), { followUp: f }); return {}; }
