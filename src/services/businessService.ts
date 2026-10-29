@@ -260,6 +260,8 @@ export interface BusinessSettings {
   // Owner's rule: money paid on packages before payment dates were logged counts as
   // paid on each package's first session date.
   legacyPackagesAtFirstSession: boolean;
+  // Staff attendance & salary rules (Staff tab): required arrival, daily grace, shift length.
+  payrollRules: { requiredArrival: string; graceMinutes: number; shiftHours: number };
 }
 
 export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
@@ -270,6 +272,7 @@ export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
   targetUtilization: null, maxOwnerSharePct: null, monthsAtTarget: 3,
   expenseCategories: DEFAULT_EXPENSE_CATEGORIES, fixedCostsSource: "recorded",
   legacyPackagesAtFirstSession: true,
+  payrollRules: { requiredArrival: "15:00", graceMinutes: 15, shiftHours: 7 },
 };
 
 export function subscribeToBusinessSettings(

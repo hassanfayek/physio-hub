@@ -6,6 +6,7 @@ import { ArrowLeft, Phone, Award, FileBadge, Briefcase, Calendar, Clock, Plus, A
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAuth } from "../../hooks/useAuth";
+import StaffPayrollSection from "./StaffPayrollSection";
 import { formatPhoneDisplay } from "../../utils/phone";
 import type { Physiotherapist } from "../../services/patientService";
 import { subscribeToAppointmentsByMonth, fmtHour12, type Appointment } from "../../services/appointmentService";
@@ -370,6 +371,12 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
           </div>
         </div>
       ))}
+
+      {/* Salary & attendance-based deductions — manager only; same month and records as above */}
+      {user?.role === "clinic_manager" && (
+        <StaffPayrollSection physioId={physio.uid} month={attendanceMonth} monthDays={monthDays}
+          attendance={attendance} uid={user.uid} onEditDay={openEntry} />
+      )}
       </div>
 
       {/* ── Print-only monthly sheet — hidden on screen, shown via @media print ── */}

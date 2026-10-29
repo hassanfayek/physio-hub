@@ -246,6 +246,15 @@ service cloud.firestore {
       allow read, write: if isManager();
     }
 
+    // Staff salary & attendance-based deductions — manager only (attendance itself
+    // stays in staffAttendance, shared with secretaries).
+    match /staffPayroll/{physioId} {
+      allow read, write: if isManager();
+      match /months/{month} {
+        allow read, write: if isManager();
+      }
+    }
+
     // Front-desk inquiry log (may hold a name/phone) — manager + secretary only.
     match /leads/{docId} {
       allow read, update, delete: if isManager() || isSecretary();
