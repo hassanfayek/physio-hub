@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { Plus, Trash2, Info } from "lucide-react";
+import { Plus, Trash2, Info, Pencil, Check, X } from "lucide-react";
 import { db } from "../../firebase";
 import { docToAppointment } from "../../services/appointmentService";
 import { subscribeToAllPatients, type Patient } from "../../services/patientService";
@@ -47,6 +47,19 @@ function Inquiries({ today, patients }: { today: string; patients: Patient[] }) 
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ date: today, source: "", name: "", phone: "", note: "" });
   const [busy, setBusy] = useState(false);
+  // Inline edit of an existing inquiry's date / name / phone / note
+  const [editId, setEditId] = useState<string | null>(null);
+  const [draft, setDraft] = useState({ date: "", name: "", phone: "", note: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const startEdit = (l: Lead) => { setEditId(l.id); setDraft({ date: l.date, name: l.name, phone: l.phone, note: l.note }); setError(null); };
+  const saveEdit = async () => {
+    if (!editId) return;
+    if (!draft.date || draft.date > today) { setError("Choose a valid inquiry date (not in the future)."); return; }
+    setSavingEdit(true);
+    const r = await updateLead(editId, { date: draft.date, name: draft.name.trim(), phone: draft.phone.trim(), note: draft.note.trim() });
+    setSavingEdit(false);
+    if (r.error) setError(r.error); else setEditId(null);
+  };
   useEffect(() => subscribeToLeads(addDays(today, -90), setLeads, (e) => setError(e.message)), [today]);
 
   const add = async () => {
@@ -83,8 +96,29 @@ function Inquiries({ today, patients }: { today: string; patients: Patient[] }) 
             <tbody>
               {leads.map((l) => (
                 <tr key={l.id}>
-                  <td>{fmtDate(l.date)}</td>
-                  <td>{l.name || <span className="fd-muted">—</span>}{l.phone && <div className="fd-muted">{l.phone}</div>}{l.note && <div className="fd-muted">{l.note}</div>}</td>
+                  {editId === l.id ? (
+                    <>
+                      <td><input className="fd-edit" type="date" value={draft.date} max={today} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></td>
+                      <td>
+                        <div className="fd-edit-stack">
+                          <input className="fd-edit" placeholder="Name" value={draft.name} autoFocus onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+                          <input className="fd-edit" placeholder="Phone" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
+                          <input className="fd-edit" placeholder="Note" value={draft.note}
+                            onChange={(e) => setDraft({ ...draft, note: e.target.value })}
+                            onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditId(null); }} />
+                          <div className="fd-edit-actions">
+                            <button className="fd-btn fd-btn-sm" onClick={saveEdit} disabled={savingEdit}><Check size={13} /> {savingEdit ? "Saving…" : "Save"}</button>
+                            <button className="fd-btn-ghost" onClick={() => setEditId(null)} disabled={savingEdit}><X size={13} /> Cancel</button>
+                          </div>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td>{fmtDate(l.date)}</td>
+                      <td>{l.name || <span className="fd-muted">—</span>}{l.phone && <div className="fd-muted">{l.phone}</div>}{l.note && <div className="fd-muted">{l.note}</div>}</td>
+                    </>
+                  )}
                   <td>
                     <select value={l.source} onChange={(e) => updateLead(l.id, { source: e.target.value })}>
                       <option value="">Unknown</option>
@@ -102,7 +136,10 @@ function Inquiries({ today, patients }: { today: string; patients: Patient[] }) 
                         ? { patientId: id, status: "converted" }
                         : { patientId: "", ...(l.status === "converted" ? { status: "new" } : {}) })} />
                   </td>
-                  <td><button className="fd-icon" title="Delete" onClick={() => { if (window.confirm("Delete this inquiry?")) deleteLead(l.id); }}><Trash2 size={13} /></button></td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    {editId !== l.id && <button className="fd-icon edit" title="Edit date, name, phone or note" onClick={() => startEdit(l)}><Pencil size={13} /></button>}{" "}
+                    <button className="fd-icon" title="Delete" onClick={() => { if (window.confirm("Delete this inquiry?")) deleteLead(l.id); }}><Trash2 size={13} /></button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -208,6 +245,12 @@ const CSS = `
 .fd-err { color: #b91c1c; font-size: 12.5px; margin-top: 8px; }
 .fd-icon { background: none; border: 1px solid #e5e0d8; border-radius: 7px; padding: 4px 6px; color: #9a9590; cursor: pointer; }
 .fd-icon:hover { color: #b91c1c; border-color: #fca5a5; background: #fee2e2; }
+.fd-icon.edit:hover { color: #2E8BC0; border-color: #B3DEF0; background: #EAF5FC; }
+.fd-edit { border: 1.5px solid #B3DEF0; border-radius: 8px; padding: 6px 8px; font-family: inherit; font-size: 13px; background: #fff; width: 100%; min-width: 0; box-sizing: border-box; }
+.fd-edit-stack { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
+.fd-edit-actions { display: flex; gap: 6px; }
+.fd-btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 8px; }
+.fd-btn-ghost { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 8px; border: 1.5px solid #e5e0d8; background: #fff; color: #5a5550; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
 .fd-banner { display: flex; gap: 8px; align-items: flex-start; background: #EAF5FC; color: #0C3C60; border: 1px solid #B3DEF0; border-radius: 12px; padding: 10px 12px; font-size: 12.5px; line-height: 1.45; margin-bottom: 12px; }
 .fd-banner svg { flex-shrink: 0; margin-top: 1px; }
 .fd-link { background: none; border: none; color: #2E8BC0; font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; margin-top: 10px; padding: 0; }
