@@ -17,6 +17,7 @@ import { openScheduleDay } from "../../utils/navEvents";
 import { STAGE_LABEL, fmtShort, phoneMatches, type LeadView } from "./leadLogic";
 import type { AAppt } from "../analytics/metrics";
 import type { Staff } from "./shared";
+import ContactButtons from "./ContactButtons";
 
 interface Props {
   view: LeadView;
@@ -70,7 +71,7 @@ export default function InquiryDetail({ view, appts, patients, physios, isManage
           <button className="iq-x" onClick={onClose}><X size={16} /></button>
         </div>
         <div className="iq-sub">
-          <a href={`tel:${lead.phone}`}>{lead.phone}</a> · {fmtShort(`${lead.date}${lead.time ? `T${lead.time}` : ""}`)} ·{" "}
+          {lead.phone} <ContactButtons phone={lead.phone} labels /> · {fmtShort(`${lead.date}${lead.time ? `T${lead.time}` : ""}`)} ·{" "}
           {labelFor(LEAD_SOURCES, lead.source, "Unknown source")} via {labelFor(LEAD_CHANNELS, lead.channel, "unknown channel")}
           {lead.campaign && <> · campaign “{lead.campaign}”</>}
           {lead.service && <> · {lead.service}</>}

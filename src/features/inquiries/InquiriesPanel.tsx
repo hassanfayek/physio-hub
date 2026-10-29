@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { Plus, Search, Phone, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
 import { db } from "../../firebase";
 import { useAuth } from "../../hooks/useAuth";
 import { docToAppointment } from "../../services/appointmentService";
@@ -19,6 +19,7 @@ import InquiryForm from "./InquiryForm";
 import LogInteraction from "./LogInteraction";
 import InquiryDetail from "./InquiryDetail";
 import InquiryAnalyticsView from "./InquiryAnalyticsView";
+import ContactButtons from "./ContactButtons";
 import type { Staff } from "./shared";
 
 type View = "dashboard" | "queue" | "records" | "analytics";
@@ -149,7 +150,7 @@ function Queue({ views, me, onOpen, onLog }: { views: LeadView[]; me: Staff | nu
               </div>
               <div className={`iq-next ${v.followUp}`}>{v.nextAction}</div>
               <div className="iq-qbtns" onClick={(e) => e.stopPropagation()}>
-                <a className="iq-icon" href={`tel:${v.lead.phone}`} title="Call"><Phone size={14} /></a>
+                <ContactButtons phone={v.lead.phone} />
                 {!v.closed && v.stage !== "converted" && <button className="iq-btn sm" onClick={() => onLog(v.lead.id)}>Log</button>}
               </div>
             </div>
@@ -257,7 +258,7 @@ function Records({ views, onOpen, onLog }: { views: LeadView[]; onOpen: (id: str
                 <td className={`iq-next ${v.followUp}`}>{v.lead.nextFollowUpAt && v.followUp !== "none" ? fmtShort(v.lead.nextFollowUpAt) : "—"}</td>
                 <td>{appt(v)}</td>
                 <td>{v.lead.assignedName || "—"}</td>
-                <td onClick={(e) => e.stopPropagation()}>{!v.closed && v.stage !== "converted" && <button className="iq-btn sm" onClick={() => onLog(v.lead.id)}>Log</button>}</td>
+                <td onClick={(e) => e.stopPropagation()}><div className="iq-qbtns"><ContactButtons phone={v.lead.phone} />{!v.closed && v.stage !== "converted" && <button className="iq-btn sm" onClick={() => onLog(v.lead.id)}>Log</button>}</div></td>
               </tr>
             ))}</tbody>
           </table>
@@ -267,7 +268,10 @@ function Records({ views, onOpen, onLog }: { views: LeadView[]; onOpen: (id: str
             <div className="iq-qname">{v.lead.name || "Unnamed"} <span className={`iq-stage s-${v.stage}`}>{STAGE_LABEL[v.stage]}</span></div>
             <div className="iq-qmeta">{v.lead.phone} · {fmtShort(v.lead.date)} · {labelFor(LEAD_SOURCES, v.lead.source, "Unknown")} via {labelFor(LEAD_CHANNELS, v.lead.channel, "?")}</div>
             <div className="iq-qmeta">{v.attempts} attempt{v.attempts === 1 ? "" : "s"}{v.lastContactAt && <> · last {fmtShort(v.lastContactAt)}</>}{v.lead.assignedName && <> · {v.lead.assignedName}</>}</div>
-            <div className={`iq-next ${v.followUp}`}>{v.nextAction}</div>
+            <div className="iq-card-foot">
+              <div className={`iq-next ${v.followUp}`}>{v.nextAction}</div>
+              <div className="iq-qbtns" onClick={(e) => e.stopPropagation()}><ContactButtons phone={v.lead.phone} />{!v.closed && v.stage !== "converted" && <button className="iq-btn sm" onClick={() => onLog(v.lead.id)}>Log</button>}</div>
+            </div>
           </div>
         ))}</div>
         <div className="iq-pager">
@@ -310,7 +314,11 @@ const CSS = `
 .iq-qname { font-weight: 600; font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .iq-qmeta { font-size: 12px; color: #9a9590; margin-top: 2px; overflow-wrap: anywhere; }
 .iq-qbtns { display: flex; gap: 6px; align-items: center; }
-.iq-icon { width: 30px; height: 30px; border-radius: 8px; border: 1.5px solid #e5e0d8; display: inline-flex; align-items: center; justify-content: center; color: #2E8BC0; background: #fff; }
+.iq-contact { display: inline-flex; gap: 6px; }
+.iq-wa { height: 30px; min-width: 30px; padding: 0 7px; border-radius: 8px; border: 1.5px solid #86efac; background: #f0fdf4; color: #15803d; display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 600; text-decoration: none; }
+.iq-wa:hover { background: #dcfce7; }
+.iq-card-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; }
+.iq-icon { min-width: 30px; padding: 0 7px; gap: 4px; font-size: 12px; font-weight: 600; text-decoration: none; width: auto; height: 30px; border-radius: 8px; border: 1.5px solid #e5e0d8; display: inline-flex; align-items: center; justify-content: center; color: #2E8BC0; background: #fff; }
 .iq-next { font-size: 12.5px; font-weight: 600; color: #5a5550; }
 .iq-next.overdue { color: #b91c1c; } .iq-next.today { color: #b45309; }
 .iq-stage { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 100px; background: #f3f4f6; color: #374151; white-space: nowrap; }
