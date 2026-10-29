@@ -15,6 +15,7 @@ import {
   ACQUISITION_SOURCES, LEAD_STATUSES, FOLLOW_UP_OUTCOMES, type Lead, type FollowUp,
 } from "../../services/businessService";
 import { addDays, followUpCandidates, type AAppt } from "./metrics";
+import PatientPicker from "./PatientPicker";
 
 const fmtDate = (d: string) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—";
 type PatientWithFollowUp = Patient & { followUp?: FollowUp };
@@ -55,8 +56,6 @@ function Inquiries({ today, patients }: { today: string; patients: Patient[] }) 
     setBusy(false);
     if (r.error) setError(r.error); else setForm({ ...form, name: "", phone: "", note: "" });
   };
-  const patientName = (id: string) => { const p = patients.find((x) => x.uid === id); return p ? `${p.firstName} ${p.lastName}` : ""; };
-
   return (
     <>
       <div className="fd-card">
@@ -98,10 +97,10 @@ function Inquiries({ today, patients }: { today: string; patients: Patient[] }) 
                     </select>
                   </td>
                   <td>
-                    <select value={l.patientId} onChange={(e) => updateLead(l.id, { patientId: e.target.value, ...(e.target.value ? { status: "converted" } : {}) })}>
-                      <option value="">{l.patientId ? patientName(l.patientId) || "Unknown patient" : "— Not linked —"}</option>
-                      {patients.map((p) => <option key={p.uid} value={p.uid}>{p.firstName} {p.lastName}</option>)}
-                    </select>
+                    <PatientPicker patients={patients} value={l.patientId} suggestName={l.name} suggestPhone={l.phone}
+                      onChange={(id) => updateLead(l.id, id
+                        ? { patientId: id, status: "converted" }
+                        : { patientId: "", ...(l.status === "converted" ? { status: "new" } : {}) })} />
                   </td>
                   <td><button className="fd-icon" title="Delete" onClick={() => { if (window.confirm("Delete this inquiry?")) deleteLead(l.id); }}><Trash2 size={13} /></button></td>
                 </tr>
