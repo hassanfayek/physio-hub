@@ -374,7 +374,7 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
 
       {/* Salary & attendance-based deductions — manager only; same month and records as above */}
       {user?.role === "clinic_manager" && (
-        <StaffPayrollSection physioId={physio.uid} month={attendanceMonth} monthDays={monthDays}
+        <StaffPayrollSection physioId={physio.uid} doctorName={`Dr. ${physio.firstName} ${physio.lastName}`} month={attendanceMonth} monthDays={monthDays}
           attendance={attendance} uid={user.uid} onEditDay={openEntry} />
       )}
       </div>

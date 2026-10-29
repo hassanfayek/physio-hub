@@ -5,7 +5,7 @@
 // attendance records of its own.
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Lock, Unlock, AlertTriangle, Pencil } from "lucide-react";
+import { ChevronDown, Lock, Unlock, AlertTriangle, Pencil, Printer } from "lucide-react";
 import type { AttendanceRecord } from "../../services/attendanceService";
 import { subscribeToBusinessSettings, saveBusinessSettings, DEFAULT_BUSINESS_SETTINGS, type BusinessSettings } from "../../services/businessService";
 import {
@@ -18,6 +18,8 @@ import { db } from "../../firebase";
 import { docToAppointment, fmtHour12, type Appointment } from "../../services/appointmentService";
 import { docToSessionPrice, type SessionPrice } from "../../services/priceService";
 import { openPatientSection } from "../../utils/navEvents";
+import SalarySlip from "./SalarySlip";
+import { printSlip } from "./printSlip";
 
 const STATUS: Record<DayStatus, { label: string; cls: string }> = {
   present: { label: "Recorded", cls: "ok" },
@@ -41,6 +43,7 @@ const parseNum = (s: string) => { const t = s.replace(/[,\s]/g, ""); return t ==
 
 interface Props {
   physioId: string;
+  doctorName: string;
   month: string;                         // the profile's attendance month (YYYY-MM)
   monthDays: string[];
   attendance: AttendanceRecord[];        // this doctor's existing attendance records
@@ -48,7 +51,7 @@ interface Props {
   onEditDay: (date: string) => void;     // opens the profile's existing attendance entry form
 }
 
-export default function StaffPayrollSection({ physioId, month, monthDays, attendance, uid, onEditDay }: Props) {
+export default function StaffPayrollSection({ physioId, doctorName, month, monthDays, attendance, uid, onEditDay }: Props) {
   const [open, setOpen] = useState(true);
   const [pay, setPay] = useState<StaffPay | null>(null);
   const [mdoc, setMdoc] = useState<PayrollMonth>(EMPTY_MONTH);
@@ -146,6 +149,13 @@ export default function StaffPayrollSection({ physioId, month, monthDays, attend
       recoverySessions: savedRec.sessions, recoveryValue: savedRec.totalValue, recoveryCommissionPct: pay?.recoveryCommissionPct ?? null, recoveryCommission: savedRec.valid ? savedRec.commission : 0,
       net: savedTotal,
     }, uid));
+  };
+  const onPrintSlip = () => {
+    if (!saved.valid) return setError(saved.reason ?? "Set the salary and expected working days first.");
+    if (salaryDraft !== null || daysDraft !== null || rulesDraft !== null || pctDraft !== null) return setError("Save or cancel your unsaved changes before printing.");
+    if (driftAfterFinal) return setError("Figures changed after this month was finalized. Reopen and finalize again before printing the slip.");
+    setError(null);
+    printSlip();
   };
   const unmarkedDays = monthDays.filter((d) => !mdoc.marks[d] && !monthAttendance.some((a) => a.date === d));
 
@@ -310,10 +320,18 @@ export default function StaffPayrollSection({ physioId, month, monthDays, attend
           </div>
 
           <div className="pr-final">
+            <button className="pr-btn ghost" disabled={!saved.valid} onClick={onPrintSlip} title="Printable slip for the doctor"><Printer size={13} /> Print salary slip</button>
             {locked && snap ? <span className="pr-muted">Finalized net: <b>{money(snap.net)} EGP</b> ({money(snap.monthlySalary)} − {money(snap.latenessDeduction)} lateness − {money(snap.absenceDeduction)} absence{snap.recoveryCommission ? ` + ${money(snap.recoveryCommission)} recovery commission` : ""})</span>
               : <button className="pr-btn" disabled={busy || !saved.valid} onClick={doFinalize}><Lock size={13} /> Finalize {monthName(month)}</button>}
           </div>
         </div>
+      )}
+      {saved.valid && (
+        <SalarySlip d={{
+          doctorName, month, finalized: locked,
+          monthlySalary: pay!.monthlySalary!, expectedWorkingDays: mdoc.expectedWorkingDays!, rules: savedRules,
+          att: saved, rec: savedRec, net: savedTotal,
+        }} />
       )}
     </div>
   );
@@ -372,6 +390,6 @@ const CSS = `
 .pr-recsum { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 12.5px; color: #5a5550; padding: 8px 0; }
 .pr-recsum b { color: #0C3C60; font-size: 15px; }
 .pr-total td { font-weight: 700; color: #0C3C60; background: #fafaf8; }
-.pr-final { display: flex; justify-content: flex-end; margin-top: 14px; }
+.pr-final { display: flex; justify-content: flex-end; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
 @media print { .pr-wrap { display: none; } }
 `;
