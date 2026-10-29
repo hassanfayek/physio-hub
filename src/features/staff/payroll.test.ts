@@ -78,3 +78,29 @@ describe("different doctors and settings", () => {
     expect(computeMonth({ monthlySalary: 5000, expectedWorkingDays: 0, rules: R, marks: {}, attendance: att }).reason).toMatch(/expected working days/);
   });
 });
+
+import { recoveryCommission, isRecoverySession } from "./payroll";
+
+describe("recovery-session commission", () => {
+  const s = (id: string, price: number | null, date = "2026-10-05") => ({ id, date, hour: 16, patientName: "P", price, paid: true, viaPackage: false });
+  it("only recovery session types count", () => {
+    expect(["Recovery Session", "recovery session", "Physiotherapy Session", "Assessment Session"].map(isRecoverySession)).toEqual([true, true, false, false]);
+  });
+  it("commission = price × percentage, per session and in total", () => {
+    const r = recoveryCommission([s("a", 400), s("b", 350), s("c", 400)], 20);
+    expect(r.rows.map((x) => x.commission)).toEqual([80, 70, 80]);
+    expect([r.sessions, r.totalValue, r.commission]).toEqual([3, 1150, 230]);
+  });
+  it("unpriced sessions are counted but earn nothing until priced", () => {
+    const r = recoveryCommission([s("a", 400), s("b", null)], 25);
+    expect([r.sessions, r.priced, r.unpriced, r.commission]).toEqual([2, 1, 1, 100]);
+  });
+  it("no percentage set → no commission (not guessed); invalid % rejected", () => {
+    expect(recoveryCommission([s("a", 400)], null).commission).toBe(0);
+    expect(recoveryCommission([s("a", 400)], 150).valid).toBe(false);
+  });
+  it("each doctor's own percentage applies", () => {
+    expect(recoveryCommission([s("a", 500)], 10).commission).toBe(50);
+    expect(recoveryCommission([s("a", 500)], 30).commission).toBe(150);
+  });
+});

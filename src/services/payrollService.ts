@@ -14,11 +14,13 @@ function parseError(err: unknown): string {
   return e.message ?? "An unexpected error occurred.";
 }
 
-export interface StaffPay { monthlySalary: number | null; updatedAt: Timestamp | null; }
+export interface StaffPay { monthlySalary: number | null; recoveryCommissionPct: number | null; updatedAt: Timestamp | null; }
 
 export interface PayrollSnapshot {
   monthlySalary: number; expectedWorkingDays: number; rules: PayrollRules;
-  totalCountedLateness: number; latenessDeduction: number; absenceDeduction: number; net: number;
+  totalCountedLateness: number; latenessDeduction: number; absenceDeduction: number;
+  recoverySessions?: number; recoveryValue?: number; recoveryCommissionPct?: number | null; recoveryCommission?: number;
+  net: number;   // salary − deductions + recovery commission
 }
 
 export interface PayrollMonth {
@@ -34,7 +36,11 @@ const EMPTY_MONTH: PayrollMonth = { expectedWorkingDays: null, marks: {}, finali
 export function subscribeToStaffPay(physioId: string, onData: (p: StaffPay) => void, onError?: (e: Error) => void) {
   return onSnapshot(doc(db, "staffPayroll", physioId), (s) => {
     const d = s.exists() ? s.data() : {};
-    onData({ monthlySalary: typeof d.monthlySalary === "number" ? d.monthlySalary : null, updatedAt: (d.updatedAt as Timestamp) ?? null });
+    onData({
+      monthlySalary: typeof d.monthlySalary === "number" ? d.monthlySalary : null,
+      recoveryCommissionPct: typeof d.recoveryCommissionPct === "number" ? d.recoveryCommissionPct : null,
+      updatedAt: (d.updatedAt as Timestamp) ?? null,
+    });
   }, (e) => onError?.(e));
 }
 
@@ -53,6 +59,12 @@ export function subscribeToPayrollMonth(physioId: string, month: string, onData:
 export async function saveMonthlySalary(physioId: string, monthlySalary: number, uid: string): Promise<{ error?: string }> {
   if (!(Number.isFinite(monthlySalary) && monthlySalary >= 0)) return { error: "Enter a valid salary (0 or more)." };
   try { await setDoc(doc(db, "staffPayroll", physioId), { monthlySalary, updatedAt: serverTimestamp(), updatedBy: uid }, { merge: true }); return {}; }
+  catch (err) { return { error: parseError(err) }; }
+}
+
+export async function saveCommissionPct(physioId: string, pct: number | null, uid: string): Promise<{ error?: string }> {
+  if (pct !== null && !(Number.isFinite(pct) && pct >= 0 && pct <= 100)) return { error: "Commission must be between 0 and 100%." };
+  try { await setDoc(doc(db, "staffPayroll", physioId), { recoveryCommissionPct: pct, updatedAt: serverTimestamp(), updatedBy: uid }, { merge: true }); return {}; }
   catch (err) { return { error: parseError(err) }; }
 }
 

@@ -112,3 +112,34 @@ export function computeMonth(input: {
 
 /** Money for display: 2 decimals, thousands separators. */
 export const money = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// ─── Recovery-session commission ──────────────────────────────────────────────
+// The doctor earns `pct`% of each completed Recovery Session's price that month.
+// A session without a price earns nothing until it's priced (flagged, not guessed).
+
+export const isRecoverySession = (sessionType: string) => /recovery/i.test(sessionType ?? "");
+
+export interface RecoverySessionIn {
+  id: string; date: string; hour: number; patientName: string; patientId?: string;
+  price: number | null;   // the session's charge; null = not priced yet
+  paid: boolean; viaPackage: boolean;
+}
+export interface RecoveryRow extends RecoverySessionIn { commission: number; }
+export interface RecoveryResult {
+  pct: number | null; valid: boolean;
+  rows: RecoveryRow[]; sessions: number; priced: number; unpriced: number;
+  totalValue: number; commission: number;
+}
+
+export function recoveryCommission(sessions: RecoverySessionIn[], pct: number | null): RecoveryResult {
+  const valid = pct !== null && pct >= 0 && pct <= 100;
+  const rate = valid ? pct! / 100 : 0;
+  const rows = [...sessions].sort((a, b) => a.date.localeCompare(b.date) || a.hour - b.hour)
+    .map((s) => ({ ...s, commission: s.price !== null ? s.price * rate : 0 }));
+  const priced = rows.filter((r) => r.price !== null);
+  return {
+    pct, valid, rows, sessions: rows.length, priced: priced.length, unpriced: rows.length - priced.length,
+    totalValue: priced.reduce((s, r) => s + (r.price ?? 0), 0),
+    commission: rows.reduce((s, r) => s + r.commission, 0),
+  };
+}

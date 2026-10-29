@@ -9,10 +9,15 @@ import { ChevronDown, Lock, Unlock, AlertTriangle, Pencil } from "lucide-react";
 import type { AttendanceRecord } from "../../services/attendanceService";
 import { subscribeToBusinessSettings, saveBusinessSettings, DEFAULT_BUSINESS_SETTINGS, type BusinessSettings } from "../../services/businessService";
 import {
-  subscribeToStaffPay, subscribeToPayrollMonth, saveMonthlySalary, saveExpectedDays, setDayMark, finalizeMonth, reopenMonth,
+  subscribeToStaffPay, subscribeToPayrollMonth, saveMonthlySalary, saveExpectedDays, saveCommissionPct, setDayMark, finalizeMonth, reopenMonth,
   EMPTY_MONTH, type StaffPay, type PayrollMonth,
 } from "../../services/payrollService";
-import { computeMonth, money, toMinutes, type DayMark, type DayStatus, type PayrollRules } from "./payroll";
+import { computeMonth, recoveryCommission, isRecoverySession, money, toMinutes, type DayMark, type DayStatus, type PayrollRules, type RecoverySessionIn } from "./payroll";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { db } from "../../firebase";
+import { docToAppointment, fmtHour12, type Appointment } from "../../services/appointmentService";
+import { docToSessionPrice, type SessionPrice } from "../../services/priceService";
+import { openPatientSection } from "../../utils/navEvents";
 
 const STATUS: Record<DayStatus, { label: string; cls: string }> = {
   present: { label: "Recorded", cls: "ok" },
@@ -54,8 +59,23 @@ export default function StaffPayrollSection({ physioId, month, monthDays, attend
   useEffect(() => subscribeToBusinessSettings(setSettings, () => {}), []);
   const savedRules: PayrollRules = settings.payrollRules ?? DEFAULT_BUSINESS_SETTINGS.payrollRules;
 
+  // This doctor's appointments and the clinic's session charges for the month (live).
+  const [monthAppts, setMonthAppts] = useState<Appointment[]>([]);
+  const [monthCharges, setMonthCharges] = useState<SessionPrice[]>([]);
+  useEffect(() => {
+    const from = `${month}-01`, to = `${month}-31`;
+    const u1 = onSnapshot(query(collection(db, "appointments"), where("date", ">=", from), where("date", "<=", to)),
+      (snap) => setMonthAppts(snap.docs.map((d) => docToAppointment(d.id, d.data())).filter((a) => a.physioId === physioId)),
+      (e) => setError(e.message));
+    const u2 = onSnapshot(query(collection(db, "patientSessionPrices"), where("date", ">=", from), where("date", "<=", to)),
+      (snap) => setMonthCharges(snap.docs.map((d) => docToSessionPrice(d.id, d.data()))),
+      (e) => setError(e.message));
+    return () => { u1(); u2(); };
+  }, [physioId, month]);
+
   // Drafts drive the calculation immediately; Save persists them. null = not being edited.
   const [salaryDraft, setSalaryDraft] = useState<string | null>(null);
+  const [pctDraft, setPctDraft] = useState<string | null>(null);
   const [daysDraft, setDaysDraft] = useState<string | null>(null);
   const [rulesDraft, setRulesDraft] = useState<{ requiredArrival: string; graceMinutes: string; shiftHours: string } | null>(null);
   const [markDate, setMarkDate] = useState(""); const [markType, setMarkType] = useState<DayMark>("absent");
@@ -75,9 +95,28 @@ export default function StaffPayrollSection({ physioId, month, monthDays, attend
   });
   // The saved values alone (no drafts) — used to finalize and to detect changes after finalizing.
   const saved = computeMonth({ monthlySalary: pay?.monthlySalary ?? null, expectedWorkingDays: mdoc.expectedWorkingDays, rules: savedRules, attendance: monthAttendance, marks: mdoc.marks });
+  // Completed Recovery Sessions this month, each priced from its session charge.
+  const recoveryIn: RecoverySessionIn[] = useMemo(() => {
+    const byAppt = new Map<string, SessionPrice>();
+    for (const c of monthCharges) {
+      const cur = byAppt.get(c.appointmentId);
+      if (!cur || (c.paid && !cur.paid)) byAppt.set(c.appointmentId, c);   // prefer the paid one if duplicated
+    }
+    return monthAppts.filter((a) => a.status === "completed" && isRecoverySession(a.sessionType)).map((a) => {
+      const c = byAppt.get(a.id);
+      return { id: a.id, date: a.date, hour: Number(a.hour), patientName: a.patientName || "Walk-in", price: c ? Number(c.amount) || 0 : null,
+        paid: !!c?.paid, viaPackage: !!c?.packageId, patientId: a.patientId };
+    });
+  }, [monthAppts, monthCharges]);
+  const pct = pctDraft !== null ? parseNum(pctDraft) : pay?.recoveryCommissionPct ?? null;
+  const rec = recoveryCommission(recoveryIn, pct === null || Number.isNaN(pct) ? null : pct);
+  const savedRec = recoveryCommission(recoveryIn, pay?.recoveryCommissionPct ?? null);
+  const total = r.net + (rec.valid ? rec.commission : 0);
+  const savedTotal = saved.net + (savedRec.valid ? savedRec.commission : 0);
+
   const locked = mdoc.finalized;
   const snap = mdoc.snapshot;
-  const driftAfterFinal = locked && snap && saved.valid && Math.abs(saved.net - snap.net) > 0.005;
+  const driftAfterFinal = locked && snap && saved.valid && Math.abs(savedTotal - snap.net) > 0.005;
 
   const run = async (fn: () => Promise<{ error?: string }>, after?: () => void) => {
     setBusy(true); setError(null);
@@ -85,6 +124,7 @@ export default function StaffPayrollSection({ physioId, month, monthDays, attend
     setBusy(false);
     if (res.error) setError(res.error); else after?.();
   };
+  const savePct = () => { const v = parseNum(pctDraft ?? ""); if (Number.isNaN(v)) return setError("Enter the commission as a number."); run(() => saveCommissionPct(physioId, v, uid), () => setPctDraft(null)); };
   const saveSalary = () => { const v = parseNum(salaryDraft ?? ""); if (v === null || Number.isNaN(v)) return setError("Enter the salary as a number."); run(() => saveMonthlySalary(physioId, v, uid), () => setSalaryDraft(null)); };
   const saveDays = () => { const v = parseNum(daysDraft ?? ""); run(() => saveExpectedDays(physioId, month, v === null || Number.isNaN(v) ? null : v), () => setDaysDraft(null)); };
   const saveRules = () => {
@@ -97,11 +137,14 @@ export default function StaffPayrollSection({ physioId, month, monthDays, attend
   };
   const doFinalize = () => {
     if (!saved.valid) return setError(saved.reason ?? "Can't finalize yet.");
-    if (salaryDraft !== null || daysDraft !== null || rulesDraft !== null) return setError("Save or cancel your unsaved changes first.");
-    if (!window.confirm(`Finalize ${monthName(month)}? Net salary ${money(saved.net)} EGP will be locked until you reopen the month.`)) return;
+    if (salaryDraft !== null || daysDraft !== null || rulesDraft !== null || pctDraft !== null) return setError("Save or cancel your unsaved changes first.");
+    if (savedRec.unpriced > 0 && !window.confirm(`${savedRec.unpriced} recovery session(s) have no price yet and earn no commission. Finalize anyway?`)) return;
+    if (!window.confirm(`Finalize ${monthName(month)}? Net salary ${money(savedTotal)} EGP will be locked until you reopen the month.`)) return;
     run(() => finalizeMonth(physioId, month, {
       monthlySalary: pay!.monthlySalary!, expectedWorkingDays: mdoc.expectedWorkingDays!, rules: savedRules,
-      totalCountedLateness: saved.totalCountedLateness, latenessDeduction: saved.latenessDeduction, absenceDeduction: saved.absenceDeduction, net: saved.net,
+      totalCountedLateness: saved.totalCountedLateness, latenessDeduction: saved.latenessDeduction, absenceDeduction: saved.absenceDeduction,
+      recoverySessions: savedRec.sessions, recoveryValue: savedRec.totalValue, recoveryCommissionPct: pay?.recoveryCommissionPct ?? null, recoveryCommission: savedRec.valid ? savedRec.commission : 0,
+      net: savedTotal,
     }, uid));
   };
   const unmarkedDays = monthDays.filter((d) => !mdoc.marks[d] && !monthAttendance.some((a) => a.date === d));
@@ -120,7 +163,7 @@ export default function StaffPayrollSection({ physioId, month, monthDays, attend
           {locked && (
             <div className="pr-alert info"><Lock size={14} />
               <div>This month was finalized{mdoc.finalizedAt ? ` on ${mdoc.finalizedAt.toDate().toLocaleDateString("en-GB")}` : ""}. Inputs are locked and the finalized figures are kept.
-                {driftAfterFinal && <> <b>Attendance has changed since:</b> recalculated net is {money(saved.net)} EGP vs finalized {money(snap!.net)} EGP. Reopen the month to update it.</>}
+                {driftAfterFinal && <> <b>Attendance or sessions have changed since:</b> recalculated net is {money(savedTotal)} EGP vs finalized {money(snap!.net)} EGP. Reopen the month to update it.</>}
                 <button className="pr-link" onClick={() => { if (window.confirm("Reopen this month? The finalized figures will be replaced when you finalize again.")) run(() => reopenMonth(physioId, month)); }}><Unlock size={12} /> Reopen month</button>
               </div>
             </div>
@@ -168,13 +211,14 @@ export default function StaffPayrollSection({ physioId, month, monthDays, attend
                 <K l="Counted lateness" v={fmtMin(r.totalCountedLateness)} n={`After ${rules.graceMinutes} min daily grace`} />
                 <K l="Lateness deduction" v={`${money(r.latenessDeduction)} EGP`} bad={r.latenessDeduction > 0} />
                 <K l="Absence deduction" v={`${money(r.absenceDeduction)} EGP`} bad={r.absenceDeduction > 0} n={r.confirmedAbsences ? `${r.confirmedAbsences} × ${money(r.dailyRate)}` : undefined} />
-                <K l="Net salary" v={`${money(r.net)} EGP`} strong n="Before other adjustments" />
+                <K l="Recovery commission" v={rec.valid ? `${money(rec.commission)} EGP` : "% not set"} n={rec.valid ? `${rec.pct}% of ${money(rec.totalValue)} · ${rec.sessions} session${rec.sessions === 1 ? "" : "s"}` : `${rec.sessions} session${rec.sessions === 1 ? "" : "s"} this month`} />
+                <K l="Net salary" v={`${money(total)} EGP`} strong n={`Salary − deductions${rec.valid ? " + recovery commission" : ""}`} />
               </div>
               <div className="pr-rates">
                 Daily rate {money(r.dailyRate)} = {money(salary as number)} ÷ {expected} days · Hourly {money(r.hourlyRate)} = daily ÷ {rules.shiftHours} h ·
                 Per minute {r.minuteRate.toFixed(4)} = hourly ÷ 60 · Lateness deduction = {r.totalCountedLateness} counted min × {r.minuteRate.toFixed(4)}
               </div>
-              {(salaryDraft !== null || daysDraft !== null || rulesDraft !== null) && <div className="pr-alert info">Showing your unsaved changes. Save to keep them.</div>}
+              {(salaryDraft !== null || daysDraft !== null || rulesDraft !== null || pctDraft !== null) && <div className="pr-alert info">Showing your unsaved changes. Save to keep them.</div>}
             </>
           )}
 
@@ -228,8 +272,45 @@ export default function StaffPayrollSection({ physioId, month, monthDays, attend
             </div>
           )}
 
+          <div className="pr-subhead">Recovery sessions: commission</div>
+          <div className="pr-inputs" style={{ marginBottom: 10 }}>
+            <label className="pr-field"><span>Commission on recovery sessions (%)</span>
+              <div className="pr-row">
+                <input inputMode="decimal" disabled={locked} value={pctDraft ?? (pay?.recoveryCommissionPct ?? "").toString()} placeholder="Not set" onChange={(e) => setPctDraft(e.target.value)} />
+                {pctDraft !== null && <><button className="pr-btn" disabled={busy} onClick={savePct}>Save</button><button className="pr-btn ghost" onClick={() => setPctDraft(null)}>Cancel</button></>}
+              </div>
+              <small>This doctor only. Counts completed Recovery Sessions they did in {monthName(month)}, priced from each session's charge.</small></label>
+            <div className="pr-recsum">
+              <div><b>{rec.sessions}</b> session{rec.sessions === 1 ? "" : "s"} done</div>
+              <div><b>{money(rec.totalValue)}</b> EGP total value</div>
+              <div><b>{rec.valid ? money(rec.commission) : "—"}</b> EGP commission</div>
+              {rec.unpriced > 0 && <div className="pr-bad">{rec.unpriced} not priced yet (no commission)</div>}
+            </div>
+          </div>
+          {rec.valid === false && pct !== null && !Number.isNaN(pct) && <div className="pr-alert bad"><AlertTriangle size={14} /> Commission must be between 0 and 100%.</div>}
+          <div className="pr-table-wrap" style={{ marginBottom: 6 }}>
+            <table className="pr-table">
+              <thead><tr><th>Date</th><th>Time</th><th>Patient</th><th className="r">Session price</th><th>Patient paid</th><th className="r">Commission</th></tr></thead>
+              <tbody>
+                {rec.rows.length === 0 ? <tr><td colSpan={6} className="pr-empty">No completed Recovery Sessions for this doctor in {monthName(month)}.</td></tr> : rec.rows.map((x) => (
+                  <tr key={x.id}>
+                    <td>{fmtDay(x.date)}</td>
+                    <td>{fmtHour12(x.hour)}</td>
+                    <td>{x.patientName}</td>
+                    <td className="r">{x.price === null
+                      ? <button className="pr-link" onClick={() => x.patientId && openPatientSection(x.patientId, "pricing")}>Not priced: set price</button>
+                      : <>{money(x.price)}{x.viaPackage && <span className="pr-muted"> (package)</span>}</>}</td>
+                    <td>{x.price === null ? "—" : x.paid ? <span className="pr-status ok">Paid</span> : <span className="pr-status warn">Unpaid</span>}</td>
+                    <td className="r">{rec.valid && x.price !== null ? money(x.commission) : "—"}</td>
+                  </tr>
+                ))}
+                {rec.rows.length > 0 && <tr className="pr-total"><td colSpan={3}>Total</td><td className="r">{money(rec.totalValue)}</td><td /><td className="r">{rec.valid ? money(rec.commission) : "—"}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+
           <div className="pr-final">
-            {locked && snap ? <span className="pr-muted">Finalized net: <b>{money(snap.net)} EGP</b> ({money(snap.monthlySalary)} − {money(snap.latenessDeduction)} lateness − {money(snap.absenceDeduction)} absence)</span>
+            {locked && snap ? <span className="pr-muted">Finalized net: <b>{money(snap.net)} EGP</b> ({money(snap.monthlySalary)} − {money(snap.latenessDeduction)} lateness − {money(snap.absenceDeduction)} absence{snap.recoveryCommission ? ` + ${money(snap.recoveryCommission)} recovery commission` : ""})</span>
               : <button className="pr-btn" disabled={busy || !saved.valid} onClick={doFinalize}><Lock size={13} /> Finalize {monthName(month)}</button>}
           </div>
         </div>
@@ -287,6 +368,10 @@ const CSS = `
 .pr-status.bad { background: #fee2e2; color: #991b1b; } .pr-status.info { background: #EAF5FC; color: #0C3C60; } .pr-status.muted { background: #f3f4f6; color: #4b5563; }
 .pr-bad { color: #b91c1c; font-weight: 600; } .pr-muted { color: #9a9590; font-size: 12px; }
 .pr-markrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; font-size: 12.5px; color: #5a5550; }
+.pr-subhead { font-size: 13px; font-weight: 700; color: #0C3C60; margin: 18px 0 8px; padding-top: 14px; border-top: 1px solid #f0ede8; }
+.pr-recsum { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 12.5px; color: #5a5550; padding: 8px 0; }
+.pr-recsum b { color: #0C3C60; font-size: 15px; }
+.pr-total td { font-weight: 700; color: #0C3C60; background: #fafaf8; }
 .pr-final { display: flex; justify-content: flex-end; margin-top: 14px; }
 @media print { .pr-wrap { display: none; } }
 `;
