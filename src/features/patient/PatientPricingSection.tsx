@@ -21,6 +21,7 @@ import {
 } from "../../services/priceService";
 import {
   subscribeToPatientAllAppointments,
+  updateAppointmentDetails,
   fmtHour12,
   SESSION_TYPES,
   type Appointment,
@@ -220,8 +221,21 @@ export default function PatientPricingSection({
       packageId:   sessionPriceForm.packageId,
       notes:       (sessionPriceForm.notes.trim() + discountNote).trim(),
     }, { id: shownCharge?.id });
+    if ("error" in result && result.error) { setSessionPriceSaving(false); setSessionPriceError(result.error); return; }
+    // Who treated the session and its type belong to the appointment (schedule, the
+    // physio's patient list and analytics read them there), so apply changes to it too.
+    const newType   = sessionPriceForm.sessionType || sessionPriceAppt.sessionType;
+    const newPhysio = sessionPriceForm.physioName  || sessionPriceAppt.physioName;
+    if (newType !== sessionPriceAppt.sessionType || newPhysio !== sessionPriceAppt.physioName) {
+      const match = physios.find((p) => `Dr. ${p.firstName} ${p.lastName}` === newPhysio);
+      const { error } = await updateAppointmentDetails(sessionPriceAppt.id, {
+        physioId:    match ? match.uid : sessionPriceAppt.physioId,
+        physioName:  newPhysio,
+        sessionType: newType,
+      });
+      if (error) { setSessionPriceSaving(false); setSessionPriceError(`Price saved, but the session's physio/type couldn't be updated: ${error}`); return; }
+    }
     setSessionPriceSaving(false);
-    if ("error" in result && result.error) { setSessionPriceError(result.error); return; }
     // If linked to a package, increment sessionsUsed
     if (sessionPriceForm.packageId) {
       const pkg = packages.find((p) => p.id === sessionPriceForm.packageId);
@@ -559,6 +573,7 @@ export default function PatientPricingSection({
 
         /* Discount row */
         .pps-discount-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .pps-mismatch { margin-top: 3px; font-size: 11px; font-weight: 600; color: #b45309; }
         .pps-other { margin-top: 16px; border: 1.5px solid #fcd34d; background: #fffbeb; border-radius: 14px; padding: 14px; }
         .pps-other-title { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; color: #92400e; margin-bottom: 4px; }
         .pps-other-help { font-size: 12.5px; color: #78350f; line-height: 1.45; margin-bottom: 10px; }
@@ -786,8 +801,14 @@ export default function PatientPricingSection({
                     return (
                       <tr key={appt.id}>
                         <td style={{ whiteSpace: "nowrap", color: "#5a5550" }}>{appt.date}</td>
-                        <td><div className="pps-desc">{appt.sessionType || "—"}</div></td>
-                        <td style={{ color: "#5a5550", fontSize: 13 }}>{appt.physioName || "—"}</td>
+                        <td>
+                          <div className="pps-desc">{appt.sessionType || "—"}</div>
+                          {sp && sp.sessionType && sp.sessionType !== appt.sessionType && <div className="pps-mismatch" title="Open Edit and Save to apply it to the session">Charge says: {sp.sessionType}</div>}
+                        </td>
+                        <td style={{ color: "#5a5550", fontSize: 13 }}>
+                          {appt.physioName || "—"}
+                          {sp && sp.physioName && sp.physioName !== appt.physioName && <div className="pps-mismatch" title="Open Edit and Save to apply it to the session">Charge says: {sp.physioName}</div>}
+                        </td>
                         <td>
                           {sp ? <span className="pps-amount">{fmt(sp.amount)}</span> : <span className="pps-no-price">Not set</span>}
                           {sp?.notes && <div className="pps-notes">{sp.notes}</div>}
