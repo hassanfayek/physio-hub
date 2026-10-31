@@ -3,6 +3,7 @@
 // Required: phone, date/time, source, channel, status. Everything else optional;
 // the reason field only appears when the status is a closed one.
 
+import DateTimeInput12 from "../../components/DateTimeInput12";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, AlertTriangle } from "lucide-react";
@@ -95,7 +96,7 @@ export default function InquiryForm({ existing, leads, patients, staff, me, camp
 
         <div className="iq-grid">
           <label className="iq-field"><span>Inquiry date & time *</span>
-            <input type="datetime-local" value={f.at} max={now} onChange={(e) => set("at", e.target.value)} /></label>
+            <DateTimeInput12 value={f.at} maxDate={now.slice(0, 10)} defaultTime={now.slice(11, 16)} onChange={(v) => set("at", v)} /></label>
           <label className="iq-field"><span>Status *</span>
             <select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value, closeReason: "" })}>
               {LEAD_STATUSES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -134,7 +135,7 @@ export default function InquiryForm({ existing, leads, patients, staff, me, camp
             </select></label>
           {!closed && (
             <div className="iq-field"><span>Next follow-up</span>
-              <input type="datetime-local" value={f.nextFollowUpAt} onChange={(e) => set("nextFollowUpAt", e.target.value)} />
+              <DateTimeInput12 value={f.nextFollowUpAt} onChange={(v) => set("nextFollowUpAt", v)} />
               <div className="iq-chips">
                 {[["Tomorrow", 1], ["In 3 days", 3], ["In a week", 7]].map(([l, d]) => (
                   <button key={l as string} type="button" className="iq-chip" onClick={() => set("nextFollowUpAt", addDaysTo(now, d as number))}>{l}</button>

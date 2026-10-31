@@ -4,6 +4,7 @@
 // through the profile's existing attendance entry form. Nothing here creates
 // attendance records of its own.
 
+import TimeInput12 from "../../components/TimeInput12";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Lock, Unlock, AlertTriangle, Pencil, Printer } from "lucide-react";
 import type { AttendanceRecord } from "../../services/attendanceService";
@@ -195,7 +196,7 @@ export default function StaffPayrollSection({ physioId, doctorName, month, month
             <div className="pr-field"><span>Rules (all doctors)</span>
               {rulesDraft ? (
                 <div className="pr-row wrap">
-                  <input type="time" value={rulesDraft.requiredArrival} onChange={(e) => setRulesDraft({ ...rulesDraft, requiredArrival: e.target.value })} />
+                  <TimeInput12 value={rulesDraft.requiredArrival} onChange={(v) => setRulesDraft({ ...rulesDraft, requiredArrival: v })} />
                   <input inputMode="numeric" style={{ width: 70 }} value={rulesDraft.graceMinutes} onChange={(e) => setRulesDraft({ ...rulesDraft, graceMinutes: e.target.value })} title="Grace minutes" />
                   <span className="pr-unit">min grace</span>
                   <input inputMode="decimal" style={{ width: 60 }} value={rulesDraft.shiftHours} onChange={(e) => setRulesDraft({ ...rulesDraft, shiftHours: e.target.value })} title="Shift hours" />

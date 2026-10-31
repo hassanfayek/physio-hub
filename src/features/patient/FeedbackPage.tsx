@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { hour12Label } from "../../utils/time";
 import { useAuth } from "../../hooks/useAuth";
 import type { PatientProfile } from "../../services/authService";
 import {
@@ -44,7 +45,7 @@ function fmtDate(dateStr: string): string {
 }
 
 function fmtHour(h: number): string {
-  return `${String(h).padStart(2,"0")}:00`;
+  return hour12Label(h);
 }
 
 const DIFFICULTY_OPTIONS = [

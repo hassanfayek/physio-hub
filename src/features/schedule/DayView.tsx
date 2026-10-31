@@ -695,7 +695,7 @@ export default function DayView({
           <div>
             <div className="dv-title">{displayDate}</div>
             <div className="dv-sub">
-              {loading ? "Loading…" : `${totalToday} appointment${totalToday !== 1 ? "s" : ""} today · ${settings.openingHour}:00 – ${settings.closingHour}:00`}
+              {loading ? "Loading…" : `${totalToday} appointment${totalToday !== 1 ? "s" : ""} today · ${fmtHour12(settings.openingHour)} – ${fmtHour12(settings.closingHour)}`}
             </div>
           </div>
           <div style={{ display: "flex", gap: 10 }}>

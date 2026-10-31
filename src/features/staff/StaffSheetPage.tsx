@@ -1,5 +1,6 @@
 // FILE: src/features/staff/StaffSheetPage.tsx
 
+import TimeInput12 from "../../components/TimeInput12";
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, Phone, Award, FileBadge, Briefcase, Calendar, Clock, Plus, AlertTriangle, Printer } from "lucide-react";
@@ -421,9 +422,9 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
               ))}
             </select>
             <label className="sf-modal-label">Check-In</label>
-            <input type="time" className="sf-modal-input" value={entryCheckIn} onChange={(e) => setEntryCheckIn(e.target.value)} />
+            <TimeInput12 allowEmpty value={entryCheckIn} onChange={setEntryCheckIn} />
             <label className="sf-modal-label">Check-Out</label>
-            <input type="time" className="sf-modal-input" value={entryCheckOut} onChange={(e) => setEntryCheckOut(e.target.value)} />
+            <TimeInput12 allowEmpty value={entryCheckOut} onChange={setEntryCheckOut} />
             <div className="sf-modal-actions">
               <button className="sf-modal-btn-cancel" onClick={() => setShowEntry(false)}>Cancel</button>
               <button className="sf-modal-btn-save" disabled={entrySaving} onClick={handleSaveAttendance}>

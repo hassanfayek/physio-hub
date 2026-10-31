@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Settings, Calendar, Clock, ChevronLeft, ChevronRight, Info } from "lucide-react";
 import {
   subscribeToClinicSettings,
+  fmtHour12,
   saveClinicSettings,
   toDateStr,
   getWeekStart,
@@ -95,21 +96,23 @@ function SettingsPanel({ settings, onSaved }: SettingsPanelProps) {
         <div className="sp-row2">
           <div className="sp-field">
             <label className="sp-label">Opening Hour</label>
-            <input
+            <select
               className="sp-input"
-              type="number" min={0} max={23}
               value={form.openingHour}
               onChange={(e) => setForm((f) => ({ ...f, openingHour: +e.target.value }))}
-            />
+            >
+              {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{fmtHour12(h)}</option>)}
+            </select>
           </div>
           <div className="sp-field">
             <label className="sp-label">Closing Hour</label>
-            <input
+            <select
               className="sp-input"
-              type="number" min={1} max={24}
               value={form.closingHour}
               onChange={(e) => setForm((f) => ({ ...f, closingHour: +e.target.value }))}
-            />
+            >
+              {Array.from({ length: 24 }, (_, i) => i + 1).map((h) => <option key={h} value={h}>{h === 24 ? "12:00 AM (midnight)" : fmtHour12(h)}</option>)}
+            </select>
           </div>
         </div>
         <button className="sp-save" onClick={handleSave} disabled={saving}>

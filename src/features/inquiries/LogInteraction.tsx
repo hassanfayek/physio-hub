@@ -2,6 +2,7 @@
 // One-step "Log interaction": what happened, a short note, and when to follow up.
 // Records the attempt only — it never contacts anyone.
 
+import DateTimeInput12 from "../../components/DateTimeInput12";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Phone, MessageCircle, User } from "lucide-react";
@@ -53,7 +54,7 @@ export default function LogInteraction({ view, me, onClose }: { view: LeadView; 
 
         {!close && (
           <div className="iq-field"><span>Next follow-up</span>
-            <input type="datetime-local" value={next} onChange={(e) => setNext(e.target.value)} />
+            <DateTimeInput12 value={next} onChange={setNext} />
             <div className="iq-chips">
               {[["Tomorrow", 1], ["In 3 days", 3], ["In a week", 7]].map(([l, d]) => (
                 <button key={l as string} type="button" className="iq-chip" onClick={() => setNext(addDaysTo(now, d as number))}>{l}</button>

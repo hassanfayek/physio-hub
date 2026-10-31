@@ -8,6 +8,7 @@
 
 import type { AAppt } from "../analytics/metrics";
 import { phoneKey } from "../analytics/patientSearch";
+import { time12, dateTime12 } from "../../utils/time";
 import { CLOSED_LEAD_STATUSES, type Lead } from "../../services/businessService";
 
 export const isAssessment = (t: string) => /assessment/i.test(t);
@@ -96,7 +97,7 @@ function nextActionFor(v: LeadView): string {
   if (v.stage === "converted" || v.closed) return "—";
   if (v.followUp === "overdue") return `Follow up (was due ${fmtShort(fu)})`;
   if (v.needsFirstResponse) return "First reply";
-  if (v.followUp === "today") return `Follow up today ${fu.slice(11, 16)}`;
+  if (v.followUp === "today") return `Follow up today ${time12(fu.slice(11, 16))}`;
   if (v.stage === "booked" && v.nextAppt) return `Appointment ${fmtShort(v.nextAppt.date)}`;
   if (v.stage === "no_show") return "Rebook (missed appointment)";
   if (v.stage === "attended") return "Offer treatment plan";
@@ -106,13 +107,8 @@ function nextActionFor(v: LeadView): string {
   return fu ? `Follow up ${fmtShort(fu)}` : "—";
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-export function fmtShort(dt: string): string {
-  if (!dt) return "";
-  const [y, m, d] = dt.slice(0, 10).split("-").map(Number);
-  if (!y) return dt;
-  return `${d} ${MONTHS[m - 1]}${dt.length > 10 ? ` ${dt.slice(11, 16)}` : ""}`;
-}
+/** "2026-10-29T15:05" → "29 Oct 3:05 PM" (12-hour). */
+export const fmtShort = (dt: string): string => dateTime12(dt);
 
 // ─── Work queue ───────────────────────────────────────────────────────────────
 

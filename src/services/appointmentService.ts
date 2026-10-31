@@ -16,6 +16,7 @@ import {
   serverTimestamp,
   type Timestamp,
 } from "firebase/firestore";
+import { hour12Label } from "../utils/time";
 import { db } from "../firebase";
 import { notifyStaff } from "./notificationService";
 
@@ -320,15 +321,13 @@ export function getWeekStart(d: Date): Date {
   return monday;
 }
 
-/** Format hour as "09:00" */
+/** Hour for display — always 12-hour ("3:00 PM"); 24 (midnight close) → "12:00 AM". */
 export function fmtHour(h: number): string {
-  return `${String(h).padStart(2, "0")}:00`;
+  return hour12Label(h);
 }
 
 export function fmtHour12(h: number): string {
-  const period = h < 12 ? "AM" : "PM";
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return `${hour12}:00 ${period}`;
+  return hour12Label(h);
 }
 
 // ─── Realtime: upcoming appointments for a patient ───────────────────────────
