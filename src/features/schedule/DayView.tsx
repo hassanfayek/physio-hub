@@ -12,6 +12,7 @@ import {
   assignAppointmentToPatient,
   updateAppointmentDetails,
   fmtHour12,
+  toDateStr,
   SESSION_TYPES,
   type Appointment,
   type ClinicSettings,
@@ -384,9 +385,6 @@ export default function DayView({
     showToast(`✓ Appointment assigned to ${pt.firstName} ${pt.lastName}`);
   };
 
-  const displayDate = new Date(date + "T00:00:00").toLocaleDateString("en-GB", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
-  });
 
   const hours = Array.from(
     { length: settings.closingHour - settings.openingHour },
@@ -394,7 +392,9 @@ export default function DayView({
   );
 
   const apptsByHour = (h: number) => appointments.filter((a) => a.hour === h);
-  const totalToday  = appointments.length;
+  const isToday = date === toDateStr(new Date());
+  const [nowHour, setNowHour] = useState(() => new Date().getHours());
+  useEffect(() => { const t = setInterval(() => setNowHour(new Date().getHours()), 60_000); return () => clearInterval(t); }, []);
 
   return (
     <>
@@ -688,45 +688,97 @@ export default function DayView({
         }
         .dv-assign-save:hover:not(:disabled) { background: #0C3C60; }
         .dv-assign-save:disabled { opacity: 0.55; cursor: not-allowed; }
+
+        /* ── Redesign (overrides) ── */
+        .dv-head2 { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+        .dv-weekday { font-size: 15px; font-weight: 700; color: #0C3C60; }
+        .dv-back { min-height: 38px; padding: 7px 12px; border-radius: 10px; background: #fff; }
+
+        .dv-summary { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; margin-bottom: 16px; }
+        .dv-sum-main { background: #fff; border: 1px solid #e5e0d8; border-radius: 16px; padding: 12px 16px; min-width: 200px; flex: 1 1 220px; }
+        .dv-sum-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #9a9590; }
+        .dv-sum-value { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 600; color: #0C3C60; line-height: 1.1; margin: 2px 0 8px; }
+        .dv-sum-value span { font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500; color: #9a9590; }
+        .dv-sum-bar { height: 7px; border-radius: 100px; background: #f0ede8; overflow: hidden; }
+        .dv-sum-bar b { display: block; height: 100%; border-radius: 100px; transition: width .3s; }
+        .dv-sum-item { background: #fff; border: 1px solid #e5e0d8; border-radius: 16px; padding: 12px 16px; display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #5a5550; flex: 0 1 auto; }
+        .dv-sum-item b { font-size: 20px; color: #0C3C60; }
+        .dv-sum-item i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+        .dv-sum-item.warn { border-color: #fde68a; background: #fffbeb; }
+
+        .dv-timeline { gap: 10px; }
+        .dv-slot { border: 1px solid #e5e0d8; border-radius: 16px; box-shadow: 0 1px 2px rgba(12,60,96,.03); }
+        .dv-slot.has-appts { border-color: #d5e8f3; }
+        .dv-slot.full { border-color: #fecaca; }
+        .dv-slot.empty { background: transparent; border-style: dashed; box-shadow: none; }
+        .dv-slot.empty .dv-slot-header { padding: 7px 12px; }
+        .dv-slot.empty .dv-slot-time { font-size: 13.5px; color: #7a7570; }
+        .dv-slot.empty .dv-slot-progress { display: none; }
+        .dv-slot.past { opacity: .72; }
+        .dv-slot.now { border: 2px solid #2E8BC0; box-shadow: 0 4px 16px rgba(46,139,192,.15); opacity: 1; }
+        .dv-slot-header { cursor: default; }
+        .dv-slot-time { display: inline-flex; align-items: center; gap: 8px; min-width: 86px; }
+        .dv-now-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; background: #2E8BC0; color: #fff; padding: 2px 7px; border-radius: 100px; }
+        .dv-slot-load.empty { background: transparent; color: #9a9590; font-weight: 600; }
+
+        .dv-appts { padding: 0 12px 12px; gap: 8px; }
+        .dv-appt-card { background: #fff; border: 1px solid #ebe7e1; border-left: 4px solid #2E8BC0; border-radius: 12px; padding: 12px 14px; align-items: flex-start; gap: 12px; transition: box-shadow .15s; }
+        .dv-appt-card:hover { box-shadow: 0 6px 18px rgba(12,60,96,.08); }
+        .dv-appt-card.st-in_progress { border-left-color: #d97706; background: linear-gradient(90deg, #fffbeb 0%, #fff 40%); }
+        .dv-appt-card.st-completed { border-left-color: #16a34a; }
+        .dv-appt-card.st-no_show { border-left-color: #ea580c; }
+        .dv-appt-card.st-cancelled, .dv-appt-card.st-rescheduled { border-left-color: #c0bbb4; background: #fafaf8; }
+        .dv-appt-card.st-cancelled .dv-appt-patient { text-decoration: line-through; color: #9a9590; }
+        .dv-appt-left { align-items: flex-start; }
+        .dv-appt-avatar { width: 38px; height: 38px; font-size: 12.5px; font-weight: 700; }
+        .dv-appt-patient { font-size: 14.5px; font-weight: 700; margin-bottom: 4px; }
+        .dv-appt-physio { font-size: 12.5px; color: #5a5550; margin-top: 4px; }
+        .dv-appt-session { display: inline-block; font-size: 11px; font-weight: 700; color: #0C3C60; background: #EAF5FC; padding: 2px 8px; border-radius: 100px; margin-top: 4px; }
+        .dv-status-select { border-radius: 10px; font-weight: 700; }
+
+        @media (max-width: 520px) {
+          .dv-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+          .dv-sum-main { grid-column: 1 / -1; min-width: 0; }
+          .dv-sum-item { padding: 10px 12px; min-width: 0; }
+          .dv-appt-card { flex-direction: column; }
+          .dv-appt-card > div:last-child { flex-direction: row !important; flex-wrap: wrap; align-items: center !important; width: 100%; }
+        }
       `}</style>
 
       <div className="dv-root">
-        <div className="dv-header">
-          <div>
-            <div className="dv-title">{displayDate}</div>
-            <div className="dv-sub">
-              {loading ? "Loading…" : `${totalToday} appointment${totalToday !== 1 ? "s" : ""} today · ${fmtHour12(settings.openingHour)} – ${fmtHour12(settings.closingHour)}`}
-            </div>
+        <div className="dv-head2">
+          <div className="dv-head2-left">
+            <div className="dv-sub">Open {fmtHour12(settings.openingHour)} – {fmtHour12(settings.closingHour)} · {settings.maxPatientsPerHour} patients per hour</div>
           </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            {onBack && (
-              <button className="dv-back" onClick={onBack}>
-                <ArrowLeft size={13} strokeWidth={2.5} />
-                Back
-              </button>
-            )}
-          </div>
+          {onBack && (
+            <button className="dv-back" onClick={onBack}>
+              <ArrowLeft size={13} strokeWidth={2.5} /> Week
+            </button>
+          )}
         </div>
 
-        {/* Stats */}
-        {!loading && (
-          <div className="dv-stats">
-            <div className="dv-stat accent">
-              <div className="dv-stat-label">Total</div>
-              <div className="dv-stat-value">{totalToday}</div>
-            </div>
-            <div className="dv-stat">
-              <div className="dv-stat-label">Hours</div>
-              <div className="dv-stat-value">{hours.length}</div>
-            </div>
-            <div className="dv-stat">
-              <div className="dv-stat-label">Full Slots</div>
-              <div className="dv-stat-value">
-                {hours.filter(h => apptsByHour(h).length >= settings.maxPatientsPerHour).length}
+        {!loading && (() => {
+          const active = appointments.filter((a) => a.status !== "cancelled" && a.status !== "rescheduled");
+          const capacity = Math.max(1, hours.length * settings.maxPatientsPerHour);
+          const pctBooked = Math.min(100, (active.length / capacity) * 100);
+          const done = appointments.filter((a) => a.status === "completed").length;
+          const upcoming = appointments.filter((a) => a.status === "scheduled" || a.status === "in_progress").length;
+          const missed = appointments.filter((a) => a.status === "cancelled" || a.status === "no_show").length;
+          const unconfirmed = appointments.filter((a) => a.status === "scheduled" && !a.confirmedByPatient).length;
+          return (
+            <div className="dv-summary">
+              <div className="dv-sum-main">
+                <div className="dv-sum-label">Booked</div>
+                <div className="dv-sum-value">{active.length}<span> / {capacity} slots</span></div>
+                <div className="dv-sum-bar"><b style={{ width: `${pctBooked}%`, background: pctBooked < 50 ? "#5BC0BE" : pctBooked < 90 ? "#E8A93B" : "#dc2626" }} /></div>
               </div>
+              <div className="dv-sum-item"><i style={{ background: "#16a34a" }} /><b>{done}</b> completed</div>
+              <div className="dv-sum-item"><i style={{ background: "#2E8BC0" }} /><b>{upcoming}</b> upcoming</div>
+              <div className="dv-sum-item"><i style={{ background: "#dc2626" }} /><b>{missed}</b> cancelled / no-show</div>
+              {unconfirmed > 0 && <div className="dv-sum-item warn"><i style={{ background: "#d97706" }} /><b>{unconfirmed}</b> not confirmed yet</div>}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Timeline */}
         <div className="dv-timeline">
@@ -742,12 +794,12 @@ export default function DayView({
                 const loadCls = count === 0 ? "empty" : ratio < 0.5 ? "low" : ratio < 1 ? "med" : "high";
 
                 return (
-                  <div key={h} className={`dv-slot ${count > 0 ? "has-appts" : ""} ${isFull ? "full" : ""}`}>
+                  <div key={h} className={`dv-slot ${count > 0 ? "has-appts" : "empty"} ${isFull ? "full" : ""} ${isToday && h === nowHour ? "now" : isToday && h < nowHour ? "past" : ""}`}>
                     <div className="dv-slot-header">
-                      <span className="dv-slot-time">{fmtHour12(h)}</span>
+                      <span className="dv-slot-time">{fmtHour12(h)}{isToday && h === nowHour && <span className="dv-now-tag">Now</span>}</span>
                       <div className="dv-slot-center">
                         <span className={`dv-slot-load ${loadCls}`}>
-                          {count} / {max}
+                          {count === 0 ? "Free" : `${count} / ${max}`}
                         </span>
                         <div className="dv-slot-progress">
                           <div
@@ -777,7 +829,7 @@ export default function DayView({
                           const hue          = a.patientName.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
                           const patientPhone = a.patientPhone || patients.find((p) => p.uid === a.patientId)?.phone || "";
                           return (
-                            <div key={a.id} className="dv-appt-card">
+                            <div key={a.id} className={`dv-appt-card st-${a.status ?? "scheduled"}`}>
                               <div className="dv-appt-left">
                                 <div
                                   className="dv-appt-avatar"
@@ -864,14 +916,14 @@ export default function DayView({
                                 {!a.patientId && (
                                   <span className="dv-unassigned-badge">Unassigned</span>
                                 )}
-                                <span className={`dv-appt-status ${a.status ?? "scheduled"}`}>
+                                {!(isManager || a.physioId === currentPhysio.uid) && <span className={`dv-appt-status ${a.status ?? "scheduled"}`}>
                                   {a.status === "completed"   ? "✓ Completed"
                                     : a.status === "cancelled"   ? "✗ Cancelled"
                                     : a.status === "rescheduled" ? "↺ Rescheduled"
                                     : a.status === "in_progress" ? "● In Progress"
                                     : a.status === "no_show"     ? "⊘ No-show"
                                     : "Scheduled"}
-                                </span>
+                                </span>}
                                 {isManager && !a.patientId && (
                                   <button
                                     className="dv-assign-btn"

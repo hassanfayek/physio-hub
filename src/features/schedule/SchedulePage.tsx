@@ -1,7 +1,7 @@
 // FILE: src/features/schedule/SchedulePage.tsx
 
-import React, { useState, useEffect } from "react";
-import { Settings, Calendar, Clock, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Settings, Calendar, CalendarDays, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   subscribeToClinicSettings,
   fmtHour12,
@@ -48,13 +48,12 @@ const MONTH_NAMES = [
 interface SettingsPanelProps {
   settings:  ClinicSettings;
   onSaved:   (s: ClinicSettings) => void;
+  onClose:   () => void;
 }
 
-function SettingsPanel({ settings, onSaved }: SettingsPanelProps) {
-  const [open,    setOpen]    = useState(false);
+function SettingsPanel({ settings, onSaved, onClose }: SettingsPanelProps) {
   const [form,    setForm]    = useState(settings);
   const [saving,  setSaving]  = useState(false);
-  const [saved,   setSaved]   = useState(false);
 
   useEffect(() => { setForm(settings); }, [settings]);
 
@@ -62,26 +61,15 @@ function SettingsPanel({ settings, onSaved }: SettingsPanelProps) {
     setSaving(true);
     await saveClinicSettings(form);
     setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
     onSaved(form);
-    setOpen(false);
+    onClose();
   };
-
-  if (!open) {
-    return (
-      <button className="sp-toggle" style={{ background: "#fafaf8", border: "1.5px solid #e5e0d8", color: "#5a5550" }} onClick={() => setOpen(true)}>
-        <Settings size={14} strokeWidth={2} color="#5a5550" />
-        {saved ? "Saved!" : "Clinic Settings"}
-      </button>
-    );
-  }
 
   return (
     <div className="sp-panel">
       <div className="sp-panel-header">
         <span className="sp-panel-title">Clinic Schedule Settings</span>
-        <button className="sp-panel-close" onClick={() => setOpen(false)}>×</button>
+        <button className="sp-panel-close" onClick={onClose}>×</button>
       </div>
       <div className="sp-panel-body">
         <div className="sp-field">
@@ -145,6 +133,7 @@ export default function SchedulePage({
   const [view,    setView]    = useState<ViewMode>(initialDayDate ? "day" : "month");
   const [cursor,  setCursor]  = useState(initialDayDate ? new Date(initialDayDate + "T00:00:00") : today);       // month/week navigator
   const [dayDate, setDayDate] = useState<string | null>(initialDayDate ?? null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Intercept Android/browser back button when in day view — go back to week instead of crashing
   useEffect(() => {
@@ -211,7 +200,7 @@ export default function SchedulePage({
   const headerLabel = (() => {
     if (view === "day" && dayDate) {
       return new Date(dayDate + "T00:00:00").toLocaleDateString("en-GB", {
-        day: "numeric", month: "long", year: "numeric",
+        weekday: "long", day: "numeric", month: "long", year: "numeric",
       });
     }
     if (view === "week") {
@@ -230,61 +219,47 @@ export default function SchedulePage({
 
         .sc-root { font-family: 'Outfit', sans-serif; }
 
-        /* Page header */
-        .sc-header {
-          display: flex; align-items: flex-end; justify-content: space-between;
-          margin-bottom: 14px; flex-wrap: wrap; gap: 8px;
-        }
-        .sc-title {
-          font-family: 'Playfair Display', serif;
-          font-size: 22px; font-weight: 500; color: #1a1a1a;
-          letter-spacing: -0.02em; margin-bottom: 3px;
-        }
-        .sc-sub { font-size: 13px; color: #9a9590; }
-
         /* Toolbar */
-        .sc-toolbar {
-          display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-          margin-bottom: 14px;
+        .sc-bar {
+          display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+          background: #fff; border: 1px solid #e5e0d8; border-radius: 18px; padding: 14px 16px;
+          margin-bottom: 14px; box-shadow: 0 1px 3px rgba(12,60,96,0.04);
         }
+        .sc-bar-left { min-width: 0; }
+        .sc-kicker { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #9a9590; }
+        .sc-range { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 600; color: #0C3C60; letter-spacing: -0.01em; margin-top: 2px; }
+        .sc-bar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
         /* View toggle */
-        .sc-view-group {
-          display: flex; align-items: center;
-          background: #f5f3ef; border-radius: 10px; padding: 3px; gap: 2px;
-        }
+        .sc-view-group { display: flex; align-items: center; background: #f3f1ed; border-radius: 12px; padding: 3px; gap: 2px; }
         .sc-view-btn {
-          padding: 8px 12px; border-radius: 8px; border: none;
-          font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
-          cursor: pointer; transition: all 0.15s; color: #9a9590; background: transparent;
-          display: flex; align-items: center; gap: 4px; min-height: 40px;
+          padding: 7px 13px; border-radius: 9px; border: none;
+          font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s; color: #7a7570; background: transparent;
+          display: flex; align-items: center; gap: 6px; min-height: 36px;
         }
-        .sc-view-btn.active { background: #fff; color: #2E8BC0; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-        .sc-view-btn:hover:not(.active) { color: #5a5550; }
+        .sc-view-btn.active { background: #fff; color: #0C3C60; box-shadow: 0 1px 4px rgba(12,60,96,0.12); }
+        .sc-view-btn:hover:not(.active) { color: #1a1a1a; }
 
         /* Navigation */
-        .sc-nav { display: flex; align-items: center; gap: 4px; }
+        .sc-nav { display: flex; align-items: center; border: 1.5px solid #e5e0d8; border-radius: 12px; overflow: hidden; background: #fff; }
         .sc-nav-btn {
-          width: 36px; height: 36px; border-radius: 8px;
-          border: 1.5px solid #e5e0d8; background: #fafaf8;
+          width: 38px; height: 38px; border: none; background: #fff;
           display: flex; align-items: center; justify-content: center;
-          cursor: pointer; color: #5a5550; transition: all 0.15s;
+          cursor: pointer; color: #5a5550; transition: background 0.15s;
         }
-        .sc-nav-btn:hover { background: #f0ede8; border-color: #c0bbb4; }
-        .sc-nav-label {
-          font-size: 13px; font-weight: 600; color: #1a1a1a; min-width: 120px; text-align: center;
-        }
-
+        .sc-nav-btn:hover { background: #f3f1ed; }
         .sc-today-btn {
-          padding: 8px 12px; border-radius: 8px;
-          border: 1.5px solid #e5e0d8; background: #fafaf8;
-          font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
-          color: #5a5550; cursor: pointer; transition: all 0.15s; min-height: 40px;
+          height: 38px; padding: 0 14px; border: none; border-left: 1.5px solid #e5e0d8; border-right: 1.5px solid #e5e0d8;
+          background: #fff; font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600;
+          color: #2E8BC0; cursor: pointer; transition: background 0.15s;
         }
-        .sc-today-btn:hover { background: #f0ede8; }
-
-        /* Spacer */
-        .sc-spacer { flex: 1; }
+        .sc-today-btn:hover { background: #EAF5FC; }
+        .sc-icon-btn {
+          width: 40px; height: 40px; border-radius: 12px; border: 1.5px solid #e5e0d8; background: #fff;
+          display: flex; align-items: center; justify-content: center; color: #5a5550; cursor: pointer; transition: all 0.15s;
+        }
+        .sc-icon-btn:hover, .sc-icon-btn.on { background: #EAF5FC; border-color: #B3DEF0; color: #2E8BC0; }
 
         /* Settings panel */
         .sp-toggle {
@@ -343,62 +318,45 @@ export default function SchedulePage({
         @keyframes scFadeIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: none; } }
 
         @media (max-width: 640px) {
-          .sc-title { font-size: 18px; }
-          .sc-toolbar { gap: 6px; }
-          .sc-view-group { width: 100%; }
-          .sc-view-btn { flex: 1; justify-content: center; padding: 8px 6px; font-size: 12px; }
-          .sc-nav-label { min-width: 90px; font-size: 12px; }
-          .sc-nav-btn { width: 32px; height: 32px; }
-          .sc-today-btn { padding: 8px 10px; font-size: 12px; }
-          .sc-spacer { display: none; }
-          .sp-toggle { flex: 1; justify-content: center; }
+          .sc-bar { padding: 12px; border-radius: 16px; }
+          .sc-range { font-size: 18px; }
+          .sc-bar-right { width: 100%; }
+          .sc-view-group { flex: 1; }
+          .sc-view-btn { flex: 1; justify-content: center; padding: 7px 4px; font-size: 12px; }
         }
       `}</style>
 
       <div className="sc-root">
-        {/* Page title */}
-        <div className="sc-header">
-          <div>
-            <div className="sc-title">Schedule</div>
-            <div className="sc-sub">
-              {showAll ? "Clinic-wide schedule" : "Your appointment schedule"}
+        {/* Toolbar: title + range on the left, view / navigation / settings on the right */}
+        <div className="sc-bar">
+          <div className="sc-bar-left">
+            <div className="sc-kicker">{showAll ? "Clinic-wide schedule" : "Your schedule"}</div>
+            <div className="sc-range">{headerLabel}</div>
+          </div>
+          <div className="sc-bar-right">
+            <div className="sc-view-group" role="tablist">
+              {([
+                { id: "month", label: "Month", Icon: Calendar },
+                { id: "week",  label: "Week",  Icon: CalendarDays },
+                { id: "day",   label: "Day",   Icon: Clock },
+              ] as { id: ViewMode; label: string; Icon: typeof Calendar }[]).map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={view === id}
+                  className={`sc-view-btn ${view === id ? "active" : ""}`}
+                  onClick={() => {
+                    setView(id);
+                    if (id === "day" && !dayDate) setDayDate(toDateStr(new Date()));
+                  }}
+                >
+                  <Icon size={14} strokeWidth={2} /> {label}
+                </button>
+              ))}
             </div>
-          </div>
-        </div>
 
-        {/* Settings panel — manager only (not secretary) */}
-        {isManager && (
-          <SettingsPanel settings={settings} onSaved={setSettings} />
-        )}
-
-        {/* Toolbar */}
-        <div className="sc-toolbar">
-          {/* View toggle */}
-          <div className="sc-view-group">
-            {([
-              { id: "month", label: "Month", icon: (active: boolean) => <Calendar size={13} strokeWidth={2} color={active ? "#2E8BC0" : "#9a9590"} /> },
-              { id: "week",  label: "Week",  icon: (active: boolean) => <Calendar size={13} strokeWidth={2} color={active ? "#2E8BC0" : "#9a9590"} /> },
-              { id: "day",   label: "Day",   icon: (active: boolean) => <Clock    size={13} strokeWidth={2} color={active ? "#2E8BC0" : "#9a9590"} /> },
-            ] as { id: ViewMode; label: string; icon: (active: boolean) => React.ReactNode }[]).map((v) => (
-              <button
-                key={v.id}
-                className={`sc-view-btn ${view === v.id ? "active" : ""}`}
-                onClick={() => {
-                  setView(v.id);
-                  if (v.id === "day" && !dayDate) setDayDate(toDateStr(new Date()));
-                }}
-              >
-                {v.icon(view === v.id)} {v.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Navigation */}
-          <div className="sc-nav">
-            <button
-              className="sc-nav-btn"
-              style={{ background: "#fafaf8", border: "1.5px solid #e5e0d8", color: "#5a5550" }}
-              onClick={() => {
+            <div className="sc-nav">
+              <button className="sc-nav-btn" aria-label="Previous" onClick={() => {
                 if (view === "month") moveMonth(-1);
                 else if (view === "week") moveWeek(-1);
                 else if (view === "day" && dayDate) {
@@ -406,15 +364,9 @@ export default function SchedulePage({
                   d.setDate(d.getDate() - 1);
                   setDayDate(toDateStr(d));
                 }
-              }}
-            >
-              <ChevronLeft size={16} strokeWidth={2.5} color="#5a5550" />
-            </button>
-            <span className="sc-nav-label">{headerLabel}</span>
-            <button
-              className="sc-nav-btn"
-              style={{ background: "#fafaf8", border: "1.5px solid #e5e0d8", color: "#5a5550" }}
-              onClick={() => {
+              }}><ChevronLeft size={16} strokeWidth={2.5} /></button>
+              <button className="sc-today-btn" onClick={goToday}>Today</button>
+              <button className="sc-nav-btn" aria-label="Next" onClick={() => {
                 if (view === "month") moveMonth(1);
                 else if (view === "week") moveWeek(1);
                 else if (view === "day" && dayDate) {
@@ -422,17 +374,21 @@ export default function SchedulePage({
                   d.setDate(d.getDate() + 1);
                   setDayDate(toDateStr(d));
                 }
-              }}
-            >
-              <ChevronRight size={16} strokeWidth={2.5} color="#5a5550" />
-            </button>
-          </div>
+              }}><ChevronRight size={16} strokeWidth={2.5} /></button>
+            </div>
 
-          <button className="sc-today-btn" style={{ background: "#fafaf8", border: "1.5px solid #e5e0d8", color: "#5a5550" }} onClick={goToday}>
-            <Info size={13} strokeWidth={2} color="#5a5550" style={{ display: "inline-block", verticalAlign: "middle", marginRight: 5 }} />
-            Today
-          </button>
+            {isManager && (
+              <button className={`sc-icon-btn ${settingsOpen ? "on" : ""}`} title="Clinic schedule settings" onClick={() => setSettingsOpen(!settingsOpen)}>
+                <Settings size={16} strokeWidth={2} />
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Settings panel — manager only (not secretary) */}
+        {isManager && settingsOpen && (
+          <SettingsPanel settings={settings} onSaved={setSettings} onClose={() => setSettingsOpen(false)} />
+        )}
 
         {/* View content */}
         <div className="sc-content" key={`${view}-${view === "day" ? dayDate : view === "week" ? toDateStr(getWeekStart(cursor)) : `${cursor.getFullYear()}-${cursor.getMonth()}`}`}>

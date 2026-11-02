@@ -61,150 +61,120 @@ export default function MonthView({
   const totalDays = daysInMonth(year, month);
   const offset    = firstWeekdayOffset(year, month);
 
-  // Map date → appointment count
-  const countByDay = new Map<string, number>();
+  // Per-day counts. "Booked" excludes cancelled/rescheduled (they don't use a slot).
+  type DayCount = { booked: number; done: number; upcoming: number; missed: number };
+  const byDay = new Map<string, DayCount>();
   for (const a of appointments) {
-    countByDay.set(a.date, (countByDay.get(a.date) ?? 0) + 1);
+    const c = byDay.get(a.date) ?? { booked: 0, done: 0, upcoming: 0, missed: 0 };
+    if (a.status === "completed") c.done++;
+    else if (a.status === "scheduled" || a.status === "in_progress") c.upcoming++;
+    if (a.status === "cancelled" || a.status === "no_show") c.missed++;
+    if (a.status !== "cancelled" && a.status !== "rescheduled") c.booked++;
+    byDay.set(a.date, c);
   }
-
-  // Max appointments in a single day (for relative busy indicator)
-  const maxInDay = Math.max(1, ...Array.from(countByDay.values()));
-  // Total available slots per day
-  const slotsPerDay = settings.maxPatientsPerHour * (settings.closingHour - settings.openingHour);
+  const totals = [...byDay.values()].reduce((t, c) => ({ booked: t.booked + c.booked, done: t.done + c.done, upcoming: t.upcoming + c.upcoming, missed: t.missed + c.missed }), { booked: 0, done: 0, upcoming: 0, missed: 0 });
+  const slotsPerDay = Math.max(1, settings.maxPatientsPerHour * (settings.closingHour - settings.openingHour));
 
   const cells: (number | null)[] = [
     ...Array.from({ length: offset }, () => null),
     ...Array.from({ length: totalDays }, (_, i) => i + 1),
   ];
-  // Pad to full grid rows
   while (cells.length % 7 !== 0) cells.push(null);
 
   return (
     <>
       <style>{`
         .mv-root { font-family: 'Outfit', sans-serif; }
+        .mv-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+        .mv-chip { display: inline-flex; align-items: center; gap: 7px; background: #fff; border: 1px solid #e5e0d8; border-radius: 12px; padding: 8px 12px; font-size: 12.5px; color: #5a5550; }
+        .mv-chip b { font-size: 16px; color: #0C3C60; font-weight: 700; }
+        .mv-chip i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 
-        .mv-day-headers {
-          display: grid; grid-template-columns: repeat(7, 1fr);
-          margin-bottom: 8px;
-        }
-        .mv-day-hdr {
-          text-align: center; font-size: 11px; text-transform: uppercase;
-          letter-spacing: 0.1em; color: #c0bbb4; font-weight: 600; padding: 6px 0;
-        }
+        .mv-day-headers { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 6px; }
+        .mv-day-hdr { text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #9a9590; font-weight: 700; padding: 6px 0; }
 
-        .mv-grid {
-          display: grid; grid-template-columns: repeat(7, 1fr);
-          border: 1px solid #e5e0d8; border-radius: 16px; overflow: hidden;
-          background: #e5e0d8; gap: 1px;
-        }
-
+        .mv-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
         .mv-cell {
-          background: #fff; min-height: 64px;
-          padding: 8px 6px 6px;
-          position: relative; cursor: pointer; transition: background 0.12s;
+          background: #fff; min-height: 92px; padding: 9px 9px 8px; border: 1px solid #ebe7e1; border-radius: 14px;
+          position: relative; cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .1s;
+          display: flex; flex-direction: column; gap: 6px;
         }
-        .mv-cell:hover { background: #fafaf8; }
-        .mv-cell.empty { background: #fafaf8; cursor: default; }
-        .mv-cell.today { background: #EAF5FC; }
+        .mv-cell:hover { border-color: #B3DEF0; box-shadow: 0 6px 16px rgba(12,60,96,0.08); }
+        .mv-cell:active { transform: scale(.99); }
+        .mv-cell.empty { background: transparent; border: 1px dashed #ebe7e1; cursor: default; box-shadow: none; }
+        .mv-cell.past { background: #fbfaf8; }
+        .mv-cell.past .mv-cell-num { color: #9a9590; }
+        .mv-cell.today { border: 2px solid #2E8BC0; box-shadow: 0 4px 14px rgba(46,139,192,0.18); }
 
-        .mv-cell-num {
-          width: 26px; height: 26px; border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 13px; font-weight: 600; color: #1a1a1a;
-          margin-bottom: 6px; transition: background 0.12s;
-        }
-        .mv-cell.today .mv-cell-num {
-          background: #2E8BC0; color: #fff;
-        }
+        .mv-top { display: flex; justify-content: space-between; align-items: center; }
+        .mv-cell-num { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 700; color: #1a1a1a; }
+        .mv-cell.today .mv-cell-num { background: #2E8BC0; color: #fff; }
+        .mv-load { font-size: 11px; font-weight: 700; color: #9a9590; font-variant-numeric: tabular-nums; }
 
-        /* Busy bar */
-        .mv-busy-bar {
-          height: 3px; border-radius: 100px;
-          margin-bottom: 5px; transition: width 0.3s;
-        }
+        .mv-bar { height: 6px; border-radius: 100px; background: #f0ede8; overflow: hidden; }
+        .mv-bar b { display: block; height: 100%; border-radius: 100px; }
+        .mv-bar b.low { background: #5BC0BE; } .mv-bar b.med { background: #E8A93B; } .mv-bar b.high { background: #dc2626; }
 
-        /* Count badge */
-        .mv-count {
-          font-size: 11.5px; font-weight: 600;
-          padding: 2px 7px; border-radius: 100px; display: inline-block;
-        }
-        .mv-count.zero  { color: #c0bbb4; background: transparent; }
-        .mv-count.low   { background: #D6EEF8; color: #0C3C60; }
-        .mv-count.med   { background: #fef3c7; color: #92400e; }
-        .mv-count.high  { background: #fee2e2; color: #b91c1c; }
+        .mv-dots { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; font-size: 11px; font-weight: 600; color: #5a5550; }
+        .mv-dots span { display: inline-flex; align-items: center; gap: 4px; }
+        .mv-dots i, .mv-chip i { width: 7px; height: 7px; border-radius: 50%; }
+        .c-done { background: #16a34a; } .c-up { background: #2E8BC0; } .c-miss { background: #dc2626; }
+        .mv-free { margin-top: auto; font-size: 11px; color: #c0bbb4; }
 
-        /* Skeleton */
-        .mv-cell-skel {
-          height: 16px; border-radius: 6px; margin-top: 4px;
-          background: linear-gradient(90deg, #f0ede8 0%, #e5e0d8 50%, #f0ede8 100%);
-          background-size: 200% 100%;
-          animation: mvShimmer 1.4s ease infinite;
-        }
+        .mv-cell-skel { height: 6px; border-radius: 6px; margin-top: 4px; background: linear-gradient(90deg, #f0ede8 0%, #e5e0d8 50%, #f0ede8 100%); background-size: 200% 100%; animation: mvShimmer 1.4s ease infinite; }
         @keyframes mvShimmer { to { background-position: -200% 0; } }
 
         @media (max-width: 640px) {
+          .mv-grid { gap: 3px; }
           .mv-day-hdr { font-size: 9px; letter-spacing: 0.04em; padding: 4px 0; }
-          .mv-cell { min-height: 46px; padding: 5px 3px 3px; }
-          .mv-cell-num { width: 20px; height: 20px; font-size: 11px; margin-bottom: 3px; }
-          .mv-count { font-size: 9.5px; padding: 1px 4px; }
-          .mv-busy-bar { margin-bottom: 3px; }
+          .mv-cell { min-height: 54px; padding: 5px 4px; border-radius: 10px; gap: 4px; }
+          .mv-cell-num { width: 22px; height: 22px; font-size: 11px; }
+          .mv-load, .mv-dots, .mv-free { display: none; }
+          .mv-bar { height: 4px; }
+          .mv-chip { padding: 6px 9px; font-size: 11.5px; } .mv-chip b { font-size: 14px; }
         }
       `}</style>
 
       <div className="mv-root">
-        {/* Day name headers */}
-        <div className="mv-day-headers">
-          {DAY_NAMES.map((d) => (
-            <div key={d} className="mv-day-hdr">{d}</div>
-          ))}
+        <div className="mv-summary">
+          <span className="mv-chip"><b>{loading ? "…" : totals.booked}</b> booked this month</span>
+          <span className="mv-chip"><i className="c-done" /><b>{loading ? "…" : totals.done}</b> completed</span>
+          <span className="mv-chip"><i className="c-up" /><b>{loading ? "…" : totals.upcoming}</b> upcoming</span>
+          <span className="mv-chip"><i className="c-miss" /><b>{loading ? "…" : totals.missed}</b> cancelled / no-show</span>
         </div>
 
-        {/* Calendar grid */}
+        <div className="mv-day-headers">
+          {DAY_NAMES.map((d) => <div key={d} className="mv-day-hdr">{d}</div>)}
+        </div>
+
         <div className="mv-grid">
           {cells.map((day, idx) => {
-            if (day === null) {
-              return <div key={`empty-${idx}`} className="mv-cell empty" />;
-            }
-
+            if (day === null) return <div key={`empty-${idx}`} className="mv-cell empty" />;
             const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-            const count   = countByDay.get(dateStr) ?? 0;
-            const ratio   = count / slotsPerDay;
-            const relRatio = count / maxInDay;
-
-            const countCls =
-              count === 0 ? "zero" :
-              ratio < 0.5 ? "low"  :
-              ratio < 0.9 ? "med"  :
-              "high";
-
-            const barColor =
-              count === 0 ? "transparent" :
-              ratio < 0.5 ? "#2E8BC0"     :
-              ratio < 0.9 ? "#d97706"     :
-              "#b91c1c";
-
+            const c = byDay.get(dateStr) ?? { booked: 0, done: 0, upcoming: 0, missed: 0 };
+            const ratio = c.booked / slotsPerDay;
+            const level = ratio < 0.5 ? "low" : ratio < 0.9 ? "med" : "high";
             return (
               <div
                 key={dateStr}
-                className={`mv-cell ${dateStr === today ? "today" : ""}`}
+                className={`mv-cell ${dateStr === today ? "today" : dateStr < today ? "past" : ""}`}
                 onClick={() => onDayClick(dateStr)}
-                title={`${count} appointment${count !== 1 ? "s" : ""} on ${dateStr}`}
+                title={`${c.booked} of ${slotsPerDay} slots booked · ${c.done} completed · ${c.upcoming} upcoming · ${c.missed} cancelled/no-show`}
               >
-                <div className="mv-cell-num">{day}</div>
-                {loading ? (
-                  <div className="mv-cell-skel" />
-                ) : (
+                <div className="mv-top">
+                  <div className="mv-cell-num">{day}</div>
+                  {!loading && c.booked > 0 && <span className="mv-load">{c.booked}/{slotsPerDay}</span>}
+                </div>
+                {loading ? <div className="mv-cell-skel" /> : (
                   <>
-                    {count > 0 && (
-                      <div
-                        className="mv-busy-bar"
-                        style={{ width: `${Math.max(10, relRatio * 100)}%`, background: barColor }}
-                      />
+                    <div className="mv-bar"><b className={level} style={{ width: `${Math.min(100, ratio * 100)}%` }} /></div>
+                    {c.booked + c.missed === 0 ? <div className="mv-free">{dateStr < today ? "No sessions" : "All free"}</div> : (
+                      <div className="mv-dots">
+                        {c.done > 0 && <span><i className="c-done" />{c.done}</span>}
+                        {c.upcoming > 0 && <span><i className="c-up" />{c.upcoming}</span>}
+                        {c.missed > 0 && <span><i className="c-miss" />{c.missed}</span>}
+                      </div>
                     )}
-                    <div className={`mv-count ${countCls}`}>
-                      {count === 0 ? "—" : `${count} appt${count !== 1 ? "s" : ""}`}
-                    </div>
                   </>
                 )}
               </div>
