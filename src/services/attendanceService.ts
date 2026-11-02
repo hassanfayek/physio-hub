@@ -8,6 +8,7 @@ import {
   getDocs,
   updateDoc,
   addDoc,
+  deleteDoc,
   serverTimestamp,
   type Timestamp,
 } from "firebase/firestore";
@@ -115,6 +116,21 @@ export async function upsertAttendance(
       recordedBy,
       updatedAt: serverTimestamp(),
     });
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+// ─── Undo a check-in: remove the day's record when it holds nothing else ──────
+
+export async function clearCheckIn(physioId: string, date: string, recordedBy: string): Promise<{ error?: string }> {
+  try {
+    const snap = await getDocs(query(collection(db, "staffAttendance"), where("physioId", "==", physioId), where("date", "==", date)));
+    for (const d of snap.docs) {
+      if (d.data().checkOut) await updateDoc(d.ref, { checkIn: "", recordedBy, updatedAt: serverTimestamp() });
+      else await deleteDoc(d.ref);
+    }
     return {};
   } catch (err) {
     return { error: parseError(err) };

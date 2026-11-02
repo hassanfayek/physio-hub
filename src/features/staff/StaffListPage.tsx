@@ -1,16 +1,18 @@
 // FILE: src/features/staff/StaffListPage.tsx
 
 import { useState, useEffect, useMemo } from "react";
-import { Trophy, Clock, LogIn, LogOut, ChevronRight } from "lucide-react";
+import { Trophy, ChevronRight } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { subscribeToPhysiotherapists, type Physiotherapist } from "../../services/patientService";
 import { subscribeToAppointmentsByMonth, type Appointment } from "../../services/appointmentService";
 import {
   subscribeToAttendanceForDate,
   upsertAttendance,
+  clearCheckIn,
   type AttendanceRecord,
 } from "../../services/attendanceService";
 import StaffSheetPage from "./StaffSheetPage";
+import TodayAttendance from "./TodayAttendance";
 
 function todayStr(): string {
   const d = new Date();
@@ -23,15 +25,6 @@ function currentYearMonth(): string {
 }
 
 // "HH:MM" (24hr, as stored) -> "h:MM AM/PM" for display
-function fmtTime12(hhmm: string): string {
-  if (!hhmm) return "";
-  const [hStr, mStr] = hhmm.split(":");
-  const h = parseInt(hStr, 10);
-  if (Number.isNaN(h)) return hhmm;
-  const period = h < 12 ? "AM" : "PM";
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${mStr} ${period}`;
-}
 
 function currentMonthLabel(): string {
   return new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" });
@@ -91,13 +84,16 @@ export default function StaffListPage() {
   const [showFormer, setShowFormer] = useState(false);
   const topCount = caseCountByPhysio.get(ranked[0]?.uid ?? "") ?? 0;
 
-  const handleMark = async (physio: Physiotherapist, field: "checkIn" | "checkOut") => {
+  // value "" = undo. Undoing a check-in removes the empty record so payroll
+  // doesn't see a "check-in missing" day.
+  const handleMark = async (physio: Physiotherapist, field: "checkIn" | "checkOut", value?: string) => {
     setMarkingId(physio.uid);
-    await upsertAttendance(
+    if (field === "checkIn" && value === "") await clearCheckIn(physio.uid, today, user?.uid ?? "");
+    else await upsertAttendance(
       physio.uid,
       `${physio.firstName} ${physio.lastName}`,
       today,
-      { [field]: nowHHMM() },
+      { [field]: value ?? nowHHMM() },
       user?.uid ?? ""
     );
     setMarkingId(null);
@@ -223,49 +219,8 @@ export default function StaffListPage() {
         </div>
       )}
 
-      <div className="sl-section-title"><Clock size={15} /> Today's Attendance</div>
-      <div className="sl-section-sub">Mark each doctor's arrival and departure as it happens.</div>
-
-      {ranked.length === 0 ? (
-        <div className="sl-empty">No physiotherapists on file yet.</div>
-      ) : (
-        <div className="sl-attend-list">
-          {ranked.map((p) => {
-            const att = attendanceByPhysio.get(p.uid);
-            const saving = markingId === p.uid;
-            return (
-              <div key={p.uid} className="sl-attend-row">
-                <div className="sl-attend-avatar">{initials(p)}</div>
-                <div className="sl-attend-name">{p.firstName} {p.lastName}</div>
-
-                {!att?.checkIn && (
-                  <>
-                    <span className="sl-attend-pill pending">Not arrived</span>
-                    <button className="sl-attend-action in" disabled={saving} onClick={() => handleMark(p, "checkIn")}>
-                      <LogIn size={13} /> Mark Arrived
-                    </button>
-                  </>
-                )}
-                {att?.checkIn && !att?.checkOut && (
-                  <>
-                    <span className="sl-attend-pill in">In {fmtTime12(att.checkIn)}</span>
-                    <button className="sl-attend-action out" disabled={saving} onClick={() => handleMark(p, "checkOut")}>
-                      <LogOut size={13} /> Mark Departed
-                    </button>
-                  </>
-                )}
-                {att?.checkIn && att?.checkOut && (
-                  <span className="sl-attend-pill out">In {fmtTime12(att.checkIn)} · Out {fmtTime12(att.checkOut)}</span>
-                )}
-
-                <div className="sl-attend-view" onClick={() => setSelected(p)}>
-                  <ChevronRight size={16} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <TodayAttendance physios={ranked} attendanceByPhysio={attendanceByPhysio} markingId={markingId}
+        onMark={handleMark} onOpen={setSelected} />
 
       {formerStaff.length > 0 && (
         <>

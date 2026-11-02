@@ -8,6 +8,7 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAuth } from "../../hooks/useAuth";
 import StaffPayrollSection from "./StaffPayrollSection";
+import AssignedPatients from "./AssignedPatients";
 import { formatPhoneDisplay } from "../../utils/phone";
 import type { Physiotherapist } from "../../services/patientService";
 import { subscribeToAppointmentsByMonth, fmtHour12, type Appointment } from "../../services/appointmentService";
@@ -307,6 +308,8 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
           {physio.specializations?.length > 0 && <span><Award size={13} /> {physio.specializations.join(", ")}</span>}
         </div>
       </div>
+
+      <AssignedPatients physioId={physio.uid} />
 
       <div className="sf-section-title"><Calendar size={16} /> Case History</div>
       <div className="sf-section-sub">Completed sessions, by month</div>
