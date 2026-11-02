@@ -541,3 +541,18 @@ export function subscribeToPhysiotherapists(
     (err)  => onError?.(err)
   );
 }
+
+// ─── Patient status (active / on hold / discharged) — manager + secretary ─────
+
+export async function updatePatientStatus(
+  patientId: string,
+  status: Patient["status"],
+  changedBy: string
+): Promise<{ error?: string }> {
+  try {
+    await updateDoc(doc(db, "patients", patientId), { status, statusChangedAt: serverTimestamp(), statusChangedBy: changedBy });
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}

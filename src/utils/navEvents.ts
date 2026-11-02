@@ -25,3 +25,15 @@ export function onOpenPatientSection(cb: (patientId: string, section: string) =>
   window.addEventListener(OPEN_PATIENT, h);
   return () => window.removeEventListener(OPEN_PATIENT, h);
 }
+
+const OPEN_STAFF = "physio:open-staff-profile";
+
+export function openStaffProfile(physioId: string) {
+  window.dispatchEvent(new CustomEvent(OPEN_STAFF, { detail: physioId }));
+}
+
+export function onOpenStaffProfile(cb: (physioId: string) => void): () => void {
+  const h = (e: Event) => cb((e as CustomEvent<string>).detail);
+  window.addEventListener(OPEN_STAFF, h);
+  return () => window.removeEventListener(OPEN_STAFF, h);
+}

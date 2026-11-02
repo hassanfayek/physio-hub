@@ -1,7 +1,18 @@
 // FILE: src/features/physio/PatientsTab.tsx
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Check, Trash2, Search, X, Plus, AlertCircle, UserPlus, Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, Trash2, Search, X, Plus, AlertCircle, UserPlus, Filter, ChevronDown, ChevronUp, Download } from "lucide-react";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { db } from "../../firebase";
+import { useAuth } from "../../hooks/useAuth";
+import { docToAppointment, fmtHour12 } from "../../services/appointmentService";
+import { docToSessionPrice, docToPackage } from "../../services/priceService";
+import { ACQUISITION_SOURCES, labelFor, clinicToday } from "../../services/businessService";
+import ContactButtons from "../inquiries/ContactButtons";
+import {
+  visitsByPatient, balancesByPatient, applyFilter, sortPatients, toCsv, sourceOf,
+  type LAppt, type LCharge, type LPackage, type LPatient, type ListFilter, type SortKey, type Attention,
+} from "./patientListLogic";
 import AddPatientModal from "../../components/AddPatientModal";
 import {
   subscribeToPhysioPatients,
@@ -10,6 +21,7 @@ import {
   assignPatientToPhysio,
   assignPatientStaff,
   deletePatient,
+  updatePatientStatus,
   type Patient,
   type Physiotherapist,
 } from "../../services/patientService";
@@ -246,6 +258,79 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
     return () => unsubscribe();
   }, []);
 
+  // ── Visits & balances ────────────────────────────────────────────────────
+  // Manager/secretary load the clinic's recent appointments; a physio loads only
+  // their own patients' appointments (never anyone else's). Balances: manager +
+  // secretary only.
+  const { user } = useAuth();
+  const staffView = isManager || isSecretary;
+  const today = clinicToday();
+  const [appts, setAppts] = useState<LAppt[]>([]);
+  const [unpaid, setUnpaid] = useState<LCharge[]>([]);
+  const [pkgs, setPkgs] = useState<LPackage[]>([]);
+  const patientIdsKey = staffView ? "" : patients.map((p) => p.uid).sort().join(",");
+  useEffect(() => {
+    const toA = (d: { id: string; data: () => Record<string, unknown> }) => { const a = docToAppointment(d.id, d.data()); return { id: a.id, patientId: a.patientId, date: a.date, hour: Number(a.hour), status: a.status }; };
+    if (staffView) {
+      const from = new Date(); from.setFullYear(from.getFullYear() - 1);
+      return onSnapshot(query(collection(db, "appointments"), where("date", ">=", from.toISOString().slice(0, 10))),
+        (snap) => setAppts(snap.docs.map(toA)), () => {});
+    }
+    const ids = patientIdsKey ? patientIdsKey.split(",") : [];
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30));
+    const parts = new Map<number, LAppt[]>();
+    const unsubs = chunks.map((chunk, i) => onSnapshot(query(collection(db, "appointments"), where("patientId", "in", chunk)),
+      (snap) => { parts.set(i, snap.docs.map(toA)); setAppts([...parts.values()].flat()); }, () => {}));
+    return () => unsubs.forEach((u) => u());
+  }, [staffView, patientIdsKey]);
+  useEffect(() => {
+    if (!staffView) return;
+    const u1 = onSnapshot(query(collection(db, "patientSessionPrices"), where("paid", "==", false)), (snap) => setUnpaid(snap.docs.map((d) => {
+      const c = docToSessionPrice(d.id, d.data());
+      return { id: c.id, patientId: c.patientId, appointmentId: c.appointmentId, amount: Number(c.amount) || 0, paid: !!c.paid, packageId: c.packageId, keptAsExtra: !!c.keptAsExtra };
+    })), () => {});
+    const u2 = onSnapshot(collection(db, "patientPackages"), (snap) => setPkgs(snap.docs.map((d) => {
+      const k = docToPackage(d.id, d.data());
+      return { patientId: k.patientId, totalAmount: Number(k.totalAmount) || 0, paidAmount: Number(k.paidAmount) || 0 };
+    })), () => {});
+    return () => { u1(); u2(); };
+  }, [staffView]);
+
+  const visits = useMemo(() => visitsByPatient(appts, today), [appts, today]);
+  const balances = useMemo(() => staffView ? balancesByPatient(unpaid, pkgs, new Map(appts.map((a) => [a.id, a.status] as const))) : new Map<string, number>(), [staffView, unpaid, pkgs, appts]);
+  const lp = (p: Patient): LPatient => ({
+    uid: p.uid, firstName: p.firstName, lastName: p.lastName, phone: p.phone, email: p.email, status: p.status || "active",
+    createdDate: p.createdAt ? p.createdAt.toDate().toISOString().slice(0, 10) : "", physioId: p.physioId,
+    seniorEditorId: p.seniorEditorId, juniorIds: p.juniorIds ?? [], traineeId: p.traineeId,
+    acquisitionSource: p.acquisitionSource, referredByPhysicianId: p.referredByPhysicianId,
+  });
+  const [listFilter, setListFilter] = useState<ListFilter>({ status: "active", doctor: "", source: "", attention: "" });
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [statusBusy, setStatusBusy] = useState<string | null>(null);
+  const changeStatus = async (p: Patient, status: Patient["status"]) => {
+    if (status === p.status) return;
+    const label = status === "discharged" ? "discharge" : status === "on_hold" ? "put on hold" : "reactivate";
+    if (!window.confirm(`${label[0].toUpperCase() + label.slice(1)} ${p.firstName} ${p.lastName}?`)) return;
+    setStatusBusy(p.uid);
+    const r = await updatePatientStatus(p.uid, status, user?.uid ?? "");
+    setStatusBusy(null);
+    showToast(r.error ? r.error : `✓ ${p.firstName} ${p.lastName} is now ${status === "on_hold" ? "on hold" : status}`);
+  };
+  const exportCsv = (rows: Patient[]) => {
+    const name = (id: string | null) => (id ? physioMap.current.get(id) ?? "" : "");
+    const data: (string | number)[][] = [["Name", "Phone", "Email", "Status", "Senior", "Juniors", "Trainee", "Heard about us via", "Referred by", "Joined", "Last visit", "Next appointment", "Balance owed (EGP)"]];
+    for (const p of rows) {
+      const v = visits.get(p.uid);
+      data.push([`${p.firstName} ${p.lastName}`, p.phone ?? "", p.email ?? "", p.status, name(p.seniorEditorId), (p.juniorIds ?? []).map((j) => name(j)).join(" / "), name(p.traineeId),
+        labelFor(ACQUISITION_SOURCES, sourceOf(lp(p)), "Unknown"), p.referredBy ?? "", lp(p).createdDate, v?.last ?? "", v?.next ? `${v.next.date} ${fmtHour12(v.next.hour)}` : "", Math.round(balances.get(p.uid) ?? 0)]);
+    }
+    const blob = new Blob([toCsv(data)], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `patients-${today}.csv`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+
   // ── Unique referral sources for filter dropdown ───────────────────────────
   const referralOptions = useMemo(() => {
     const set = new Set<string>();
@@ -275,6 +360,19 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
     return true;
   });
 
+
+  const byUid = new Map(patients.map((p) => [p.uid, p] as const));
+  const shownPatients = sortPatients(applyFilter(filteredPatients.map(lp), listFilter, visits, balances), sortKey, visits, balances)
+    .map((x) => byUid.get(x.uid)!).filter(Boolean);
+  const counts = {
+    active: patients.filter((p) => (p.status || "active") === "active").length,
+    on_hold: patients.filter((p) => p.status === "on_hold").length,
+    discharged: patients.filter((p) => p.status === "discharged").length,
+    noSenior: patients.filter((p) => !p.seniorEditorId).length,
+    noUpcoming: patients.filter((p) => (p.status || "active") === "active" && !visits.get(p.uid)?.next).length,
+    owes: patients.filter((p) => (balances.get(p.uid) ?? 0) > 0).length,
+  };
+  const setAttention = (a: Attention) => setListFilter((f) => ({ ...f, attention: f.attention === a ? "" : a, status: a === "no_upcoming" ? "active" : f.status }));
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -604,6 +702,33 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
           from { opacity: 0; transform: translateX(-50%) translateY(16px); }
           to   { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
+        /* ── People tab upgrade ── */
+        button.pt-stat { text-align: left; cursor: pointer; font-family: inherit; transition: border-color .15s, box-shadow .15s; }
+        button.pt-stat:hover { border-color: #B3DEF0; box-shadow: 0 4px 12px rgba(12,60,96,.06); }
+        .pt-filter2 { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+        .pt-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .pt-chips-label { font-size: 12px; color: #9a9590; font-weight: 600; margin-right: 2px; }
+        .pt-chip { border: 1.5px solid #e5e0d8; background: #fff; border-radius: 100px; padding: 5px 12px; font-family: inherit; font-size: 12.5px; font-weight: 600; color: #5a5550; cursor: pointer; }
+        .pt-chip b { margin-left: 4px; color: #9a9590; }
+        .pt-chip.on { background: #0C3C60; border-color: #0C3C60; color: #fff; } .pt-chip.on b { color: rgba(255,255,255,.75); }
+        .pt-chip.warn:not(.on) { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+        .pt-selects { display: flex; gap: 6px; flex-wrap: wrap; }
+        .pt-selects select { border: 1.5px solid #e5e0d8; border-radius: 10px; padding: 7px 10px; font-family: inherit; font-size: 13px; background: #fff; color: #1a1a1a; min-width: 0; }
+        .pt-export { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid #B3DEF0; background: #EAF5FC; color: #2E8BC0; border-radius: 10px; padding: 7px 12px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; margin-left: auto; }
+        .pt-visits { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: #9a9590; margin-top: 5px; }
+        .pt-visits b { color: #1a1a1a; font-weight: 600; }
+        .pt-visits .pt-warn b { color: #b45309; }
+        .pt-owes { font-size: 11.5px; font-weight: 700; color: #991b1b; background: #fee2e2; padding: 1px 8px; border-radius: 100px; }
+        .pt-row-quick { display: flex; gap: 6px; align-items: center; margin-top: 7px; flex-wrap: wrap; }
+        .pt-status-sel { border-radius: 100px; padding: 4px 8px; font-family: inherit; font-size: 12px; font-weight: 700; border: 1.5px solid; cursor: pointer; }
+        .pt-status-sel.s-active, .pt-status-pill.s-active { background: #dcfce7; color: #166534; border-color: #86efac; }
+        .pt-status-sel.s-on_hold, .pt-status-pill.s-on_hold { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+        .pt-status-sel.s-discharged, .pt-status-pill.s-discharged { background: #f3f4f6; color: #4b5563; border-color: #d1d5db; }
+        .pt-status-pill { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 100px; border: 1px solid; }
+        .iq-contact { display: inline-flex; gap: 6px; }
+        .iq-wa { height: 28px; min-width: 28px; padding: 0 7px; border-radius: 8px; border: 1.5px solid #86efac; background: #f0fdf4; color: #15803d; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+        .iq-icon { height: 28px; min-width: 28px; padding: 0 7px; border-radius: 8px; border: 1.5px solid #e5e0d8; background: #fff; color: #2E8BC0; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+        @media (max-width: 640px) { .pt-export { margin-left: 0; } }
       `}</style>
 
       <div className="pt-root">
@@ -637,24 +762,25 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
           </div>
         </div>
 
-        {/* Stats strip */}
+        {/* Summary — click a number to filter */}
         {!loading && (
           <div className="pt-stats">
             {[
-              { label: "Total",          value: patients.length,                                      sub: "registered",        accent: true  },
-              { label: "Active",         value: patients.filter((p) => p.status === "active").length, sub: "in rehabilitation", accent: false },
+              { label: "Total", value: patients.length, sub: "registered", on: listFilter.status === "", click: () => setListFilter((f) => ({ ...f, status: "" })) },
+              { label: "Active", value: counts.active, sub: "in treatment", on: listFilter.status === "active", click: () => setListFilter((f) => ({ ...f, status: "active" })) },
+              { label: "On hold", value: counts.on_hold, sub: "paused", on: listFilter.status === "on_hold", click: () => setListFilter((f) => ({ ...f, status: "on_hold" })) },
+              { label: "Discharged", value: counts.discharged, sub: "finished", on: listFilter.status === "discharged", click: () => setListFilter((f) => ({ ...f, status: "discharged" })) },
               { label: "New This Month", value: patients.filter((p) => {
                   if (!p.createdAt) return false;
-                  const d = p.createdAt.toDate();
-                  const now = new Date();
+                  const d = p.createdAt.toDate(); const now = new Date();
                   return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-                }).length, sub: "patients joined", accent: false },
-            ].map((s) => (
-              <div key={s.label} className={`pt-stat ${s.accent ? "accent" : ""}`}>
-                <div className="pt-stat-label">{s.label}</div>
-                <div className="pt-stat-value">{s.value}</div>
-                <div className="pt-stat-sub">{s.sub}</div>
-              </div>
+                }).length, sub: "patients joined", on: false, click: () => setSortKey("newest") },
+            ].map((st) => (
+              <button key={st.label} className={`pt-stat ${st.on ? "accent" : ""}`} onClick={st.click}>
+                <div className="pt-stat-label">{st.label}</div>
+                <div className="pt-stat-value">{st.value}</div>
+                <div className="pt-stat-sub">{st.sub}</div>
+              </button>
             ))}
           </div>
         )}
@@ -713,6 +839,47 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
           </div>
         )}
 
+        {/* Status · doctor · source · needs attention · sort · export */}
+        {!loading && patients.length > 0 && (
+          <div className="pt-filter2">
+            <div className="pt-chips">
+              {([["active", "Active"], ["on_hold", "On hold"], ["discharged", "Discharged"], ["", "All"]] as const).map(([v, l]) => (
+                <button key={l} className={`pt-chip ${listFilter.status === v ? "on" : ""}`} onClick={() => setListFilter((f) => ({ ...f, status: v }))}>{l}</button>
+              ))}
+            </div>
+            <div className="pt-chips">
+              <span className="pt-chips-label">Needs attention:</span>
+              <button className={`pt-chip warn ${listFilter.attention === "no_upcoming" ? "on" : ""}`} onClick={() => setAttention("no_upcoming")}>No upcoming visit <b>{counts.noUpcoming}</b></button>
+              {staffView && <button className={`pt-chip warn ${listFilter.attention === "owes" ? "on" : ""}`} onClick={() => setAttention("owes")}>Owes money <b>{counts.owes}</b></button>}
+              {staffView && <button className={`pt-chip warn ${listFilter.attention === "no_senior" ? "on" : ""}`} onClick={() => setAttention("no_senior")}>No senior assigned <b>{counts.noSenior}</b></button>}
+            </div>
+            <div className="pt-selects">
+              {staffView && (
+                <select value={listFilter.doctor} onChange={(e) => setListFilter((f) => ({ ...f, doctor: e.target.value }))}>
+                  <option value="">All doctors</option>
+                  {physios.filter((ph) => ph.active).map((ph) => <option key={ph.uid} value={ph.uid}>Dr. {ph.firstName} {ph.lastName}</option>)}
+                </select>
+              )}
+              <select value={listFilter.source} onChange={(e) => setListFilter((f) => ({ ...f, source: e.target.value }))}>
+                <option value="">All sources</option>
+                {ACQUISITION_SOURCES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                <option value="unknown">Unknown</option>
+              </select>
+              <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>
+                <option value="name">Sort: Name</option>
+                <option value="newest">Sort: Newest</option>
+                <option value="last_visit">Sort: Last visit</option>
+                {staffView && <option value="balance">Sort: Balance owed</option>}
+              </select>
+              {isManager && (
+                <button className="pt-export" onClick={() => exportCsv(shownPatients)} title="Download the patients shown as a CSV file (opens in Excel)">
+                  <Download size={14} /> Export ({shownPatients.length})
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Patients list */}
         <div className="pt-list">
           {loading ? (
@@ -728,18 +895,18 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
                 {(isManager || isSecretary) && <div className="pt-skel pt-skel-sel" />}
               </div>
             ))
-          ) : filteredPatients.length === 0 ? (
+          ) : shownPatients.length === 0 ? (
             <div className="pt-empty">
               <div className="pt-empty-icon">{searchQuery ? "🔍" : "🏥"}</div>
-              {searchQuery
-                ? `No patients match "${searchQuery}"`
+              {searchQuery || listFilter.attention || listFilter.doctor || listFilter.source || listFilter.status
+                ? "No patients match these filters."
                 : (isManager || isSecretary)
                   ? "No patients found in the system."
                   : "No patients assigned to you yet."
               }
             </div>
           ) : (
-            filteredPatients.map((patient) => {
+            shownPatients.map((patient) => {
               const fullName = `${patient.firstName} ${patient.lastName}`;
               const initials = `${patient.firstName[0] ?? ""}${patient.lastName[0] ?? ""}`.toUpperCase();
               const hue      = fullName.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
@@ -762,6 +929,26 @@ export default function PatientsTab({ physioId, isManager = false, isSenior = fa
                       <div className="pt-cell-contact">
                         {patient.phone && <span className="pt-cell-phone">{patient.phone}</span>}
                         <span className="pt-cell-email">{patient.email}</span>
+                      </div>
+                      <div className="pt-visits">
+                        {(() => { const v = visits.get(patient.uid); return <>
+                          <span>Last visit: <b>{v?.last ? new Date(v.last + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}</b></span>
+                          <span className={v?.next ? "" : (patient.status || "active") === "active" ? "pt-warn" : ""}>Next: <b>{v?.next ? `${new Date(v.next.date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })} ${fmtHour12(v.next.hour)}` : "not booked"}</b></span>
+                        </>; })()}
+                        {staffView && (balances.get(patient.uid) ?? 0) > 0 && <span className="pt-owes">Owes {Math.round(balances.get(patient.uid)!).toLocaleString("en-US")} EGP</span>}
+                      </div>
+                      <div className="pt-row-quick">
+                        {patient.phone && <ContactButtons phone={patient.phone} />}
+                        {staffView ? (
+                          <select className={`pt-status-sel s-${patient.status || "active"}`} value={patient.status || "active"} disabled={statusBusy === patient.uid}
+                            onChange={(e) => changeStatus(patient, e.target.value as Patient["status"])} title="Patient status">
+                            <option value="active">Active</option>
+                            <option value="on_hold">On hold</option>
+                            <option value="discharged">Discharged</option>
+                          </select>
+                        ) : (
+                          <span className={`pt-status-pill s-${patient.status || "active"}`}>{patient.status === "on_hold" ? "On hold" : patient.status === "discharged" ? "Discharged" : "Active"}</span>
+                        )}
                       </div>
                     </div>
                   </div>

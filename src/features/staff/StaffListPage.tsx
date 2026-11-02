@@ -45,12 +45,14 @@ const RANK_LABEL: Record<string, string> = {
 
 const MEDALS = ["#E8A93B", "#B7C0C8", "#C08552"]; // gold, silver, bronze — rank 1/2/3 avatar rings
 
-export default function StaffListPage() {
+export default function StaffListPage({ initialSelectedUid }: { initialSelectedUid?: string } = {}) {
   const { user } = useAuth();
   const [physios, setPhysios] = useState<Physiotherapist[]>([]);
   const [monthAppts, setMonthAppts] = useState<Appointment[]>([]);
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord[]>([]);
   const [selected, setSelected] = useState<Physiotherapist | null>(null);
+  // Opened from elsewhere (e.g. People → Team "Staff profile"): show that doctor once loaded.
+  const [jumpUid, setJumpUid] = useState<string | null>(initialSelectedUid ?? null);
   const [markingId, setMarkingId] = useState<string | null>(null);
 
   const today = todayStr();
@@ -99,8 +101,13 @@ export default function StaffListPage() {
     setMarkingId(null);
   };
 
+  const jumpTarget = !selected && jumpUid ? physios.find((p) => p.uid === jumpUid) ?? null : null;
+  if (jumpTarget) {
+    return <StaffSheetPage physio={jumpTarget} onBack={() => setJumpUid(null)} />;
+  }
+
   if (selected) {
-    return <StaffSheetPage physio={selected} onBack={() => setSelected(null)} />;
+    return <StaffSheetPage physio={selected} onBack={() => { setSelected(null); setJumpUid(null); }} />;
   }
 
   return (

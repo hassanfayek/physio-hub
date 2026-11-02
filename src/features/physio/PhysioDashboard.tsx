@@ -40,6 +40,9 @@ import BusinessAnalyticsPage from "../analytics/BusinessAnalyticsPage";
 import FrontDeskPage from "../analytics/FrontDeskPage";
 import { onOpenScheduleDay, onOpenPatientSection } from "../../utils/navEvents";
 import StaffListPage from "../staff/StaffListPage";
+import { CaseloadBar } from "./TeamInsights";
+import { useTeamStats, attendanceLabel } from "./teamStats";
+import { openStaffProfile, onOpenStaffProfile } from "../../utils/navEvents";
 import { runBackgroundScan, subscribeToPackageAlerts } from "../../services/notificationService";
 
 
@@ -66,7 +69,7 @@ function IconAdd()       { return <Plus size={14} strokeWidth={2.5} color="curre
 
 // ─── Team tab (manager only) ─────────────────────────────────────────────────
 
-function TeamTab() {
+export function TeamTab() {
   const [physios,        setPhysios]        = React.useState<Physiotherapist[]>([]);
   const [showAddPhysio,  setShowAddPhysio]  = React.useState(false);
   const [expandedUid,    setExpandedUid]    = React.useState<string | null>(null);
@@ -115,6 +118,7 @@ function TeamTab() {
   React.useEffect(() => {
     return subscribeToPhysiotherapists(setPhysios, () => {});
   }, []);
+  const teamStats = useTeamStats(physios);
 
   React.useEffect(() => {
     return subscribeToSecretaries(setSecretaries, () => {});
@@ -425,6 +429,23 @@ function TeamTab() {
         .tm-rank-trainee { background: #f3f4f6; color: #374151; }
         .tm-rank-manager { background: #ede9fe; color: #5b21b6; }
         .tm-rank-secretary { background: #f3e8ff; color: #7c3aed; }
+        .tm-card-v2 .tm-foot-link { white-space: nowrap; }
+        .tm-statrow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; padding: 0 18px 14px; }
+        .tm-statrow > div:not(.tm-att) { display: flex; flex-direction: column; background: #fafaf8; border: 1px solid #f0ede8; border-radius: 10px; padding: 7px 10px; }
+        .tm-statrow b { font-size: 18px; color: #0C3C60; line-height: 1.1; }
+        .tm-statrow span { font-size: 11px; color: #9a9590; }
+        .tm-att { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #9a9590; }
+        .tm-att i { width: 8px; height: 8px; border-radius: 50%; background: #c0bbb4; }
+        .tm-att.in { color: #15803d; } .tm-att.in i { background: #16a34a; }
+        .tm-att.done { color: #2E8BC0; } .tm-att.done i { background: #2E8BC0; }
+        .tm-caseload { background: #fff; border: 1.5px solid #e5e0d8; border-radius: 16px; padding: 14px 16px; margin-bottom: 18px; }
+        .tm-caseload-head { font-size: 13.5px; font-weight: 700; color: #0C3C60; margin-bottom: 10px; }
+        .tm-caseload-head span { display: block; font-size: 11.5px; font-weight: 400; color: #9a9590; margin-top: 2px; }
+        .tm-cl-row { display: grid; grid-template-columns: minmax(110px, 30%) 1fr 34px; gap: 10px; align-items: center; margin-bottom: 7px; font-size: 12.5px; }
+        .tm-cl-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #1a1a1a; }
+        .tm-cl-track { height: 9px; background: #f0ede8; border-radius: 100px; overflow: hidden; }
+        .tm-cl-track b { display: block; height: 100%; background: linear-gradient(90deg, #2E8BC0, #5BC0BE); border-radius: 100px; }
+        .tm-cl-num { text-align: right; font-weight: 700; color: #0C3C60; }
 
         /* ── Staff cards (physios + secretaries): identity on top, actions in a footer ── */
         .tm-card-v2 {
@@ -540,6 +561,8 @@ function TeamTab() {
         </button>
       </div>
 
+      <CaseloadBar physios={physios} stats={teamStats} />
+
       <div className="tm-section-label" style={{ color: "#9a9590", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700, marginBottom: 12 }}>
         Physiotherapy Team ({physios.length})
       </div>
@@ -565,6 +588,16 @@ function TeamTab() {
                 {(p.specializations ?? []).slice(0, 2).map((s) => <span key={s} className="tm-badge">{s}</span>)}
                 {!p.active && <span className="tm-badge tm-inactive-badge">Deactivated</span>}
               </div>
+              {p.active && (() => {
+                const att = attendanceLabel(teamStats.attendance.get(p.uid));
+                return (
+                  <div className="tm-statrow">
+                    <div><b>{teamStats.caseload.get(p.uid) ?? 0}</b><span>active patients</span></div>
+                    <div><b>{teamStats.sessions.get(p.uid) ?? 0}</b><span>sessions this month</span></div>
+                    <div className={`tm-att ${att.cls}`}><i />{att.text}</div>
+                  </div>
+                );
+              })()}
               {expanded && (
                 <div className="tm-card-body">
                   {([
@@ -603,10 +636,13 @@ function TeamTab() {
                 </div>
               )}
               <div className="tm-card-foot">
-                <button className="tm-foot-link" onClick={toggle}>
-                  {expanded ? "Hide details" : "Details"}
-                  <ChevronDown className={`tm-card-chevron ${expanded ? "open" : ""}`} size={13} strokeWidth={2.5} />
-                </button>
+                <span style={{ display: "inline-flex", gap: 12 }}>
+                  <button className="tm-foot-link" onClick={toggle}>
+                    {expanded ? "Hide details" : "Details"}
+                    <ChevronDown className={`tm-card-chevron ${expanded ? "open" : ""}`} size={13} strokeWidth={2.5} />
+                  </button>
+                  <button className="tm-foot-link" onClick={() => openStaffProfile(p.uid)} title="Salary, attendance and patient list">Staff profile</button>
+                </span>
                 <div className="tm-foot-actions">
                   {rank !== "manager" && (
                     <button
@@ -1391,6 +1427,12 @@ export default function PhysioDashboard() {
   const [viewingPatientId,      setViewingPatientId]      = useState<string | null>(null);
   const [viewingPatientSection, setViewingPatientSection] = useState<string | undefined>(undefined);
   const [scheduleJumpDate,      setScheduleJumpDate]      = useState<string | null>(null);
+  const [staffJumpUid,          setStaffJumpUid]          = useState<string | null>(null);
+  useEffect(() => onOpenStaffProfile((uid) => {
+    setViewingPatientId(null); setViewingPatientSection(undefined);
+    setStaffJumpUid(uid); setActiveTab("staff");
+    window.scrollTo({ top: 0 });
+  }), []);
 
   // Deep links from anywhere in the dashboard (e.g. a price sheet's "Go to day").
   useEffect(() => onOpenScheduleDay((date) => {
@@ -1854,7 +1896,7 @@ export default function PhysioDashboard() {
                 <div
                   key={tab.id}
                   className={`phd-nav-item ${activeTab === tab.id ? "active" : ""}`}
-                  onClick={() => { setActiveTab(tab.id); setViewingPatientId(null); setViewingPatientSection(undefined); setScheduleJumpDate(null); setMobileNavOpen(false); }}
+                  onClick={() => { setActiveTab(tab.id); setViewingPatientId(null); setViewingPatientSection(undefined); setScheduleJumpDate(null); setStaffJumpUid(null); setMobileNavOpen(false); }}
                 >
                   <div className="phd-nav-icon">{tab.icon}</div>
                   <span className="phd-nav-text">{tab.label}</span>
@@ -1965,7 +2007,7 @@ export default function PhysioDashboard() {
                   />
                 )}
                 {activeTab === "loyalty" && (isManager || isSecretary) && <LoyaltyClubPage />}
-                {activeTab === "staff"   && (isManager || isSecretary) && <StaffListPage />}
+                {activeTab === "staff"   && (isManager || isSecretary) && <StaffListPage key={staffJumpUid ?? "list"} initialSelectedUid={staffJumpUid ?? undefined} />}
               </>
             )}
           </main>
