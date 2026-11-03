@@ -3,12 +3,13 @@
 import TimeInput12 from "../../components/TimeInput12";
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Phone, Award, FileBadge, Briefcase, Calendar, Clock, Plus, AlertTriangle, Printer } from "lucide-react";
+import { ArrowLeft, Phone, Award, FileBadge, Briefcase, Calendar, Clock } from "lucide-react";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAuth } from "../../hooks/useAuth";
 import StaffPayrollSection from "./StaffPayrollSection";
 import AssignedPatients from "./AssignedPatients";
+import MonthAttendance from "./MonthAttendance";
 import { formatPhoneDisplay } from "../../utils/phone";
 import type { Physiotherapist } from "../../services/patientService";
 import { subscribeToAppointmentsByMonth, fmtHour12, type Appointment } from "../../services/appointmentService";
@@ -203,9 +204,6 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
     setShowEntry(false);
   };
 
-  const isPastIncomplete = (date: string, record: AttendanceRecord | null) =>
-    date < todayStr() && !!record?.checkIn && !record?.checkOut;
-
   // Deferring one paint frame gives the browser a chance to finish applying
   // the @media print stylesheet before the print dialog opens, instead of
   // both happening at once — this is what made the dialog feel like it was
@@ -247,17 +245,6 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
         .sf-case-date { color: #9a9590; font-size: 11.5px; flex-shrink: 0; }
 
         /* ── Attendance ── */
-        .sf-attend-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
-        .sf-add-entry-btn { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 9px; border: none; background: #2E8BC0; color: #fff; font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer; }
-        .sf-print-btn { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 9px; border: 1.5px solid #e5e0d8; background: #fff; color: #5a5550; font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer; }
-
-        .sf-attend-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f0ede8; font-size: 13px; }
-        .sf-attend-row:last-child { border-bottom: none; }
-        .sf-attend-row.clickable { cursor: pointer; }
-        .sf-attend-dow { color: #9a9590; font-size: 11px; }
-        .sf-attend-times { color: #3a3530; display: flex; align-items: center; gap: 6px; }
-        .sf-attend-missing { color: #b91c1c; }
-        .sf-warn-icon { color: #d97706; flex-shrink: 0; }
 
         .sf-empty { padding: 16px; border-radius: 12px; background: #f7f5f1; color: #9a9590; font-size: 13px; text-align: center; }
 
@@ -350,31 +337,10 @@ export default function StaffSheetPage({ physio, onBack }: StaffSheetPageProps) 
       )}
 
       <div className="sf-section-title"><Clock size={16} /> Attendance</div>
-      <div className="sf-section-sub">The full calendar month — tap any day to add or correct it.</div>
+      <div className="sf-section-sub">Tap any day to add or correct it.</div>
 
-      <div className="sf-attend-toolbar">
-        <select className="sf-month-input" value={attendanceMonth} onChange={(e) => setAttendanceMonth(e.target.value)}>
-          {monthOptions.map((m) => <option key={m} value={m}>{monthYearLabel(m)}</option>)}
-        </select>
-        <button className="sf-add-entry-btn" onClick={openEntryDefault}>
-          <Plus size={14} /> Add / Edit Entry
-        </button>
-        <button className="sf-print-btn" onClick={handlePrint}>
-          <Printer size={14} /> Print This Month
-        </button>
-      </div>
-
-      {monthAttendanceRows.map(({ date, record }) => (
-        <div key={date} className="sf-attend-row clickable" onClick={() => openEntry(date)}>
-          <div>{fmtDateDisplay(date)} <span className="sf-attend-dow">{dayOfWeekShort(date)}</span></div>
-          <div className="sf-attend-times">
-            {isPastIncomplete(date, record) && <AlertTriangle size={13} className="sf-warn-icon" />}
-            In: {record?.checkIn ? fmtTime12(record.checkIn) : <span className="sf-attend-missing">—</span>}
-            {"  ·  "}
-            Out: {record?.checkOut ? fmtTime12(record.checkOut) : <span className="sf-attend-missing">—</span>}
-          </div>
-        </div>
-      ))}
+      <MonthAttendance month={attendanceMonth} monthOptions={monthOptions} monthDays={monthDays} attendanceByDate={attendanceByDate}
+        onMonth={setAttendanceMonth} onEdit={openEntry} onAdd={openEntryDefault} onPrint={handlePrint} />
 
       {/* Salary & attendance-based deductions — manager only; same month and records as above */}
       {user?.role === "clinic_manager" && (
