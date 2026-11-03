@@ -4,17 +4,21 @@
 // Uses the same design tokens (colours, radii, font) as the existing app.
 // CSS prefix: el-  (exercise library)
 
-import React, { useState, useEffect, type FormEvent } from "react";
+import React, { useState, useEffect, useCallback, type FormEvent } from "react";
 import { createPortal } from "react-dom";
-import { X, Check } from "lucide-react";
-import { VideoEmbed } from "../../components/VideoEmbed";
+import { X, Check, Plus, Search, Video, Play, Dumbbell, Users, AlertTriangle, UserPlus, Pencil, Copy, Trash2, ListChecks, Home, Building2 } from "lucide-react";
+import VideoShowbox, { type ShowboxItem } from "../../components/VideoShowbox";
+import { exerciseVideo } from "../../utils/youtube";
 import {
   subscribeToExerciseLibrary,
   createExercise,
   updateExercise,
   deleteExercise,
   assignExerciseToPatient,
+  duplicateExercise,
+  fetchExerciseUsage,
   type LibraryExercise,
+  type Difficulty,
 } from "../../services/exerciseService";
 import {
   subscribeToAllPatients,
@@ -45,18 +49,22 @@ interface ExerciseFormState {
   notes:           string;
   mediaUrl:        string;
   videoId:         string;
+  difficulty:      Difficulty;
+  precautions:     string;
 }
 
 const BLANK_FORM: ExerciseFormState = {
   name: "", category: "", equipment: "", description: "",
   defaultSets: "3", defaultReps: "10", defaultHoldTime: "0",
-  notes: "", mediaUrl: "", videoId: "",
+  notes: "", mediaUrl: "", videoId: "", difficulty: "", precautions: "",
 };
 
 const CATEGORIES = [
   "Shoulder", "Knee", "Hip", "Spine", "Ankle & Foot",
   "Elbow & Wrist", "Neck", "Core", "Balance", "Cardio", "Other",
 ];
+
+const DIFF_LABEL: Record<string, string> = { easy: "Easy", moderate: "Moderate", hard: "Hard" };
 
 const EQUIPMENT_TYPES = [
   "Bodyweight", "Resistance Bands", "Free Weights", "Machine",
@@ -66,15 +74,8 @@ const EQUIPMENT_TYPES = [
 
 // ─── Media helper ─────────────────────────────────────────────────────────────
 
-function isYouTube(url: string) {
-  return /(?:youtube\.com|youtu\.be)/.test(url);
-}
 function isImage(url: string) {
   return /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(url);
-}
-function youTubeThumb(raw: string) {
-  const id = raw.match(/(?:v=|youtu\.be\/|shorts\/|shorts:)([^&?/\s]{11})/)?.[1] ?? null;
-  return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
 }
 
 // Shorts URLs are stored as-is so VideoEmbed can detect them.
@@ -112,6 +113,8 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
           notes:           initial.notes,
           mediaUrl:        initial.mediaUrl,
           videoId:         initial.videoId,
+          difficulty:      initial.difficulty,
+          precautions:     initial.precautions,
         }
       : BLANK_FORM
   );
@@ -147,6 +150,8 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
       notes:           form.notes.trim(),
       mediaUrl:        form.mediaUrl.trim(),
       videoId:         extractYouTubeId(form.videoId.trim()),
+      difficulty:      form.difficulty,
+      precautions:     form.precautions.trim(),
     };
 
     const result = mode === "add"
@@ -206,6 +211,16 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
             </div>
 
             <div className="el-field">
+              <label className="el-label">Difficulty</label>
+              <div className="el-seg">
+                {(["", "easy", "moderate", "hard"] as Difficulty[]).map((d) => (
+                  <button key={d || "none"} type="button" className={`el-seg-btn d-${d || "none"} ${form.difficulty === d ? "on" : ""}`}
+                    onClick={() => setForm((f) => ({ ...f, difficulty: d }))}>{d ? DIFF_LABEL[d] : "Not set"}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="el-field">
               <label className="el-label">Description</label>
               <textarea className="el-textarea" rows={3} value={form.description} onChange={set("description")} placeholder="Describe how to perform the exercise…" />
             </div>
@@ -227,7 +242,12 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
 
             <div className="el-field">
               <label className="el-label">Notes</label>
-              <textarea className="el-textarea" rows={2} value={form.notes} onChange={set("notes")} placeholder="Any clinical notes or precautions…" />
+              <textarea className="el-textarea" rows={2} value={form.notes} onChange={set("notes")} placeholder="Default note copied to the patient when assigned…" />
+            </div>
+
+            <div className="el-field">
+              <label className="el-label">Precautions</label>
+              <textarea className="el-textarea" rows={2} value={form.precautions} onChange={set("precautions")} placeholder="When to stop, what to avoid… (shown to patients in red)" />
             </div>
 
             <div className="el-field">
@@ -290,25 +310,26 @@ function ExerciseModal({ mode, initial, onClose, onSaved }: ExerciseModalProps) 
   );
 }
 
-// ─── Assign-to-Patient Modal ──────────────────────────────────────────────────
+// ─── Assign-to-Patient Modal (one exercise, or several at once) ───────────────
 
 interface AssignModalProps {
-  exercise:  LibraryExercise;
+  exercises: LibraryExercise[];
   patients:  Patient[];
   physioId:  string;
-  isManager: boolean;
   onClose:   () => void;
+  onAssigned: () => void;
 }
 
-function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps) {
-  const [assignedCount, setAssignedCount] = useState(0);
-  const [lastAssigned,  setLastAssigned]  = useState<string>("");
+function AssignModal({ exercises, patients, physioId, onClose, onAssigned }: AssignModalProps) {
+  const single = exercises.length === 1 ? exercises[0] : null;
+  const [assignedTo,  setAssignedTo]  = useState<string[]>([]);
   const [search,   setSearch]   = useState("");
   const [selected, setSelected] = useState<Patient | null>(null);
-  const [sets,     setSets]     = useState(String(exercise.defaultSets));
-  const [reps,     setReps]     = useState(String(exercise.defaultReps));
-  const [holdTime, setHoldTime] = useState(String(exercise.defaultHoldTime));
-  const [notes,    setNotes]    = useState(exercise.notes);
+  const [programType, setProgramType] = useState<"clinic" | "home">("home");
+  const [sets,     setSets]     = useState(String(single?.defaultSets ?? 3));
+  const [reps,     setReps]     = useState(String(single?.defaultReps ?? 10));
+  const [holdTime, setHoldTime] = useState(String(single?.defaultHoldTime ?? 0));
+  const [notes,    setNotes]    = useState(single?.notes ?? "");
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState<string | null>(null);
 
@@ -318,34 +339,38 @@ function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps
     return () => document.removeEventListener("keydown", h);
   }, [onClose]);
 
-  const filtered = patients.filter((p) =>
-    `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase())
-  );
+  const q = search.trim().toLowerCase(), qd = search.replace(/\D/g, "");
+  const filtered = patients
+    .filter((p) => `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) || (qd.length >= 3 && (p.phone ?? "").replace(/\D/g, "").includes(qd)))
+    .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
+    .slice(0, 50);
 
   const handleAssign = async () => {
     if (!selected) { setError("Please select a patient."); return; }
     setSaving(true);
     setError(null);
-
-    const result = await assignExerciseToPatient({
-      patientId:    selected.uid,
-      exerciseId:   exercise.id,
-      exerciseName: exercise.name,
-      sets:         Math.max(1, parseInt(sets) || 3),
-      reps:         Math.max(1, parseInt(reps) || 10),
-      holdTime:     Math.max(0, parseInt(holdTime) || 0),
-      notes:        notes.trim(),
-      createdBy:    physioId,
-      mediaUrl:     exercise.mediaUrl,
-      videoId:      exercise.videoId,
-    });
-
+    for (const ex of exercises) {
+      const result = await assignExerciseToPatient({
+        patientId:    selected.uid,
+        exerciseId:   ex.id,
+        exerciseName: ex.name,
+        sets:         single ? Math.max(1, parseInt(sets) || 3) : ex.defaultSets,
+        reps:         single ? Math.max(1, parseInt(reps) || 10) : ex.defaultReps,
+        holdTime:     single ? Math.max(0, parseInt(holdTime) || 0) : ex.defaultHoldTime,
+        notes:        single ? notes.trim() : ex.notes,
+        createdBy:    physioId,
+        mediaUrl:     ex.mediaUrl,
+        videoId:      ex.videoId,
+        programType,
+      });
+      if ("error" in result && result.error) { setSaving(false); setError(result.error); return; }
+    }
     setSaving(false);
-    if ("error" in result && result.error) { setError(result.error); return; }
-    // Stay open — show success feedback and let physio assign to more patients
-    setAssignedCount((c) => c + 1);
-    setLastAssigned(`${selected.firstName} ${selected.lastName}`);
+    // Stay open so the same exercise(s) can go to more patients
+    setAssignedTo((a) => [...a, `${selected.firstName} ${selected.lastName}`]);
     setSelected(null);
+    setSearch("");
+    onAssigned();
   };
 
   return createPortal(
@@ -354,9 +379,9 @@ function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps
 
         <div className="el-modal-hd">
           <div>
-            <div className="el-modal-badge">Assign Exercise</div>
-            <div className="el-modal-title">{exercise.name}</div>
-            {exercise.category && <div className="el-modal-sub">{exercise.category}</div>}
+            <div className="el-modal-badge">{single ? "Assign Exercise" : `Assign ${exercises.length} Exercises`}</div>
+            <div className="el-modal-title">{single ? single.name : "Build a program"}</div>
+            {single?.category && <div className="el-modal-sub">{single.category}</div>}
           </div>
           <button className="el-close-btn" onClick={onClose} aria-label="Close">
             <X size={14} strokeWidth={2.5} />
@@ -367,92 +392,89 @@ function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps
 
           {error && <div className="el-error-box">{error}</div>}
 
-          {/* Patient search */}
-          <div className="el-field">
-            <label className="el-label">Search Patient</label>
-            <input
-              className="el-input"
-              placeholder="Type patient name…"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setSelected(null); }}
-              autoFocus
-            />
-          </div>
-
-          {/* Patient list */}
-          {search.length > 0 && (
-            <div className="el-patient-list">
-              {filtered.length === 0 && (
-                <div className="el-patient-empty">No patients match "{search}"</div>
-              )}
-              {filtered.map((p) => (
-                <div
-                  key={p.uid}
-                  className={`el-patient-row ${selected?.uid === p.uid ? "selected" : ""}`}
-                  onClick={() => setSelected(p)}
-                >
-                  <div className="el-patient-avatar">{p.firstName[0]}{p.lastName[0]}</div>
-                  <div>
-                    <div className="el-patient-name">{p.firstName} {p.lastName}</div>
-                    <div className="el-patient-cond">{p.occupation || "—"}</div>
-                  </div>
-                  {selected?.uid === p.uid && (
-                    <Check className="el-patient-check" size={16} strokeWidth={2.5} />
-                  )}
+          {!single && (
+            <div className="el-bulk-list">
+              {exercises.map((ex) => (
+                <div key={ex.id} className="el-bulk-item">
+                  <span>{ex.name}</span>
+                  <small>{ex.defaultSets} × {ex.defaultReps}{ex.defaultHoldTime > 0 ? ` · ${ex.defaultHoldTime}s` : ""}</small>
                 </div>
               ))}
             </div>
           )}
 
-          {selected && (
-            <div className="el-selected-banner">
-              Assigning to: <strong>{selected.firstName} {selected.lastName}</strong>
-            </div>
-          )}
-
-          {/* Override sets/reps/hold */}
-          <div className="el-row3">
-            <div className="el-field">
-              <label className="el-label">Sets</label>
-              <input className="el-input" type="number" min={1} max={20} value={sets} onChange={(e) => setSets(e.target.value)} />
-            </div>
-            <div className="el-field">
-              <label className="el-label">Reps</label>
-              <input className="el-input" type="number" min={1} max={100} value={reps} onChange={(e) => setReps(e.target.value)} />
-            </div>
-            <div className="el-field">
-              <label className="el-label">Hold (sec)</label>
-              <input className="el-input" type="number" min={0} max={120} value={holdTime} onChange={(e) => setHoldTime(e.target.value)} />
+          <div className="el-field">
+            <label className="el-label">Program</label>
+            <div className="el-seg">
+              <button type="button" className={`el-seg-btn ${programType === "home" ? "on home" : ""}`} onClick={() => setProgramType("home")}><Home size={13} /> Home program</button>
+              <button type="button" className={`el-seg-btn ${programType === "clinic" ? "on" : ""}`} onClick={() => setProgramType("clinic")}><Building2 size={13} /> In clinic</button>
             </div>
           </div>
 
           <div className="el-field">
-            <label className="el-label">Custom Notes for Patient</label>
-            <textarea className="el-textarea" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any patient-specific instructions…" />
+            <label className="el-label">Patient</label>
+            {selected ? (
+              <div className="el-selected-banner">
+                <span className="el-patient-avatar">{selected.firstName[0]}{selected.lastName[0]}</span>
+                <strong>{selected.firstName} {selected.lastName}</strong>
+                <button type="button" className="el-change" onClick={() => setSelected(null)}>Change</button>
+              </div>
+            ) : (
+              <>
+                <input className="el-input" placeholder="Search name or phone…" value={search} onChange={(e) => setSearch(e.target.value)} autoFocus />
+                <div className="el-patient-list">
+                  {filtered.length === 0 && <div className="el-patient-empty">No patients match.</div>}
+                  {filtered.map((p) => (
+                    <div key={p.uid} className="el-patient-row" onClick={() => setSelected(p)}>
+                      <div className="el-patient-avatar">{p.firstName[0]}{p.lastName[0]}</div>
+                      <div>
+                        <div className="el-patient-name">{p.firstName} {p.lastName}</div>
+                        <div className="el-patient-cond">{p.phone || "—"}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
+          {single && (
+            <>
+              <div className="el-row3">
+                <div className="el-field">
+                  <label className="el-label">Sets</label>
+                  <input className="el-input" type="number" min={1} max={20} value={sets} onChange={(e) => setSets(e.target.value)} />
+                </div>
+                <div className="el-field">
+                  <label className="el-label">Reps</label>
+                  <input className="el-input" type="number" min={1} max={100} value={reps} onChange={(e) => setReps(e.target.value)} />
+                </div>
+                <div className="el-field">
+                  <label className="el-label">Hold (sec)</label>
+                  <input className="el-input" type="number" min={0} max={120} value={holdTime} onChange={(e) => setHoldTime(e.target.value)} />
+                </div>
+              </div>
+              <div className="el-field">
+                <label className="el-label">Note for the patient</label>
+                <textarea className="el-textarea" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any patient-specific instructions…" />
+              </div>
+            </>
+          )}
+          {!single && <div className="el-hint">Each exercise uses its library sets, reps and hold. You can fine-tune them on the patient's sheet.</div>}
+
+          {assignedTo.length > 0 && (
+            <div className="el-success">
+              <Check size={14} strokeWidth={2.5} /> Assigned to {assignedTo.join(", ")}. Pick another patient to assign again.
+            </div>
+          )}
         </div>
 
         <div className="el-modal-ft">
-          <button type="button" className="el-btn-cancel" onClick={onClose}>{assignedCount > 0 ? "Done" : "Cancel"}</button>
-          {assignedCount > 0 && (
-            <div style={{
-              background: "#d8f3dc", border: "1px solid #b7e4c7",
-              borderRadius: 10, padding: "10px 14px",
-              fontSize: 13, color: "#1b4332", marginBottom: 12,
-              display: "flex", alignItems: "center", gap: 8,
-            }}>
-              <Check size={13} strokeWidth={2.5} />
-              Assigned to <strong>{lastAssigned}</strong> ({assignedCount} total this session)
-            </div>
-          )}
+          <button type="button" className="el-btn-cancel" onClick={onClose}>{assignedTo.length > 0 ? "Done" : "Cancel"}</button>
           <button type="button" className="el-btn-primary" disabled={!selected || saving} onClick={handleAssign}>
             {saving
               ? <><span className="el-spinner" /> Assigning…</>
-              : <>
-                  <Check size={13} strokeWidth={2.5} />
-                  Assign to Patient
-                </>
+              : <><Check size={13} strokeWidth={2.5} /> Assign{single ? "" : ` ${exercises.length}`}</>
             }
           </button>
         </div>
@@ -465,6 +487,24 @@ function AssignModal({ exercise, patients, physioId, onClose }: AssignModalProps
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+type SortKey = "name" | "newest" | "used" | "category";
+
+function cardThumb(ex: LibraryExercise): string | null {
+  const v = exerciseVideo(ex);
+  if (v) return v.thumb;
+  return ex.mediaUrl && isImage(ex.mediaUrl) ? ex.mediaUrl : null;
+}
+
+function toShowboxItem(ex: LibraryExercise): ShowboxItem {
+  return {
+    key: ex.id, title: ex.name, video: exerciseVideo(ex),
+    dosage: `${ex.defaultSets} sets · ${ex.defaultReps} reps${ex.defaultHoldTime > 0 ? ` · ${ex.defaultHoldTime}s hold` : ""}`,
+    tags: [ex.category, ex.equipment], difficulty: ex.difficulty,
+    description: ex.description, precautions: ex.precautions,
+    notes: ex.notes, notesLabel: "Default note",
+  };
+}
+
 export default function ExerciseLibraryPage({
   physioId,
   isManager,
@@ -474,23 +514,33 @@ export default function ExerciseLibraryPage({
   const [exercises,   setExercises]   = useState<LibraryExercise[]>([]);
   const [patients,    setPatients]    = useState<Patient[]>([]);
   const [loading,     setLoading]     = useState(true);
+  const [usage,       setUsage]       = useState<Map<string, number>>(new Map());
   const [search,         setSearch]         = useState("");
   const [filterCat,      setFilterCat]      = useState("");
   const [filterEquipment,setFilterEquipment]= useState("");
+  const [filterDiff,     setFilterDiff]     = useState("");
+  const [videoOnly,      setVideoOnly]      = useState(false);
+  const [sort,           setSort]           = useState<SortKey>("name");
   const [modal,       setModal]       = useState<ModalMode | null>(null);
   const [editTarget,  setEditTarget]  = useState<LibraryExercise | null>(null);
-  const [assignTarget,setAssignTarget]= useState<LibraryExercise | null>(null);
+  const [assignList,  setAssignList]  = useState<LibraryExercise[]>([]);
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
   const [toast,       setToast]       = useState<string | null>(null);
+  const [selecting,   setSelecting]   = useState(false);
+  const [picked,      setPicked]      = useState<Set<string>>(new Set());
+  const [viewing,     setViewing]     = useState<number | null>(null);
 
   // Realtime: exercise library
   useEffect(() => {
-    setLoading(true);
     return subscribeToExerciseLibrary(
       (data) => { setExercises(data); setLoading(false); },
       ()     => setLoading(false)
     );
   }, []);
+
+  // How many patients use each exercise (one read; refreshed after assigning)
+  const refreshUsage = useCallback(() => { fetchExerciseUsage().then(setUsage).catch(() => {}); }, []);
+  useEffect(refreshUsage, [refreshUsage]);
 
   // Realtime: patients (for assign modal)
   useEffect(() => {
@@ -506,7 +556,9 @@ export default function ExerciseLibraryPage({
   };
 
   const handleDelete = async (ex: LibraryExercise) => {
-    if (!window.confirm(`Delete "${ex.name}" from the library? This cannot be undone.`)) return;
+    const n = usage.get(ex.id) ?? 0;
+    const extra = n > 0 ? `\n\n${n} patient${n > 1 ? "s" : ""} already have it — their programs keep their copy.` : "";
+    if (!window.confirm(`Delete "${ex.name}" from the library? This cannot be undone.${extra}`)) return;
     setDeletingId(ex.id);
     const result = await deleteExercise(ex.id);
     setDeletingId(null);
@@ -514,214 +566,147 @@ export default function ExerciseLibraryPage({
     showToast(`"${ex.name}" removed from library`);
   };
 
-  const openEdit = (ex: LibraryExercise) => {
-    setEditTarget(ex);
-    setModal("edit");
+  const handleDuplicate = async (ex: LibraryExercise) => {
+    const r = await duplicateExercise(ex);
+    showToast(r.error ? "Error: " + r.error : `Copied "${ex.name}"`);
   };
 
-  const openAssign = (ex: LibraryExercise) => {
-    setAssignTarget(ex);
-    setModal("assign");
-  };
+  const openEdit = (ex: LibraryExercise) => { setViewing(null); setEditTarget(ex); setModal("edit"); };
+  const openAssign = (list: LibraryExercise[]) => { setViewing(null); setAssignList(list); setModal("assign"); };
+  const togglePick = (id: string) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
-  // Filtered list
-  const displayed = exercises.filter((ex) => {
-    const matchSearch = ex.name.toLowerCase().includes(search.toLowerCase()) ||
-                        ex.description.toLowerCase().includes(search.toLowerCase());
-    const matchCat    = !filterCat || ex.category === filterCat;
-    const matchEquip  = !filterEquipment || ex.equipment === filterEquipment;
-    return matchSearch && matchCat && matchEquip;
+  // Filtered + sorted list
+  const q = search.trim().toLowerCase();
+  const base = exercises.filter((ex) =>
+    (!q || ex.name.toLowerCase().includes(q) || ex.description.toLowerCase().includes(q) || ex.category.toLowerCase().includes(q)) &&
+    (!filterEquipment || ex.equipment === filterEquipment) &&
+    (!filterDiff || ex.difficulty === filterDiff) &&
+    (!videoOnly || !!exerciseVideo(ex)));
+  const displayed = base.filter((ex) => !filterCat || ex.category === filterCat).sort((a, b) => {
+    if (sort === "used") return (usage.get(b.id) ?? 0) - (usage.get(a.id) ?? 0) || a.name.localeCompare(b.name);
+    if (sort === "newest") return (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0);
+    if (sort === "category") return (a.category || "~").localeCompare(b.category || "~") || a.name.localeCompare(b.name);
+    return a.name.localeCompare(b.name);
   });
 
-  const categories       = Array.from(new Set(exercises.map((e) => e.category).filter(Boolean)));
-  const usedEquipment    = Array.from(new Set(exercises.map((e) => e.equipment).filter(Boolean)));
+  const catCounts = new Map<string, number>();
+  base.forEach((e) => { if (e.category) catCounts.set(e.category, (catCounts.get(e.category) ?? 0) + 1); });
+  const categories    = [...catCounts.keys()].sort();
+  const usedEquipment = Array.from(new Set(exercises.map((e) => e.equipment).filter(Boolean))).sort();
+  const withVideo     = exercises.filter((e) => exerciseVideo(e)).length;
+  const pickedList    = exercises.filter((e) => picked.has(e.id));
+  const anyFilter     = !!(q || filterCat || filterEquipment || filterDiff || videoOnly);
 
   return (
     <>
       <style>{`
-        .el-root { font-family: 'Outfit', sans-serif; }
+        .el-root { font-family: 'Outfit', sans-serif; padding-bottom: 80px; }
 
-        /* ── Page header ── */
-        .el-header {
-          display: flex; align-items: flex-end; justify-content: space-between;
-          margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
-        }
-        .el-title {
-          font-family: 'Playfair Display', serif;
-          font-size: 22px; font-weight: 500; color: #1a1a1a;
-          letter-spacing: -0.02em; margin-bottom: 3px;
-        }
-        .el-sub { font-size: 13px; color: #9a9590; }
+        /* ── Hero ── */
+        .el-hero { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 20px 22px; border-radius: 20px; background: linear-gradient(135deg, #0C3C60 0%, #2E8BC0 100%); color: #fff; margin-bottom: 16px; }
+        .el-title { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 500; letter-spacing: -0.02em; }
+        .el-hero-stats { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        .el-hero-stat { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 100px; background: rgba(255,255,255,.16); }
+        .el-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .el-add-btn { display: inline-flex; align-items: center; gap: 7px; padding: 10px 16px; border-radius: 12px; border: none; background: #fff; color: #0C3C60; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; min-height: 44px; white-space: nowrap; }
+        .el-add-btn:hover { background: #EAF5FC; }
+        .el-ghost-btn { display: inline-flex; align-items: center; gap: 7px; padding: 10px 14px; border-radius: 12px; border: 1.5px solid rgba(255,255,255,.4); background: transparent; color: #fff; font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; min-height: 44px; white-space: nowrap; }
+        .el-ghost-btn.on { background: rgba(255,255,255,.2); border-color: #fff; }
 
         /* ── Toolbar ── */
-        .el-toolbar {
-          display: flex; flex-direction: column; align-items: stretch; gap: 8px;
-          margin-bottom: 14px;
-        }
-        .el-toolbar-row {
-          display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-        }
-        .el-search {
-          font-family: 'Outfit', sans-serif;
-          flex: 1; min-width: 0; padding: 10px 14px; border-radius: 10px;
-          border: 1.5px solid #e5e0d8; background: #fff; font-size: 14px;
-          color: #1a1a1a; outline: none; transition: border-color 0.15s;
-          min-height: 44px;
-        }
-        .el-search:focus { border-color: #2E8BC0; box-shadow: 0 0 0 3px rgba(46,139,192,0.08); }
-        .el-cat-filter {
-          font-family: 'Outfit', sans-serif;
-          padding: 10px 28px 10px 12px; border-radius: 10px;
-          border: 1.5px solid #e5e0d8; background: #fff; font-size: 13.5px;
-          color: #5a5550; outline: none; cursor: pointer; transition: border-color 0.15s;
-          appearance: none; -webkit-appearance: none; min-height: 44px;
-          background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%232d6a4f' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-          background-repeat: no-repeat; background-position: right 10px center;
-        }
-        .el-cat-filter:focus { border-color: #2E8BC0; }
+        .el-toolbar { background: #fff; border: 1.5px solid #e5e0d8; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+        .el-toolbar-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .el-search { flex: 1 1 220px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 12px; border: 1.5px solid #e5e0d8; background: #fafaf8; color: #9a9590; min-height: 44px; }
+        .el-search:focus-within { border-color: #2E8BC0; background: #fff; }
+        .el-search input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-family: inherit; font-size: 14px; color: #1a1a1a; }
+        .el-filter { font-family: inherit; padding: 0 28px 0 12px; border-radius: 12px; border: 1.5px solid #e5e0d8; background-color: #fafaf8; font-size: 13px; color: #5a5550; min-height: 44px; cursor: pointer; appearance: none; -webkit-appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a9590' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+        .el-filter.on { border-color: #2E8BC0; color: #0C3C60; background-color: #EAF5FC; }
+        .el-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; min-height: 44px; border-radius: 12px; border: 1.5px solid #e5e0d8; background: #fafaf8; font-family: inherit; font-size: 13px; font-weight: 600; color: #5a5550; cursor: pointer; }
+        .el-toggle.on { border-color: #2E8BC0; color: #0C3C60; background: #EAF5FC; }
+        .el-chip-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+        .el-chip { flex-shrink: 0; padding: 6px 12px; border-radius: 100px; border: 1.5px solid #e5e0d8; background: #fff; font-family: inherit; font-size: 12.5px; font-weight: 600; color: #5a5550; cursor: pointer; white-space: nowrap; }
+        .el-chip span { color: #9a9590; margin-left: 3px; font-weight: 500; }
+        .el-chip:hover { border-color: #B3DEF0; }
+        .el-chip.active { border-color: #0C3C60; background: #0C3C60; color: #fff; } .el-chip.active span { color: rgba(255,255,255,.7); }
+        .el-count-row { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; color: #9a9590; margin-bottom: 10px; }
+        .el-clear { background: none; border: none; color: #2E8BC0; font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
 
-        /* Equipment filter chips */
-        .el-chip-row {
-          display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
-        }
-        .el-chip-label {
-          font-size: 11px; font-weight: 600; color: #9a9590;
-          text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap;
-          margin-right: 2px;
-        }
-        .el-chip {
-          padding: 5px 12px; border-radius: 100px; border: 1.5px solid #e5e0d8;
-          background: #fff; font-family: 'Outfit', sans-serif;
-          font-size: 12.5px; font-weight: 500; color: #5a5550;
-          cursor: pointer; transition: all 0.15s; white-space: nowrap;
-        }
-        .el-chip:hover { border-color: #B3DEF0; color: #2E8BC0; background: #EAF5FC; }
-        .el-chip.active { border-color: #2E8BC0; color: #2E8BC0; background: #D6EEF8; }
+        /* ── Cards ── */
+        .el-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+        .el-card { position: relative; background: #fff; border: 1.5px solid #e5e0d8; border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; transition: box-shadow .18s, border-color .18s, transform .18s; }
+        .el-card:hover { border-color: #B3DEF0; box-shadow: 0 10px 28px rgba(12,60,96,.10); transform: translateY(-2px); }
+        .el-card.picked { border-color: #2E8BC0; box-shadow: 0 0 0 3px rgba(46,139,192,.18); }
+        .el-media { position: relative; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #D6EEF8, #EAF5FC); border: none; padding: 0; cursor: pointer; overflow: hidden; display: block; width: 100%; }
+        .el-media img { width: 100%; height: 100%; object-fit: cover; transition: transform .3s; }
+        .el-card:hover .el-media img { transform: scale(1.04); }
+        .el-media-ph { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #2E8BC0; font-size: 12px; font-weight: 600; }
+        .el-media::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(0,0,0,.35)); pointer-events: none; }
+        .el-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,.94); color: #0C3C60; display: flex; align-items: center; justify-content: center; padding-left: 3px; box-shadow: 0 6px 20px rgba(0,0,0,.25); transition: transform .15s; z-index: 1; }
+        .el-card:hover .el-play { transform: translate(-50%,-50%) scale(1.1); }
+        .el-badge { position: absolute; z-index: 1; font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 100px; text-transform: uppercase; letter-spacing: .04em; }
+        .el-badge.short { right: 8px; bottom: 8px; background: #ff0033; color: #fff; }
+        .el-badge.diff { left: 8px; top: 8px; }
+        .d-easy { background: #dcfce7; color: #166534; } .d-moderate { background: #fef3c7; color: #92400e; } .d-hard { background: #fee2e2; color: #991b1b; }
+        .el-pick { position: absolute; right: 8px; top: 8px; z-index: 2; width: 26px; height: 26px; border-radius: 8px; border: 2px solid #fff; background: rgba(0,0,0,.3); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .el-card.picked .el-pick { background: #2E8BC0; border-color: #2E8BC0; }
+        .el-body { padding: 12px 14px 4px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+        .el-name { font-size: 15px; font-weight: 700; color: #1a1a1a; line-height: 1.25; cursor: pointer; }
+        .el-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+        .el-tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 100px; background: #EAF5FC; color: #0C3C60; }
+        .el-tag.eq { background: #f3f4f6; color: #374151; }
+        .el-desc { font-size: 12.5px; color: #7a7570; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .el-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: #9a9590; margin-top: auto; padding-top: 4px; }
+        .el-dose { font-weight: 700; color: #0C3C60; }
+        .el-used { display: inline-flex; align-items: center; gap: 4px; }
+        .el-caution { display: inline-flex; align-items: center; gap: 3px; color: #dc2626; font-weight: 600; }
+        .el-actions { display: flex; gap: 6px; padding: 10px 14px 14px; }
+        .el-btn-assign { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 10px; border-radius: 10px; border: none; background: #2E8BC0; color: #fff; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .el-btn-assign:hover { background: #0C3C60; }
+        .el-icon-btn { width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px; border: 1.5px solid #e5e0d8; background: #fafaf8; color: #7a7570; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        .el-icon-btn:hover { border-color: #B3DEF0; color: #2E8BC0; }
+        .el-icon-btn.del:hover { border-color: #fca5a5; color: #b91c1c; background: #fff5f3; }
+        .el-icon-btn:disabled { opacity: .5; cursor: wait; }
+        .el-viewonly { font-size: 12px; color: #c0bbb4; font-style: italic; padding: 8px 0; }
+        .el-skel-card { height: 280px; border-radius: 18px; background: linear-gradient(90deg, #f0ede8 0%, #e5e0d8 50%, #f0ede8 100%); background-size: 200% 100%; animation: elShimmer 1.4s ease infinite; }
 
-        /* Add button */
-        .el-add-btn {
-          display: inline-flex; align-items: center; gap: 7px;
-          padding: 10px 16px; border-radius: 10px; border: none;
-          background: #2E8BC0; color: #fff;
-          font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 500;
-          cursor: pointer; transition: background 0.2s; white-space: nowrap;
-          min-height: 44px;
-        }
-        .el-add-btn:hover { background: #0C3C60; }
+        /* ── Bulk bar ── */
+        .el-bulkbar { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 900; display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 18px; border-radius: 16px; background: #0C3C60; color: #fff; box-shadow: 0 14px 40px rgba(12,60,96,.35); font-size: 14px; font-weight: 600; animation: elToastIn .25s cubic-bezier(.16,1,.3,1) both; max-width: calc(100vw - 24px); }
+        .el-bulkbar button { border: none; border-radius: 10px; padding: 9px 14px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .el-bulkbar .go { background: #fff; color: #0C3C60; } .el-bulkbar .go:disabled { opacity: .5; }
+        .el-bulkbar .x { background: rgba(255,255,255,.14); color: #fff; }
 
-        /* ── Count row ── */
-        .el-count-row {
-          font-size: 12px; color: #9a9590; margin-bottom: 10px;
-        }
+        /* ── Modal extras ── */
+        .el-seg { display: flex; gap: 6px; flex-wrap: wrap; }
+        .el-seg-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 10px; border-radius: 10px; border: 1.5px solid #e5e0d8; background: #fff; font-family: inherit; font-size: 13px; font-weight: 600; color: #7a7570; cursor: pointer; white-space: nowrap; }
+        .el-seg-btn.on { border-color: #2E8BC0; background: #2E8BC0; color: #fff; }
+        .el-seg-btn.on.home { border-color: #059669; background: #059669; }
+        .el-seg-btn.on.d-easy { background: #16a34a; border-color: #16a34a; color: #fff; }
+        .el-seg-btn.on.d-moderate { background: #d97706; border-color: #d97706; color: #fff; }
+        .el-seg-btn.on.d-hard { background: #dc2626; border-color: #dc2626; color: #fff; }
+        .el-seg-btn.on.d-none { background: #5a5550; border-color: #5a5550; }
+        .el-bulk-list { display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow-y: auto; border: 1.5px solid #e5e0d8; border-radius: 12px; padding: 6px; background: #fafaf8; }
+        .el-bulk-item { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; color: #1a1a1a; padding: 6px 8px; }
+        .el-bulk-item small { color: #9a9590; font-weight: 500; white-space: nowrap; }
+        .el-hint { font-size: 12px; color: #9a9590; }
+        .el-change { margin-left: auto; background: none; border: none; color: #2E8BC0; font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+        .el-success { display: flex; align-items: flex-start; gap: 8px; background: #dcfce7; border: 1px solid #86efac; border-radius: 10px; padding: 10px 12px; font-size: 13px; color: #166534; }
+        .el-sb-actions { display: flex; gap: 8px; }
+        .el-sb-actions .el-btn-assign { padding: 11px; font-size: 14px; }
 
-        /* ── Exercise cards ── */
-        .el-grid {
-          display: flex; flex-direction: column; gap: 8px;
+        @media (max-width: 600px) {
+          .el-hero { padding: 16px; border-radius: 16px; }
+          .el-hero-actions { width: 100%; } .el-hero-actions button { flex: 1; justify-content: center; }
+          .el-filter, .el-toggle { flex: 1 1 calc(50% - 8px); }
+          .el-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+          .el-body { padding: 10px 10px 2px; } .el-name { font-size: 13.5px; }
+          .el-desc { display: none; }
+          .el-actions { padding: 8px 10px 10px; flex-wrap: wrap; }
+          .el-btn-assign { flex-basis: 100%; }
+          .el-icon-btn { flex: 1; height: 32px; }
+          .el-play { width: 40px; height: 40px; }
+          .el-sb-actions .el-icon-btn { flex: 0 0 44px; height: 44px; }
         }
-        .el-card {
-          background: #fff; border: 1.5px solid #e5e0d8; border-radius: 14px;
-          padding: 14px 14px; display: flex; align-items: flex-start; gap: 12px;
-          flex-wrap: wrap;
-          transition: border-color 0.15s, box-shadow 0.15s;
-        }
-        .el-video-wrap {
-          width: 100%; flex-basis: 100%;
-          border-radius: 10px; overflow: hidden;
-          position: relative; padding-top: 56.25%; /* 16:9 */
-          margin-top: 10px;
-        }
-        .el-video-wrap iframe {
-          position: absolute; inset: 0;
-          width: 100%; height: 100%;
-          border: none; display: block;
-        }
-        .el-card:hover { border-color: #B3DEF0; box-shadow: 0 2px 12px rgba(46,139,192,0.07); }
-
-        /* Thumbnail / media indicator */
-        .el-thumb {
-          width: 52px; height: 52px; border-radius: 10px; flex-shrink: 0;
-          overflow: hidden; background: #f5f3ef;
-          display: flex; align-items: center; justify-content: center;
-          border: 1px solid #e5e0d8;
-        }
-        .el-thumb img { width: 100%; height: 100%; object-fit: cover; }
-        .el-thumb-icon { font-size: 22px; }
-
-        /* Card body */
-        .el-card-body { flex: 1; min-width: 0; }
-        .el-card-top {
-          display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-          margin-bottom: 4px;
-        }
-        .el-card-name {
-          font-size: 15px; font-weight: 600; color: #1a1a1a;
-        }
-        .el-card-cat {
-          font-size: 11px; font-weight: 600;
-          background: #D6EEF8; color: #0C3C60;
-          padding: 2px 8px; border-radius: 100px;
-        }
-        .el-card-desc {
-          font-size: 13px; color: #5a5550; margin-bottom: 6px;
-          display: -webkit-box; -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical; overflow: hidden;
-        }
-        .el-card-meta {
-          display: flex; gap: 14px; flex-wrap: wrap;
-          font-size: 12.5px; color: #9a9590;
-        }
-        .el-card-meta-item {
-          display: flex; align-items: center; gap: 4px;
-        }
-        .el-card-meta-val { font-weight: 600; color: #1a1a1a; }
-
-        /* Card actions */
-        .el-card-actions {
-          display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
-        }
-        .el-btn-assign {
-          display: inline-flex; align-items: center; gap: 5px;
-          padding: 6px 12px; border-radius: 8px;
-          border: 1.5px solid #B3DEF0; background: #EAF5FC;
-          font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 500;
-          color: #2E8BC0; cursor: pointer; transition: all 0.15s; white-space: nowrap;
-        }
-        .el-btn-assign:hover { background: #D6EEF8; border-color: #2E8BC0; }
-        .el-btn-edit {
-          display: inline-flex; align-items: center; gap: 5px;
-          padding: 6px 12px; border-radius: 8px;
-          border: 1.5px solid #e5e0d8; background: #fafaf8;
-          font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 500;
-          color: #5a5550; cursor: pointer; transition: all 0.15s; white-space: nowrap;
-        }
-        .el-btn-edit:hover { background: #f0ede8; }
-        .el-btn-del {
-          display: inline-flex; align-items: center; gap: 5px;
-          padding: 6px 12px; border-radius: 8px;
-          border: 1.5px solid #e5e0d8; background: #fafaf8;
-          font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 500;
-          color: #c0bbb4; cursor: pointer; transition: all 0.15s; white-space: nowrap;
-        }
-        .el-btn-del:hover:not(:disabled) { border-color: #fca5a5; color: #b91c1c; background: #fff5f3; }
-        .el-btn-del:disabled { opacity: 0.5; cursor: not-allowed; }
-        .el-media-link-btn {
-          display: inline-flex; align-items: center; gap: 5px;
-          font-size: 12px; color: #5BC0BE; font-weight: 500;
-          padding: 2px 0; background: none; border: none; cursor: pointer;
-          font-family: 'Outfit', sans-serif;
-          transition: color 0.15s;
-        }
-        .el-media-link-btn:hover { color: #2E8BC0; }
-
-        /* Empty state */
-        .el-empty {
-          text-align: center; padding: 64px 24px;
-          background: #fafaf8; border-radius: 16px; border: 1.5px dashed #e5e0d8;
-        }
-        .el-empty-icon { font-size: 36px; margin-bottom: 12px; }
-        .el-empty-title { font-family: 'Playfair Display', serif; font-size: 20px; color: #1a1a1a; margin-bottom: 6px; }
-        .el-empty-sub { font-size: 13.5px; color: #9a9590; margin-bottom: 20px; }
-
         /* ── Skeleton ── */
         .el-skel {
           height: 78px; border-radius: 16px;
@@ -822,12 +807,6 @@ export default function ExerciseLibraryPage({
           padding: 10px 14px; font-size: 13.5px; color: #b91c1c;
         }
 
-        /* Media preview */
-        .el-media-preview { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
-        .el-preview-img { width: 72px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid #e5e0d8; }
-        .el-preview-link { font-size: 12.5px; color: #5BC0BE; font-weight: 500; }
-        .el-preview-link:hover { color: #2E8BC0; }
-
         /* Patient list in assign modal */
         .el-patient-list {
           max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;
@@ -851,6 +830,7 @@ export default function ExerciseLibraryPage({
         .el-patient-cond { font-size: 11.5px; color: #9a9590; }
         .el-patient-check { color: #2E8BC0; margin-left: auto; flex-shrink: 0; }
         .el-selected-banner {
+          display: flex; align-items: center; gap: 10px;
           background: #D6EEF8; border: 1px solid #B3DEF0; border-radius: 10px;
           padding: 8px 14px; font-size: 13px; color: #0C3C60;
         }
@@ -915,55 +895,56 @@ export default function ExerciseLibraryPage({
 
       <div className="el-root">
 
-        {/* Page header */}
-        <div className="el-header">
+        {/* Hero */}
+        <div className="el-hero">
           <div>
             <div className="el-title">Exercise Library</div>
-            <div className="el-sub">
-              {loading ? "Loading…" : `${exercises.length} exercise${exercises.length !== 1 ? "s" : ""} in library`}
+            <div className="el-hero-stats">
+              <span className="el-hero-stat">{loading ? "Loading…" : `${exercises.length} exercises`}</span>
+              {!loading && <span className="el-hero-stat">{withVideo} with video</span>}
+              {!loading && <span className="el-hero-stat">{new Set(exercises.map((e) => e.category).filter(Boolean)).size} categories</span>}
             </div>
           </div>
           {canEdit && (
-            <button className="el-add-btn" onClick={() => setModal("add")}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              Add Exercise
-            </button>
+            <div className="el-hero-actions">
+              <button className={`el-ghost-btn ${selecting ? "on" : ""}`} onClick={() => { setSelecting((v) => !v); setPicked(new Set()); }}>
+                <ListChecks size={15} /> {selecting ? "Cancel selection" : "Select to assign"}
+              </button>
+              <button className="el-add-btn" onClick={() => setModal("add")}><Plus size={15} strokeWidth={2.5} /> Add Exercise</button>
+            </div>
           )}
         </div>
 
         {/* Toolbar */}
         <div className="el-toolbar">
           <div className="el-toolbar-row">
-            <input
-              className="el-search"
-              placeholder="Search exercises…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <select
-              className="el-cat-filter"
-              value={filterCat}
-              onChange={(e) => setFilterCat(e.target.value)}
-            >
-              <option value="">All Categories</option>
-              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            <label className="el-search"><Search size={15} />
+              <input placeholder="Search exercises…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              {search && <X size={14} style={{ cursor: "pointer" }} onClick={() => setSearch("")} />}
+            </label>
+            <select className={`el-filter ${filterEquipment ? "on" : ""}`} value={filterEquipment} onChange={(e) => setFilterEquipment(e.target.value)}>
+              <option value="">Any equipment</option>
+              {usedEquipment.map((eq) => <option key={eq} value={eq}>{eq}</option>)}
+            </select>
+            <select className={`el-filter ${filterDiff ? "on" : ""}`} value={filterDiff} onChange={(e) => setFilterDiff(e.target.value)}>
+              <option value="">Any difficulty</option>
+              {(["easy", "moderate", "hard"] as const).map((d) => <option key={d} value={d}>{DIFF_LABEL[d]}</option>)}
+            </select>
+            <button className={`el-toggle ${videoOnly ? "on" : ""}`} onClick={() => setVideoOnly((v) => !v)}><Video size={14} /> Has video</button>
+            <select className="el-filter" value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+              <option value="name">Sort: A–Z</option>
+              <option value="newest">Sort: Newest</option>
+              <option value="used">Sort: Most used</option>
+              <option value="category">Sort: Category</option>
             </select>
           </div>
-          {usedEquipment.length > 0 && (
+          {categories.length > 0 && (
             <div className="el-chip-row">
-              <span className="el-chip-label">Equipment:</span>
-              <button
-                className={`el-chip${filterEquipment === "" ? " active" : ""}`}
-                onClick={() => setFilterEquipment("")}
-              >All</button>
-              {usedEquipment.map((eq) => (
-                <button
-                  key={eq}
-                  className={`el-chip${filterEquipment === eq ? " active" : ""}`}
-                  onClick={() => setFilterEquipment(filterEquipment === eq ? "" : eq)}
-                >{eq}</button>
+              <button className={`el-chip${filterCat === "" ? " active" : ""}`} onClick={() => setFilterCat("")}>All<span>{base.length}</span></button>
+              {categories.map((c) => (
+                <button key={c} className={`el-chip${filterCat === c ? " active" : ""}`} onClick={() => setFilterCat(filterCat === c ? "" : c)}>
+                  {c}<span>{catCounts.get(c)}</span>
+                </button>
               ))}
             </div>
           )}
@@ -971,135 +952,97 @@ export default function ExerciseLibraryPage({
 
         {!loading && (
           <div className="el-count-row">
-            {displayed.length === exercises.length
-              ? `Showing all ${displayed.length} exercise${displayed.length !== 1 ? "s" : ""}`
-              : `${displayed.length} of ${exercises.length} exercise${exercises.length !== 1 ? "s" : ""}`
-            }
+            <span>{displayed.length === exercises.length ? `Showing all ${displayed.length}` : `${displayed.length} of ${exercises.length}`}{selecting ? " · tap cards to select" : ""}</span>
+            {(anyFilter || filterCat) && <button className="el-clear" onClick={() => { setSearch(""); setFilterCat(""); setFilterEquipment(""); setFilterDiff(""); setVideoOnly(false); }}>Clear filters</button>}
           </div>
         )}
 
-        {/* Exercise list */}
-        <div className="el-grid">
-          {loading
-            ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="el-skel" />)
-            : displayed.length === 0
-              ? (
-                <div className="el-empty">
-                  <div className="el-empty-icon">🏋️</div>
-                  <div className="el-empty-title">
-                    {exercises.length === 0 ? "No exercises yet" : "No results found"}
-                  </div>
-                  <div className="el-empty-sub">
-                    {exercises.length === 0
-                      ? "Add exercises to the library to get started."
-                      : "Try a different search term or category."}
-                  </div>
-                  {exercises.length === 0 && canEdit && (
-                    <button className="el-add-btn" onClick={() => setModal("add")}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                      </svg>
-                      Add First Exercise
-                    </button>
-                  )}
-                </div>
-              )
-              : displayed.map((ex) => {
-                  const thumb = ex.mediaUrl
-                    ? isYouTube(ex.mediaUrl) ? youTubeThumb(ex.mediaUrl)
-                    : isImage(ex.mediaUrl)   ? ex.mediaUrl
-                    : null
-                    : null;
-
-                  return (
-                    <div key={ex.id} className="el-card">
-                      {/* Thumbnail */}
-                      <div className="el-thumb">
-                        {thumb
-                          ? <img src={thumb} alt={ex.name} />
-                          : <span className="el-thumb-icon">🏋️</span>
-                        }
-                      </div>
-
-                      {/* Body */}
-                      <div className="el-card-body">
-                        <div className="el-card-top">
-                          <span className="el-card-name">{ex.name}</span>
-                          {ex.category && <span className="el-card-cat">{ex.category}</span>}
-                          {ex.equipment && (
-                            <span className="el-card-cat" style={{ background: "#f3f4f6", color: "#374151" }}>
-                              {ex.equipment}
-                            </span>
-                          )}
-                        </div>
-
-                        {ex.description && (
-                          <div className="el-card-desc">{ex.description}</div>
-                        )}
-
-                        <div className="el-card-meta">
-                          <div className="el-card-meta-item">
-                            Sets: <span className="el-card-meta-val">&nbsp;{ex.defaultSets}</span>
-                          </div>
-                          <div className="el-card-meta-item">
-                            Reps: <span className="el-card-meta-val">&nbsp;{ex.defaultReps}</span>
-                          </div>
-                          {ex.defaultHoldTime > 0 && (
-                            <div className="el-card-meta-item">
-                              Hold: <span className="el-card-meta-val">&nbsp;{ex.defaultHoldTime}s</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {ex.videoId && (
-                        <VideoEmbed videoId={ex.videoId} wrapperStyle={{ marginTop: 10, width: "100%", flexBasis: "100%" }} />
-                      )}
-
-                      {/* Actions */}
-                      <div className="el-card-actions">
-                        {canEdit ? (
-                        <><button className="el-btn-assign" onClick={() => openAssign(ex)}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                            <circle cx="9" cy="7" r="4"/>
-                            <line x1="19" y1="8" x2="19" y2="14"/>
-                            <line x1="22" y1="11" x2="16" y2="11"/>
-                          </svg>
-                          Assign to Patient
-                        </button>
-                        <button className="el-btn-edit" onClick={() => openEdit(ex)}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                          </svg>
-                          Edit
-                        </button>
-                        <button
-                          className="el-btn-del"
-                          disabled={deletingId === ex.id}
-                          onClick={() => handleDelete(ex)}
-                        >
-                          {deletingId === ex.id
-                            ? <><span style={{ width: 11, height: 11, border: "2px solid #e5e0d8", borderTopColor: "#b91c1c", borderRadius: "50%", display: "block", animation: "elSpin 0.7s linear infinite" }} /> Deleting…</>
-                            : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="3 6 5 6 21 6"/>
-                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                                <path d="M10 11v6M14 11v6"/>
-                                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                              </svg> Delete</>
-                          }
-                        </button>
-                        </>) : (
-                          <span style={{ fontSize: 12, color: "#c0bbb4", fontStyle: "italic", padding: "4px 0" }}>View only</span>
-                        )}
-                      </div>
+        {/* Exercise grid */}
+        {loading ? (
+          <div className="el-grid">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="el-skel-card" />)}</div>
+        ) : displayed.length === 0 ? (
+          <div className="el-empty">
+            <div className="el-empty-icon">🏋️</div>
+            <div className="el-empty-title">{exercises.length === 0 ? "No exercises yet" : "No results found"}</div>
+            <div className="el-empty-sub">{exercises.length === 0 ? "Add exercises to the library to get started." : "Try a different search or filter."}</div>
+            {exercises.length === 0 && canEdit && (
+              <button className="el-add-btn" style={{ background: "#2E8BC0", color: "#fff" }} onClick={() => setModal("add")}><Plus size={15} /> Add First Exercise</button>
+            )}
+          </div>
+        ) : (
+          <div className="el-grid">
+            {displayed.map((ex, i) => {
+              const thumb = cardThumb(ex);
+              const v = exerciseVideo(ex);
+              const used = usage.get(ex.id) ?? 0;
+              const isPicked = picked.has(ex.id);
+              const open = () => (selecting ? togglePick(ex.id) : setViewing(i));
+              return (
+                <div key={ex.id} className={`el-card ${isPicked ? "picked" : ""}`}>
+                  <button className="el-media" onClick={open} aria-label={`View ${ex.name}`}>
+                    {thumb ? <img src={thumb} alt="" loading="lazy" /> : <span className="el-media-ph"><Dumbbell size={26} />{ex.category || "Exercise"}</span>}
+                    {v && !selecting && <span className="el-play"><Play size={20} fill="currentColor" /></span>}
+                    {v?.isShort && <span className="el-badge short">Short</span>}
+                    {ex.difficulty && <span className={`el-badge diff d-${ex.difficulty}`}>{DIFF_LABEL[ex.difficulty]}</span>}
+                  </button>
+                  {selecting && <span className="el-pick" onClick={() => togglePick(ex.id)}>{isPicked && <Check size={14} strokeWidth={3} />}</span>}
+                  <div className="el-body">
+                    <div className="el-name" onClick={open}>{ex.name}</div>
+                    <div className="el-tags">
+                      {ex.category && <span className="el-tag">{ex.category}</span>}
+                      {ex.equipment && <span className="el-tag eq">{ex.equipment}</span>}
                     </div>
-                  );
-                })
-          }
-        </div>
+                    {ex.description && <div className="el-desc">{ex.description}</div>}
+                    <div className="el-meta">
+                      <span className="el-dose">{ex.defaultSets} × {ex.defaultReps}{ex.defaultHoldTime > 0 ? ` · ${ex.defaultHoldTime}s` : ""}</span>
+                      <span className="el-used" title="Patients with this exercise in their program"><Users size={12} /> {used}</span>
+                      {ex.precautions && <span className="el-caution" title={ex.precautions}><AlertTriangle size={12} /> Caution</span>}
+                    </div>
+                  </div>
+                  <div className="el-actions">
+                    {canEdit ? (
+                      <>
+                        <button className="el-btn-assign" onClick={() => openAssign([ex])}><UserPlus size={14} /> Assign</button>
+                        <button className="el-icon-btn" title="Edit" onClick={() => openEdit(ex)}><Pencil size={14} /></button>
+                        <button className="el-icon-btn" title="Duplicate" onClick={() => handleDuplicate(ex)}><Copy size={14} /></button>
+                        <button className="el-icon-btn del" title="Delete" disabled={deletingId === ex.id} onClick={() => handleDelete(ex)}><Trash2 size={14} /></button>
+                      </>
+                    ) : <span className="el-viewonly">View only</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* Bulk selection bar */}
+      {selecting && (
+        <div className="el-bulkbar">
+          <span>{picked.size} selected</span>
+          <button className="go" disabled={picked.size === 0} onClick={() => openAssign(pickedList)}>Assign to patient</button>
+          <button className="x" onClick={() => { setSelecting(false); setPicked(new Set()); }}>Cancel</button>
+        </div>
+      )}
+
+      {/* Video showbox */}
+      {viewing !== null && displayed[viewing] && (
+        <VideoShowbox
+          items={displayed.map(toShowboxItem)}
+          index={viewing}
+          onIndex={setViewing}
+          onClose={() => setViewing(null)}
+          footer={canEdit ? (item) => {
+            const ex = displayed.find((e) => e.id === item.key);
+            return ex ? (
+              <div className="el-sb-actions">
+                <button className="el-btn-assign" onClick={() => openAssign([ex])}><UserPlus size={15} /> Assign to patient</button>
+                <button className="el-icon-btn" style={{ width: 44, height: 44 }} title="Edit" onClick={() => openEdit(ex)}><Pencil size={15} /></button>
+              </div>
+            ) : null;
+          } : undefined}
+        />
+      )}
 
       {/* Add / Edit modal */}
       {(modal === "add" || modal === "edit") && (
@@ -1116,13 +1059,16 @@ export default function ExerciseLibraryPage({
       )}
 
       {/* Assign modal */}
-      {modal === "assign" && assignTarget && (
+      {modal === "assign" && assignList.length > 0 && (
         <AssignModal
-          exercise={assignTarget}
+          exercises={assignList}
           patients={patients}
           physioId={physioId}
-          isManager={isManager}
-          onClose={() => { setModal(null); setAssignTarget(null); }}
+          onAssigned={refreshUsage}
+          onClose={() => {
+            setModal(null); setAssignList([]);
+            if (selecting) { setSelecting(false); setPicked(new Set()); }
+          }}
         />
       )}
 

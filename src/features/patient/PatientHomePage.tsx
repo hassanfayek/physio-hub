@@ -3,7 +3,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../hooks/useAuth";
-import { VideoEmbed } from "../../components/VideoEmbed";
+import VideoShowbox from "../../components/VideoShowbox";
+import { exerciseVideo } from "../../utils/youtube";
 import {
   subscribeToPatientAppointments,
   fmtHour,
@@ -144,7 +145,9 @@ function ExCard({
   onComplete: (id: string, val: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [watching, setWatching] = useState(false);
   const done = ex.completed ?? false;
+  const video = exerciseVideo(ex);
 
   return (
     <div className={`pth-ex-card${done ? " pth-ex-card-done" : ""}`}>
@@ -185,10 +188,18 @@ function ExCard({
           {ex.notes && (
             <div className="pth-ex-notes">{ex.notes}</div>
           )}
-          {ex.videoId && (
-            <VideoEmbed videoId={ex.videoId} wrapperStyle={{ marginTop: 10 }} />
+          {video && (
+            <button className="pth-ex-thumb" onClick={() => setWatching(true)} aria-label="Watch video">
+              <img src={video.thumb} alt="" loading="lazy" />
+              <span>▶</span>
+            </button>
           )}
-          {!ex.videoId && !ex.notes && (
+          {watching && video && (
+            <VideoShowbox index={0} onIndex={() => {}} onClose={() => setWatching(false)}
+              items={[{ key: ex.id, title: ex.name, video, notes: ex.notes,
+                dosage: [ex.sets && `${ex.sets} sets`, ex.reps && `${ex.reps} reps`, ex.holdTime && `${ex.holdTime}s hold`].filter(Boolean).join(" · ") }]} />
+          )}
+          {!video && !ex.notes && (
             <div style={{ fontSize: 12, color: "#b0aca6" }}>No additional details.</div>
           )}
         </div>
@@ -454,6 +465,9 @@ export default function PatientHomePage({ onNavigate }: PatientHomePageProps) {
         .pth-ex-expanded {
           padding:0 14px 14px 52px;
         }
+        .pth-ex-thumb { position:relative; display:block; width:100%; max-width:320px; aspect-ratio:16/9; margin-top:10px; padding:0; border:none; border-radius:12px; overflow:hidden; cursor:pointer; background:#000; }
+        .pth-ex-thumb img { width:100%; height:100%; object-fit:cover; opacity:.88; }
+        .pth-ex-thumb span { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:46px; height:46px; border-radius:50%; background:rgba(255,255,255,.94); color:#0C3C60; display:flex; align-items:center; justify-content:center; font-size:16px; padding-left:3px; box-shadow:0 4px 14px rgba(0,0,0,.3); }
         .pth-ex-notes {
           font-size:13px; color:#5a5550; line-height:1.5;
         }

@@ -12,6 +12,7 @@ import {
   setDoc,
   query,
   where,
+  getDocs,
   orderBy,
   onSnapshot,
   serverTimestamp,
@@ -34,7 +35,19 @@ export interface LibraryExercise {
   notes:        string;
   mediaUrl:     string;
   videoId:      string;   // YouTube video ID (e.g. "dQw4w9WgXcQ")
+  difficulty:   Difficulty;
+  precautions:  string;
   createdAt:    Timestamp | null;
+}
+
+export type Difficulty = "" | "easy" | "moderate" | "hard";
+export type Effort = "easy" | "ok" | "hard";
+
+/** What the patient reported after doing an exercise. Pain is optional (0–10). */
+export interface ExerciseFeedback {
+  effort: Effort;
+  pain:   number | null;
+  date:   string;          // YYYY-MM-DD
 }
 
 export interface PatientExercise {
@@ -57,6 +70,7 @@ export interface PatientExercise {
   programType:   "clinic" | "home";
   timeOfDay?:    "Morning" | "Afternoon" | "Evening";
   skipped?:      boolean;
+  lastFeedback?: ExerciseFeedback;
 }
 
 export interface CreateExercisePayload {
@@ -70,6 +84,8 @@ export interface CreateExercisePayload {
   notes:           string;
   mediaUrl:        string;
   videoId:         string;
+  difficulty?:     Difficulty;
+  precautions?:    string;
 }
 
 export interface AssignExercisePayload {
@@ -109,6 +125,8 @@ function docToLibraryExercise(id: string, data: Record<string, unknown>): Librar
     notes:           (data.notes           as string)  ?? "",
     mediaUrl:        (data.mediaUrl        as string)  ?? "",
     videoId:         (data.videoId         as string)  ?? "",
+    difficulty:      (["easy", "moderate", "hard"].includes(data.difficulty as string) ? data.difficulty : "") as Difficulty,
+    precautions:     (data.precautions     as string)  ?? "",
     createdAt:       (data.createdAt       as Timestamp | null) ?? null,
   };
 }
@@ -135,6 +153,7 @@ function docToPatientExercise(id: string, data: Record<string, unknown>): Patien
     programType:  ((data.programType as string) === "home" ? "home" : "clinic") as "clinic" | "home",
     timeOfDay:    (data.timeOfDay as "Morning" | "Afternoon" | "Evening" | undefined) ?? undefined,
     skipped:      (data.skipped as boolean | undefined) ?? undefined,
+    lastFeedback: (data.lastFeedback as ExerciseFeedback | undefined) ?? undefined,
   };
 }
 
@@ -175,6 +194,25 @@ export async function deleteExercise(
   } catch (err) {
     return { error: parseError(err) };
   }
+}
+
+export async function duplicateExercise(ex: LibraryExercise): Promise<{ id?: string; error?: string }> {
+  const { id: _id, createdAt: _c, ...rest } = ex;
+  void _id; void _c;
+  return createExercise({ ...rest, name: `${ex.name} (copy)` });
+}
+
+/** How many distinct patients currently have each library exercise assigned. */
+export async function fetchExerciseUsage(): Promise<Map<string, number>> {
+  const snap = await getDocs(collection(db, "patientExercises"));
+  const sets = new Map<string, Set<string>>();
+  snap.docs.forEach((d) => {
+    const { exerciseId, patientId } = d.data() as { exerciseId?: string; patientId?: string };
+    if (!exerciseId || !patientId) return;
+    if (!sets.has(exerciseId)) sets.set(exerciseId, new Set());
+    sets.get(exerciseId)!.add(patientId);
+  });
+  return new Map([...sets].map(([k, v]) => [k, v.size]));
 }
 
 // ─── Exercise Library: realtime listener ─────────────────────────────────────
@@ -302,6 +340,29 @@ export async function toggleExerciseCompletion(
         { merge: true }
       );
     }
+    return {};
+  } catch (err) {
+    return { error: parseError(err) };
+  }
+}
+
+// ─── Patient Exercises: feedback after doing an exercise ─────────────────────
+// The latest answer sits on the assignment (so the physio sees it at a glance);
+// every answer is also kept in exerciseFeedback for history.
+
+export async function saveExerciseFeedback(
+  rec: Pick<PatientExercise, "id" | "patientId" | "exerciseId" | "exerciseName">,
+  effort: Effort,
+  pain: number | null,
+  today: string
+): Promise<{ error?: string }> {
+  const fb: ExerciseFeedback = { effort, pain: pain === null ? null : Math.max(0, Math.min(10, Math.round(pain))), date: today };
+  try {
+    await updateDoc(doc(db, "patientExercises", rec.id), { lastFeedback: fb });
+    await addDoc(collection(db, "exerciseFeedback"), {
+      patientId: rec.patientId, patientExerciseId: rec.id, exerciseId: rec.exerciseId,
+      exerciseName: rec.exerciseName, ...fb, createdAt: serverTimestamp(),
+    });
     return {};
   } catch (err) {
     return { error: parseError(err) };

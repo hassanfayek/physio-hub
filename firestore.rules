@@ -156,9 +156,18 @@ service cloud.firestore {
     }
 
     // ── Exercise Library ─────────────────────────────────────────────────────
+    // Patients read it too, for the how-to text and precautions in their video viewer.
     match /exerciseLibrary/{exerciseId} {
-      allow read:  if isStaff();
+      allow read:  if isStaff() || isPatient();
       allow write: if isManager() || isPhysio();
+    }
+
+    // "How did it feel?" answers patients give after an exercise (history log).
+    match /exerciseFeedback/{docId} {
+      allow read:   if isStaff() || (isPatient() && resource.data.patientId == request.auth.uid);
+      allow create: if isPatient() && request.resource.data.patientId == request.auth.uid
+                    && request.resource.data.effort in ['easy', 'ok', 'hard'];
+      allow delete: if isManager();
     }
 
     // ── Treatment Protocols ───────────────────────────────────────────────────

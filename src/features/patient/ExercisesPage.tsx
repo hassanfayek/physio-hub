@@ -1,134 +1,72 @@
 // FILE: src/features/patient/ExercisesPage.tsx
-// Patient-facing exercise page.
-// Loads from patientExercises where patientId == currentUser.uid (realtime).
-// Two tabs: Clinic Exercises | Home Program (filtered by programType field).
-// Checkbox writes completed + completedAt to Firestore via toggleExerciseCompletion.
+// Patient-facing exercise page — today's home program.
+// Loads from patientExercises where patientId == currentUser.uid (realtime);
+// patients only see home-program exercises (clinic ones are done with the physio).
+// Marking done goes through toggleExerciseCompletion (also logs the streak day),
+// then asks "How did it feel?" + optional pain, which the physio sees.
+// Videos open in the shared VideoShowbox.
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "../../hooks/useAuth";
-import { VideoEmbed } from "../../components/VideoEmbed";
+import VideoShowbox, { type ShowboxItem } from "../../components/VideoShowbox";
+import { FeedbackPrompt, FeedbackBadge } from "../../components/ExerciseFeedback";
 import {
   subscribeToPatientExercises,
+  subscribeToExerciseLibrary,
   resetDailyHomeExercises,
   toggleExerciseCompletion,
+  saveExerciseFeedback,
   type PatientExercise,
+  type LibraryExercise,
+  type Effort,
 } from "../../services/exerciseService";
+import { clinicToday } from "../../services/businessService";
+import { exerciseVideo } from "../../utils/youtube";
 import type { PatientProfile } from "../../services/authService";
-import { Check, Dumbbell, ChevronDown } from "lucide-react";
+import { Check, Dumbbell, Play, AlertTriangle } from "lucide-react";
 
-// ─── Skeleton card ────────────────────────────────────────────────────────────
-
-function SkeletonCard() {
-  return (
-    <div className="ep-card">
-      <div className="ep-card-header">
-        <div className="ep-skel ep-skel-title" />
-        <div className="ep-skel ep-skel-badge" />
-      </div>
-      <div className="ep-skel ep-skel-line" style={{ marginBottom: 8 }} />
-      <div className="ep-skel ep-skel-line" style={{ width: "70%" }} />
-      <div className="ep-stats-grid" style={{ marginTop: 16 }}>
-        {[1, 2, 3].map((n) => (
-          <div key={n} className="ep-skel ep-skel-stat" />
-        ))}
-      </div>
-    </div>
-  );
-}
+const dosage = (e: PatientExercise) => `${e.sets} sets · ${e.reps} reps${(e.holdTime ?? 0) > 0 ? ` · ${e.holdTime}s hold` : ""}`;
 
 // ─── Exercise card ────────────────────────────────────────────────────────────
 
-function ExerciseCard({
-  exercise,
-  onToggle,
-  toggling,
-}: {
-  exercise: PatientExercise;
-  onToggle: (rec: PatientExercise) => void;
-  toggling: boolean;
+function ExerciseCard({ exercise, lib, today, toggling, askFeedback, savingFb, onToggle, onView, onFeedback, onSkipFeedback }: {
+  exercise:   PatientExercise;
+  lib?:       LibraryExercise;
+  today:      string;
+  toggling:   boolean;
+  askFeedback: boolean;
+  savingFb:   boolean;
+  onToggle:   (rec: PatientExercise) => void;
+  onView:     (rec: PatientExercise) => void;
+  onFeedback: (rec: PatientExercise, effort: Effort, pain: number | null) => void;
+  onSkipFeedback: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
-  // Issue 4 fix: always default completed to false
-  const completed = exercise.completed ?? false;
+  const done = exercise.completed ?? false;
+  const video = exerciseVideo(exercise);
+  const fbToday = exercise.lastFeedback?.date === today ? exercise.lastFeedback : undefined;
 
   return (
-    <div className={`ep-card ${completed ? "ep-card-done" : ""}`}>
-      <div className="ep-card-header" onClick={() => setExpanded(!expanded)}>
-        <div className="ep-card-left">
-          <div className="ep-card-icon">
-            {completed
-              ? <Check size={18} strokeWidth={2.5} color="#2E8BC0" />
-              : <Dumbbell size={18} strokeWidth={1.8} color="#9a9590" />
-            }
-          </div>
-          <div>
-            {/* Issue 1: show exerciseName directly from patientExercises doc */}
-            <div className="ep-card-name">{exercise.exerciseName}</div>
-            <div className="ep-card-cat">
-              {exercise.sets} sets · {exercise.reps} reps
-              {(exercise.holdTime ?? 0) > 0 ? ` · ${exercise.holdTime}s hold` : ""}
-            </div>
-          </div>
+    <div className={`xp-card ${done ? "done" : ""}`}>
+      <div className="xp-row">
+        <button className="xp-media" onClick={() => onView(exercise)} disabled={!video} aria-label="Watch video">
+          {video ? <img src={video.thumb} alt="" loading="lazy" /> : <Dumbbell size={22} />}
+          {video && <span className="xp-play"><Play size={14} fill="currentColor" /></span>}
+        </button>
+        <div className="xp-info">
+          <div className="xp-name">{exercise.exerciseName}</div>
+          <div className="xp-dose">{dosage(exercise)}</div>
+          {lib?.precautions && <div className="xp-caution"><AlertTriangle size={11} /> Read the precautions</div>}
+          {fbToday && <div style={{ marginTop: 4 }}><FeedbackBadge fb={fbToday} /></div>}
         </div>
-        <div className="ep-card-right">
-          {completed && (
-            <span className="ep-diff-badge" style={{ background: "#D6EEF8", color: "#0C3C60" }}>Done</span>
-          )}
-          <ChevronDown
-            size={14} strokeWidth={2} color="#9a9590"
-            style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }}
-          />
-        </div>
+        <button className={`xp-check ${done ? "on" : ""}`} disabled={toggling} onClick={() => onToggle(exercise)}
+          title={done ? "Undo" : "Mark as done"} aria-label={done ? "Undo" : "Mark as done"}>
+          {toggling ? <span className="xp-spin" /> : <Check size={18} strokeWidth={3} />}
+        </button>
       </div>
-
-      {/* Expanded content */}
-      {expanded && (
-        <div className="ep-card-body">
-
-          <div className="ep-stats-grid">
-            {[
-              { label: "Sets",     value: exercise.sets },
-              { label: "Reps",     value: exercise.reps },
-              { label: "Hold (s)", value: (exercise.holdTime ?? 0) > 0 ? exercise.holdTime : "—" },
-            ].map((s) => (
-              <div key={s.label} className="ep-stat-box">
-                <div className="ep-stat-val">{s.value}</div>
-                <div className="ep-stat-label">{s.label}</div>
-              </div>
-            ))}
-          </div>
-
-          {exercise.notes && (
-            <div className="ep-notes">
-              <div className="ep-notes-label">Physio Notes</div>
-              <div className="ep-notes-text">{exercise.notes}</div>
-            </div>
-          )}
-
-          {exercise.videoId && (
-            <VideoEmbed videoId={exercise.videoId} wrapperStyle={{ marginBottom: 8 }} />
-          )}
-
-          {/* Complete button — home exercises only */}
-          {(exercise.programType ?? "clinic") === "home" ? (
-            <button
-              className={`ep-complete-btn ${completed ? "ep-complete-btn-done" : ""} ${toggling ? "ep-complete-btn-busy" : ""}`}
-              disabled={toggling}
-              onClick={(e) => { e.stopPropagation(); onToggle(exercise); }}
-            >
-              {toggling
-                ? <><span className="ep-btn-spin" /> Saving…</>
-                : completed
-                  ? <><Check size={14} strokeWidth={2.5} /> Completed — tap to undo</>
-                  : "☐ Mark as Complete"
-              }
-            </button>
-          ) : (
-            <div className="ep-complete-btn ep-complete-clinic-note">
-              ⚕️ Marked by your physiotherapist
-            </div>
-          )}
+      {exercise.notes && <div className="xp-note"><b>Physio note</b>{exercise.notes}</div>}
+      {askFeedback && (
+        <div style={{ marginTop: 10 }}>
+          <FeedbackPrompt saving={savingFb} onSkip={onSkipFeedback} onSubmit={(e, p) => onFeedback(exercise, e, p)} />
         </div>
       )}
     </div>
@@ -140,17 +78,20 @@ function ExerciseCard({
 export default function ExercisesPage() {
   const { user } = useAuth();
   const patient = user as PatientProfile | null;
+  const today = clinicToday();
 
   const [exercises,  setExercises]  = useState<PatientExercise[]>([]);
+  const [library,    setLibrary]    = useState<Map<string, LibraryExercise>>(new Map());
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [askFbId,    setAskFbId]    = useState<string | null>(null);
+  const [savingFb,   setSavingFb]   = useState(false);
+  const [viewing,    setViewing]    = useState<number | null>(null);
   const resetDoneRef = useRef(false);  // ensure daily reset only runs once per session
 
-  // ── Issue 1: Realtime query on patientExercises collection ────────────────
   useEffect(() => {
     if (!patient?.uid) return;
-    setLoading(true);
     const unsub = subscribeToPatientExercises(
       patient.uid,
       (data) => {
@@ -175,256 +116,142 @@ export default function ExercisesPage() {
     return () => unsub();
   }, [patient?.uid]);
 
-  // ── Issue 3 + 4: Toggle with safe null, writes to Firestore ──────────────
+  // How-to text and precautions live on the library exercise.
+  useEffect(() => subscribeToExerciseLibrary((d) => setLibrary(new Map(d.map((e) => [e.id, e]))), () => {}), []);
+
   const handleToggle = async (rec: PatientExercise) => {
     if ((rec.programType ?? "clinic") === "clinic") return;
-    const currentCompleted = rec.completed ?? false;
+    const nowDone = !(rec.completed ?? false);
     setTogglingId(rec.id);
-    await toggleExerciseCompletion(rec.id, !currentCompleted, rec.patientId);
+    await toggleExerciseCompletion(rec.id, nowDone, rec.patientId);
     setTogglingId(null);
+    setAskFbId(nowDone && rec.lastFeedback?.date !== today ? rec.id : null);
+  };
+
+  const handleFeedback = async (rec: PatientExercise, effort: Effort, pain: number | null) => {
+    setSavingFb(true);
+    await saveExerciseFeedback(rec, effort, pain, today);
+    setSavingFb(false);
+    setAskFbId(null);
   };
 
   // Patients see only home program exercises
   const tabExercises   = exercises.filter((e) => (e.programType ?? "clinic") === "home");
   const completedCount = tabExercises.filter((e) => e.completed ?? false).length;
+  const total = tabExercises.length;
+  const pct   = total ? Math.round((completedCount / total) * 100) : 0;
+  const withVideo = useMemo(() => exercises.filter((e) => (e.programType ?? "clinic") === "home" && exerciseVideo(e)), [exercises]);
+
+  const items = useMemo<ShowboxItem[]>(() => withVideo.map((r) => {
+    const lib = library.get(r.exerciseId);
+    return {
+      key: r.id, title: r.exerciseName, video: exerciseVideo(r), dosage: dosage(r),
+      tags: [lib?.category ?? "", lib?.equipment ?? ""], difficulty: lib?.difficulty,
+      description: lib?.description, precautions: lib?.precautions, notes: r.notes,
+    };
+  }), [withVideo, library]);
+
+  const R = 34, C = 2 * Math.PI * R;
+  const message = total === 0 ? "" : pct === 100 ? "All done for today — great job! 🎉" : completedCount === 0 ? "Let's get moving. Tap a video to see how." : "Keep going, you're doing great.";
 
   return (
     <>
-      <style>{`
-        
+      <style>{CSS}</style>
+      <div className="xp-root">
 
-        .ep-root { font-family: 'Outfit', sans-serif; }
-
-        /* Header */
-        .ep-header { margin-bottom: 16px; }
-        .ep-title {
-          font-family: 'Playfair Display', serif;
-          font-size: 22px; font-weight: 500; color: #1a1a1a;
-          letter-spacing: -0.02em; margin-bottom: 3px;
-        }
-        .ep-sub { font-size: 13px; color: #9a9590; }
-
-        /* Progress ring row */
-        .ep-progress-row {
-          display: flex; align-items: center; gap: 14px;
-          background: #fff; border: 1px solid #e5e0d8;
-          border-radius: 14px; padding: 14px 16px;
-          margin-bottom: 14px;
-        }
-        .ep-ring-wrap { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
-        .ep-ring-wrap svg { transform: rotate(-90deg); }
-        .ep-ring-text {
-          position: absolute; inset: 0;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 15px; font-weight: 700; color: #2E8BC0;
-        }
-        .ep-progress-info {}
-        .ep-progress-label { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 2px; }
-        .ep-progress-sub   { font-size: 12.5px; color: #9a9590; }
-
-        /* ── Program tabs (Issue 2) ── */
-        .ep-prog-tabs {
-          display: flex; gap: 4px;
-          background: #f5f3ef; border-radius: 12px; padding: 4px;
-          width: 100%; margin-bottom: 14px;
-          border: 1px solid #e5e0d8;
-        }
-        .ep-prog-tab {
-          flex: 1; padding: 10px 12px; border-radius: 9px; border: none;
-          background: transparent; font-size: 13.5px; font-weight: 500;
-          color: #9a9590; cursor: pointer; transition: all 0.15s;
-          font-family: 'Outfit', sans-serif; display: flex; align-items: center; justify-content: center; gap: 5px;
-          min-height: 44px;
-        }
-        .ep-prog-tab.active {
-          background: #fff; color: #2E8BC0;
-          box-shadow: 0 1px 6px rgba(0,0,0,0.07);
-        }
-        .ep-prog-tab-count {
-          display: inline-flex; align-items: center; justify-content: center;
-          min-width: 18px; height: 18px; border-radius: 9px; padding: 0 4px;
-          font-size: 10px; font-weight: 700;
-          background: #e5e0d8; color: #5a5550;
-        }
-        .ep-prog-tab.active .ep-prog-tab-count { background: #D6EEF8; color: #0C3C60; }
-
-        /* Cards */
-        .ep-list { display: flex; flex-direction: column; gap: 10px; }
-
-        .ep-card {
-          background: #fff; border: 1.5px solid #e5e0d8;
-          border-radius: 14px; overflow: hidden;
-          transition: border-color 0.15s, box-shadow 0.15s;
-        }
-        .ep-card:hover { border-color: #B3DEF0; box-shadow: 0 2px 12px rgba(0,0,0,0.05); }
-        .ep-card-done { border-color: #B3DEF0; background: #fafffe; }
-
-        .ep-card-header {
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 14px 16px; cursor: pointer; gap: 12px;
-        }
-        .ep-card-left  { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
-        .ep-card-icon  {
-          width: 38px; height: 38px; border-radius: 10px;
-          background: #f5f3ef; display: flex; align-items: center;
-          justify-content: center; flex-shrink: 0;
-        }
-        .ep-card-name  { font-size: 15px; font-weight: 600; color: #1a1a1a; }
-        .ep-card-cat   { font-size: 12px; color: #9a9590; margin-top: 1px; }
-        .ep-card-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-
-        .ep-diff-badge {
-          padding: 3px 10px; border-radius: 100px;
-          font-size: 12px; font-weight: 500; white-space: nowrap;
-        }
-
-        /* Expanded body */
-        .ep-card-body { padding: 0 14px 14px; border-top: 1px solid #f5f3ef; }
-
-        .ep-stats-grid {
-          display: grid; grid-template-columns: repeat(3, 1fr);
-          gap: 8px; margin: 12px 0;
-        }
-        .ep-stat-box {
-          background: #f5f3ef; border-radius: 10px;
-          padding: 12px; text-align: center;
-        }
-        .ep-stat-val   { font-size: 22px; font-weight: 700; color: #1a1a1a; line-height: 1; }
-        .ep-stat-label { font-size: 11px; color: #9a9590; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.06em; }
-
-        .ep-notes {
-          background: #fffbeb; border: 1px solid #fde68a;
-          border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;
-        }
-        .ep-notes-label { font-size: 11px; font-weight: 600; color: #92400e; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
-        .ep-notes-text  { font-size: 13.5px; color: #78350f; line-height: 1.5; }
-
-        .ep-media-link {
-          display: inline-flex; align-items: center; gap: 6px;
-          font-size: 13px; font-weight: 500; color: #5BC0BE;
-          margin-bottom: 14px; text-decoration: none; transition: color 0.15s;
-          background: none; border: none; cursor: pointer; padding: 0;
-          font-family: 'Outfit', sans-serif;
-        }
-        .ep-media-link:hover { color: #2E8BC0; }
-
-        /* Checkbox / complete button */
-        .ep-complete-btn {
-          width: 100%; padding: 13px;
-          border-radius: 10px; border: 1.5px solid #e5e0d8;
-          background: #fff; font-family: 'Outfit', sans-serif;
-          font-size: 14px; font-weight: 500; color: #5a5550;
-          cursor: pointer; transition: all 0.15s; min-height: 48px;
-          display: flex; align-items: center; justify-content: center; gap: 7px;
-        }
-        .ep-complete-btn:hover:not(:disabled) { border-color: #5BC0BE; color: #2E8BC0; }
-        .ep-complete-btn-done  { background: #D6EEF8; border-color: #B3DEF0; color: #0C3C60; }
-        .ep-complete-btn-busy  { opacity: 0.7; cursor: not-allowed; }
-        .ep-complete-clinic-note { cursor: default; color: #9a9590; font-size: 13px; border-style: dashed; }
-        .ep-btn-spin {
-          width: 13px; height: 13px; flex-shrink: 0;
-          border: 2px solid rgba(46,139,192,0.3); border-top-color: #2E8BC0;
-          border-radius: 50%; animation: epSpin 0.7s linear infinite; display: inline-block;
-        }
-        @keyframes epSpin { to { transform: rotate(360deg); } }
-
-        /* Skeleton */
-        .ep-skel {
-          border-radius: 6px;
-          background: linear-gradient(90deg, #f0ede8 0%, #e5e0d8 50%, #f0ede8 100%);
-          background-size: 200% 100%; animation: epShimmer 1.4s ease infinite;
-        }
-        @keyframes epShimmer { to { background-position: -200% 0; } }
-        .ep-skel-title { height: 18px; width: 180px; }
-        .ep-skel-badge { height: 22px; width: 80px; border-radius: 100px; }
-        .ep-skel-line  { height: 13px; width: 100%; }
-        .ep-skel-stat  { height: 60px; border-radius: 10px; }
-
-        /* Error */
-        .ep-error {
-          padding: 16px; background: #fff5f3;
-          border: 1px solid #fecaca; border-radius: 12px;
-          font-size: 13.5px; color: #b91c1c; margin-bottom: 16px;
-        }
-
-        /* Empty */
-        .ep-empty { text-align: center; padding: 60px 24px; }
-        .ep-empty-icon  { font-size: 40px; margin-bottom: 12px; }
-        .ep-empty-title { font-family: 'Playfair Display', serif; font-size: 20px; color: #1a1a1a; margin-bottom: 6px; }
-        .ep-empty-sub   { font-size: 13.5px; color: #9a9590; }
-      `}</style>
-
-      <div className="ep-root">
-
-        {/* Header */}
-        <div className="ep-header">
-          <div className="ep-title">My Exercises</div>
-          <div className="ep-sub">
-            {loading
-              ? "Loading your exercise programme…"
-              : `${exercises.length} exercise${exercises.length !== 1 ? "s" : ""} assigned · ${completedCount} completed`}
+        {/* Hero with progress ring */}
+        <div className="xp-hero">
+          <div className="xp-ring">
+            <svg width="84" height="84" viewBox="0 0 84 84">
+              <circle cx="42" cy="42" r={R} fill="none" stroke="rgba(255,255,255,.22)" strokeWidth="7" />
+              <circle cx="42" cy="42" r={R} fill="none" stroke="#fff" strokeWidth="7" strokeLinecap="round"
+                strokeDasharray={`${(pct / 100) * C} ${C}`} style={{ transition: "stroke-dasharray .5s ease" }} />
+            </svg>
+            <span>{loading ? "—" : `${pct}%`}</span>
+          </div>
+          <div>
+            <div className="xp-title">My Home Program</div>
+            <div className="xp-sub">{loading ? "Loading your exercises…" : total === 0 ? "No exercises yet" : `${completedCount} of ${total} done today`}</div>
+            {message && <div className="xp-msg">{message}</div>}
           </div>
         </div>
 
-        {/* Progress ring */}
-        {!loading && exercises.length > 0 && (() => {
-          const pct  = Math.round((completedCount / exercises.length) * 100);
-          const r    = 26;
-          const circ = 2 * Math.PI * r;
-          const dash = (pct / 100) * circ;
-          return (
-            <div className="ep-progress-row">
-              <div className="ep-ring-wrap">
-                <svg width="64" height="64" viewBox="0 0 64 64">
-                  <circle cx="32" cy="32" r={r} fill="none" stroke="#e5e0d8" strokeWidth="5" />
-                  <circle cx="32" cy="32" r={r} fill="none" stroke="#2E8BC0" strokeWidth="5"
-                    strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-                    style={{ transition: "stroke-dasharray 0.5s ease" }}
-                  />
-                </svg>
-                <div className="ep-ring-text">{pct}%</div>
-              </div>
-              <div className="ep-progress-info">
-                <div className="ep-progress-label">Today's Progress</div>
-                <div className="ep-progress-sub">{completedCount} of {exercises.length} exercises completed</div>
-              </div>
-            </div>
-          );
-        })()}
+        {error && <div className="xp-error">{error}</div>}
 
-
-        {/* Error */}
-        {error && <div className="ep-error">{error}</div>}
-
-        {/* Content */}
         {loading ? (
-          <div className="ep-list">
-            {[1,2,3,4].map((n) => <SkeletonCard key={n} />)}
-          </div>
-        ) : tabExercises.length === 0 ? (
-          <div className="ep-empty">
-            <div className="ep-empty-icon">🏠</div>
-            <div className="ep-empty-title">
-              No home program yet
-            </div>
-            <div className="ep-empty-sub">
-              Your physiotherapist hasn't assigned any home exercises yet. Check back after your next session.
-            </div>
+          <div className="xp-list">{[1, 2, 3].map((n) => <div key={n} className="xp-skel" />)}</div>
+        ) : total === 0 ? (
+          <div className="xp-empty">
+            <div style={{ fontSize: 40, marginBottom: 10 }}>🏠</div>
+            <div className="xp-empty-title">No home program yet</div>
+            <div className="xp-empty-sub">Your physiotherapist hasn't assigned any home exercises yet. Check back after your next session.</div>
           </div>
         ) : (
-          <div className="ep-list">
+          <div className="xp-list">
             {tabExercises.map((ex) => (
-              <ExerciseCard
-                key={ex.id}
-                exercise={ex}
-                onToggle={handleToggle}
-                toggling={togglingId === ex.id}
-              />
+              <ExerciseCard key={ex.id} exercise={ex} lib={library.get(ex.exerciseId)} today={today}
+                toggling={togglingId === ex.id} askFeedback={askFbId === ex.id} savingFb={savingFb}
+                onToggle={handleToggle} onView={(r) => { const i = withVideo.findIndex((w) => w.id === r.id); if (i >= 0) setViewing(i); }}
+                onFeedback={handleFeedback} onSkipFeedback={() => setAskFbId(null)} />
             ))}
           </div>
         )}
-
       </div>
+
+      {viewing !== null && items[viewing] && (
+        <VideoShowbox items={items} index={viewing} onIndex={setViewing} onClose={() => setViewing(null)}
+          footer={(item) => {
+            const rec = withVideo.find((w) => w.id === item.key);
+            if (!rec) return null;
+            const done = rec.completed ?? false;
+            return (
+              <button className={`xp-sb-done ${done ? "on" : ""}`} disabled={togglingId === rec.id}
+                onClick={() => { handleToggle(rec); if (!done) setViewing(null); }}>
+                <Check size={16} strokeWidth={3} /> {done ? "Done — tap to undo" : "Mark as done"}
+              </button>
+            );
+          }} />
+      )}
     </>
   );
 }
+
+const CSS = `
+.xp-root { font-family: 'Outfit', sans-serif; }
+.xp-hero { display: flex; align-items: center; gap: 18px; padding: 20px; border-radius: 22px; background: linear-gradient(135deg, #0C3C60 0%, #2E8BC0 70%, #5BC0BE 100%); color: #fff; margin-bottom: 16px; box-shadow: 0 12px 30px rgba(12,60,96,.18); }
+.xp-ring { position: relative; width: 84px; height: 84px; flex-shrink: 0; }
+.xp-ring svg { transform: rotate(-90deg); }
+.xp-ring span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 19px; font-weight: 800; }
+.xp-title { font-family: 'Playfair Display', serif; font-size: 22px; letter-spacing: -.01em; }
+.xp-sub { font-size: 13.5px; opacity: .85; margin-top: 2px; }
+.xp-msg { font-size: 13px; font-weight: 600; margin-top: 8px; background: rgba(255,255,255,.16); padding: 5px 10px; border-radius: 100px; display: inline-block; }
+.xp-list { display: flex; flex-direction: column; gap: 10px; }
+.xp-card { background: #fff; border: 1.5px solid #e5e0d8; border-radius: 18px; padding: 12px; transition: border-color .15s, background .15s; }
+.xp-card.done { border-color: #86efac; background: #f6fef8; }
+.xp-row { display: flex; align-items: center; gap: 12px; }
+.xp-media { position: relative; width: 104px; aspect-ratio: 16 / 10; flex-shrink: 0; border: none; padding: 0; border-radius: 12px; overflow: hidden; background: linear-gradient(135deg, #D6EEF8, #EAF5FC); color: #2E8BC0; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.xp-media:disabled { cursor: default; }
+.xp-media img { width: 100%; height: 100%; object-fit: cover; }
+.xp-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,.94); color: #0C3C60; display: flex; align-items: center; justify-content: center; padding-left: 2px; box-shadow: 0 3px 10px rgba(0,0,0,.3); }
+.xp-info { flex: 1; min-width: 0; }
+.xp-name { font-size: 15px; font-weight: 700; color: #1a1a1a; line-height: 1.25; }
+.done .xp-name { color: #166534; }
+.xp-dose { font-size: 12.5px; color: #0C3C60; font-weight: 600; margin-top: 3px; }
+.xp-caution { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #dc2626; margin-top: 4px; }
+.xp-check { width: 46px; height: 46px; flex-shrink: 0; border-radius: 50%; border: 2px solid #d6d1ca; background: #fff; color: #d6d1ca; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all .15s; }
+.xp-check:hover { border-color: #16a34a; color: #16a34a; }
+.xp-check.on { background: #16a34a; border-color: #16a34a; color: #fff; }
+.xp-spin { width: 16px; height: 16px; border: 2px solid #d6d1ca; border-top-color: #2E8BC0; border-radius: 50%; animation: xpSpin .7s linear infinite; }
+@keyframes xpSpin { to { transform: rotate(360deg); } }
+.xp-note { margin-top: 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 8px 12px; font-size: 13px; color: #78350f; line-height: 1.45; }
+.xp-note b { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: #92400e; margin-bottom: 2px; }
+.xp-sb-done { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 13px; border-radius: 12px; border: none; background: #16a34a; color: #fff; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.xp-sb-done.on { background: #f0fdf4; color: #166534; border: 1.5px solid #86efac; }
+.xp-error { padding: 14px; background: #fff5f3; border: 1px solid #fecaca; border-radius: 12px; font-size: 13.5px; color: #b91c1c; margin-bottom: 14px; }
+.xp-empty { text-align: center; padding: 50px 24px; }
+.xp-empty-title { font-family: 'Playfair Display', serif; font-size: 20px; color: #1a1a1a; margin-bottom: 6px; }
+.xp-empty-sub { font-size: 13.5px; color: #9a9590; }
+.xp-skel { height: 94px; border-radius: 18px; background: linear-gradient(90deg, #f0ede8 0%, #e5e0d8 50%, #f0ede8 100%); background-size: 200% 100%; animation: xpShim 1.4s ease infinite; }
+@keyframes xpShim { to { background-position: -200% 0; } }
+@media (max-width: 420px) { .xp-media { width: 84px; } .xp-hero { padding: 16px; gap: 14px; } }
+`;

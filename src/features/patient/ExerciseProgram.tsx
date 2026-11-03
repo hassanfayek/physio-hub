@@ -7,10 +7,12 @@
 //   - Media link per exercise
 // CSS prefix: ep-  (exercise program — no collision with ps- classes)
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { X, Home, Heart, Plus, Check, Pencil, Trash2, Play } from "lucide-react";
-import { VideoEmbed } from "../../components/VideoEmbed";
+import VideoShowbox, { type ShowboxItem } from "../../components/VideoShowbox";
+import { FeedbackBadge } from "../../components/ExerciseFeedback";
+import { exerciseVideo } from "../../utils/youtube";
 import {
   subscribeToPatientExercises,
   subscribeToExerciseLibrary,
@@ -247,13 +249,15 @@ interface ExerciseCardProps {
   onRemove:     (rec: PatientExercise) => void;
   onSetEditVals: (v: { sets: string; reps: string; holdTime: string; notes: string; programType: "clinic" | "home" }) => void;
   onCancelEdit: () => void;
+  onView:       (rec: PatientExercise) => void;
 }
 
 function ExerciseCard({
   rec, viewerRole, canEdit, canComplete_, togglingId, editingId,
   editVals, editSaving, editError, removingId,
-  onToggle, onEditOpen, onSaveEdit, onRemove, onSetEditVals, onCancelEdit,
+  onToggle, onEditOpen, onSaveEdit, onRemove, onSetEditVals, onCancelEdit, onView,
 }: ExerciseCardProps) {
+  const video = exerciseVideo(rec);
   const isClinicPatient = viewerRole === "patient" && (rec.programType ?? "clinic") === "clinic";
   const isDisabled = !canComplete_ || isClinicPatient;
   const checkTitle = !canComplete_
@@ -304,12 +308,20 @@ function ExerciseCard({
 
         {rec.notes && <div className="ep-ex-notes">{rec.notes}</div>}
 
-        {rec.videoId && (
-          <VideoEmbed videoId={rec.videoId} wrapperStyle={{ marginTop: 8 }} />
+        {video && (
+          <button className="ep-thumb" onClick={() => onView(rec)} title="Watch video">
+            <img src={video.thumb} alt="" loading="lazy" />
+            <span className="ep-thumb-play"><Play size={16} fill="currentColor" /></span>
+            {video.isShort && <span className="ep-thumb-short">Short</span>}
+          </button>
+        )}
+
+        {viewerRole !== "patient" && rec.lastFeedback && (
+          <div className="ep-fb-row"><span>Patient said:</span><FeedbackBadge fb={rec.lastFeedback} /></div>
         )}
 
         <div className="ep-ex-footer">
-          {!rec.videoId && rec.mediaUrl && (
+          {!video && rec.mediaUrl && (
             <button className="ep-watch-btn" onClick={() => window.open(rec.mediaUrl, "_blank", "noopener,noreferrer")}>
               <Play size={12} strokeWidth={2} /> Watch Video
             </button>
@@ -424,6 +436,14 @@ export default function ExerciseProgram({
   const [editError,    setEditError]    = useState<string | null>(null);
   const [toast,        setToast]        = useState<string | null>(null);
 
+  const [viewing,      setViewing]      = useState<{ list: PatientExercise[]; index: number } | null>(null);
+  // Library details (how-to, precautions, difficulty) for the video viewer — staff only.
+  const [library,      setLibrary]      = useState<Map<string, LibraryExercise>>(new Map());
+  useEffect(() => {
+    if (viewerRole === "patient") return;
+    return subscribeToExerciseLibrary((d) => setLibrary(new Map(d.map((e) => [e.id, e]))), () => {});
+  }, [viewerRole]);
+
   const canEdit     = canEditProgram(viewerRole, isSenior);
   const canComplete_ = canComplete(viewerRole);
 
@@ -493,6 +513,22 @@ export default function ExerciseProgram({
     if (result.error) { showToast("Error: " + result.error); return; }
     showToast(`"${rec.exerciseName}" removed`);
   };
+
+  const openViewer = (rec: PatientExercise) => {
+    const list = (viewerRole === "patient" ? visibleExercises : exercises).filter((e) => exerciseVideo(e));
+    const index = list.findIndex((e) => e.id === rec.id);
+    if (index >= 0) setViewing({ list, index });
+  };
+  const viewerItems = useMemo<ShowboxItem[]>(() => (viewing?.list ?? []).map((r) => {
+    const lib = library.get(r.exerciseId);
+    return {
+      key: r.id, title: r.exerciseName, video: exerciseVideo(r),
+      dosage: `${r.sets} sets · ${r.reps} reps${r.holdTime > 0 ? ` · ${r.holdTime}s hold` : ""}`,
+      tags: [lib?.category ?? "", r.programType === "home" ? "Home program" : "In clinic"],
+      difficulty: lib?.difficulty, description: lib?.description, precautions: lib?.precautions,
+      notes: r.notes, notesLabel: "Note for this patient",
+    };
+  }), [viewing, library]);
 
   const visibleExercises = viewerRole === "patient"
     ? exercises.filter((e) => (e.programType ?? "clinic") === "home")
@@ -566,6 +602,12 @@ export default function ExerciseProgram({
 
         /* Card body */
         .ep-ex-body { flex: 1; min-width: 0; }
+        .ep-thumb { position: relative; display: block; width: 100%; max-width: 220px; aspect-ratio: 16 / 9; margin-top: 8px; padding: 0; border: none; border-radius: 10px; overflow: hidden; cursor: pointer; background: #000; }
+        .ep-thumb img { width: 100%; height: 100%; object-fit: cover; opacity: .88; transition: transform .25s, opacity .2s; }
+        .ep-thumb:hover img { transform: scale(1.04); opacity: 1; }
+        .ep-thumb-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.94); color: #0C3C60; display: flex; align-items: center; justify-content: center; padding-left: 2px; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+        .ep-thumb-short { position: absolute; right: 6px; bottom: 6px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 100px; background: #ff0033; color: #fff; text-transform: uppercase; }
+        .ep-fb-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11.5px; color: #9a9590; flex-wrap: wrap; }
         .ep-ex-name {
           font-size: 14.5px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px;
         }
@@ -993,7 +1035,7 @@ export default function ExerciseProgram({
                         togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
                         removingId={removingId}
                         onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
-                        onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
+                        onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} onView={openViewer} />
                     ))}
                   </div>
                 </div>
@@ -1011,7 +1053,7 @@ export default function ExerciseProgram({
                         togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
                         removingId={removingId}
                         onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
-                        onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
+                        onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} onView={openViewer} />
                     ))}
                   </div>
                 </div>
@@ -1023,7 +1065,7 @@ export default function ExerciseProgram({
                     togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
                     removingId={removingId}
                     onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
-                    onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
+                    onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} onView={openViewer} />
                 ))}
               </div>
             )}
@@ -1035,7 +1077,7 @@ export default function ExerciseProgram({
                 togglingId={togglingId} editingId={editingId} editVals={editVals} editSaving={editSaving} editError={editError}
                 removingId={removingId}
                 onToggle={handleToggle} onEditOpen={handleEditOpen} onSaveEdit={handleSaveEdit} onRemove={handleRemove}
-                onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} />
+                onSetEditVals={setEditVals} onCancelEdit={() => { setEditingId(null); setEditError(null); }} onView={openViewer} />
             ))}
           </div>
         )}
@@ -1051,6 +1093,12 @@ export default function ExerciseProgram({
             showToast(`✓ "${name}" added`);
           }}
         />
+      )}
+
+      {viewing && (
+        <VideoShowbox items={viewerItems} index={viewing.index}
+          onIndex={(i) => setViewing((v) => (v ? { ...v, index: i } : v))}
+          onClose={() => setViewing(null)} />
       )}
 
       {toast && <div className="ep-toast">{toast}</div>}
