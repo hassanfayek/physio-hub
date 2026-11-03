@@ -253,6 +253,7 @@ function AssumptionsModal({ initial, onClose }: { initial: BusinessSettings; onC
 export default function BusinessAnalyticsPage() {
   const today = clinicToday();
   const [section, setSection] = useState<SectionKey>("overview");
+  const [expMonth, setExpMonth] = useState<string | null>(null);   // month to open in Monthly Expenses
   const [preset, setPreset] = useState<M.PresetKey>("month");
   const [custom, setCustom] = useState<M.Range>({ from: M.addDays(today, -13), to: today });
   const [settings, setSettings] = useState<BusinessSettings>(DEFAULT_BUSINESS_SETTINGS);
@@ -345,7 +346,7 @@ export default function BusinessAnalyticsPage() {
       </div>
 
       <div className="ba-tabs">
-        {SECTIONS.map((s) => <button key={s.key} className={`ba-tab ${section === s.key ? "on" : ""}`} onClick={() => setSection(s.key)}>{s.label}</button>)}
+        {SECTIONS.map((s) => <button key={s.key} className={`ba-tab ${section === s.key ? "on" : ""}`} onClick={() => { setExpMonth(null); setSection(s.key); }}>{s.label}</button>)}
       </div>
 
       {error && <div className="ba-banner err"><AlertTriangle size={15} /> {error} <button className="ba-link" onClick={reload}>Try again</button></div>}
@@ -356,14 +357,14 @@ export default function BusinessAnalyticsPage() {
           {dq && <DataQualityNotes dq={dq} section={section} data={data} legacyRule={settings.legacyPackagesAtFirstSession} />}
 
           {section === "overview" && <Overview m={m} />}
-          {section === "financial" && <Financial m={m} data={data} settings={settings} cur={cur} cap={cap} months={months} monthly={monthlyExp ?? []} today={today} onOpenExpenses={() => setSection("expenses")} />}
+          {section === "financial" && <Financial m={m} data={data} settings={settings} cur={cur} cap={cap} months={months} monthly={monthlyExp ?? []} today={today} onOpenExpenses={() => { setExpMonth(null); setSection("expenses"); }} />}
           {section === "acquisition" && <Acquisition m={m} data={data} cur={cur} />}
           {section === "retention" && <Retention m={m} data={data} today={today} />}
           {section === "schedule" && <Schedule data={data} cur={cur} prev={prev} cap={cap} settings={settings} />}
-          {section === "expansion" && <Expansion m={m} data={data} settings={settings} cap={cap} monthly={monthlyExp ?? []} today={today} />}
+          {section === "expansion" && <Expansion m={m} data={data} settings={settings} cap={cap} monthly={monthlyExp ?? []} today={today} onOpenExpenses={(ym) => { setExpMonth(ym); setSection("expenses"); }} />}
           {section === "expenses" && (monthlyExp === null
             ? <div className="ba-loading"><div className="ba-skel" /></div>
-            : <MonthlyExpensesPanel entries={monthlyExp} legacy={legacy} settings={settings} today={today} />)}
+            : <MonthlyExpensesPanel entries={monthlyExp} legacy={legacy} settings={settings} today={today} initialMonth={expMonth ?? undefined} />)}
           {section === "checks" && <DataChecks data={data} today={today} />}
         </>
       )}
@@ -735,7 +736,7 @@ function Schedule({ data, cur, prev, cap, settings }: { data: AnalyticsData; cur
   );
 }
 
-function Expansion({ m, data, settings, cap, monthly, today }: { m: Computed; data: AnalyticsData; settings: BusinessSettings; cap: M.Capacity; monthly: MonthlyExpense[]; today: string }) {
+function Expansion({ m, data, settings, cap, monthly, today, onOpenExpenses }: { m: Computed; data: AnalyticsData; settings: BusinessSettings; cap: M.Capacity; monthly: MonthlyExpense[]; today: string; onOpenExpenses: (ym: string) => void }) {
   const fc = fixedCosts(settings, monthly, today);
   // Full calendar months only (the current month is partial).
   const full = m.monthly.slice(0, -1);
@@ -753,7 +754,8 @@ function Expansion({ m, data, settings, cap, monthly, today }: { m: Computed; da
   const last3 = full.slice(-3).map((x) => x.result);
   const run = last3.length === 3 && last3.every((v) => v !== null) ? M.runway(settings.cashBalance, last3 as number[]) : { months: null, burning: null };
   const criteria = M.expansionCriteria({
-    fullMonths: full.map((x) => ({ ym: x.ym, result: x.result, completed: x.appt.completed, capacity: x.capacity, newPatients: x.newPts.length, expensesRecorded: !x.expGap })),
+    fullMonths: full.map((x) => ({ ym: x.ym, result: x.result, completed: x.appt.completed, capacity: x.capacity, newPatients: x.newPts.length, expensesRecorded: !x.expGap,
+      expEntered: x.exp.coverage[0]?.entered ?? 0, expRequired: x.exp.coverage[0]?.required ?? 0 })),
     monthsAtTarget: settings.monthsAtTarget,
     targetMonthlyResult: settings.targetMonthlyResult,
     breakEvenSessionsPerMonth: be.ok ? be.sessionsPerMonth : null,
@@ -764,6 +766,7 @@ function Expansion({ m, data, settings, cap, monthly, today }: { m: Computed; da
   const met = criteria.filter((c) => c.state === "met").length;
   const missing = criteria.filter((c) => c.state === "missing").length;
   const months = full.map((x) => x.ym);
+  const tracked = full.slice(-Math.max(1, settings.monthsAtTarget));
   return (
     <div className="ba-stack">
       <div className="ba-banner"><Info size={15} />
@@ -774,6 +777,27 @@ function Expansion({ m, data, settings, cap, monthly, today }: { m: Computed; da
           The monthly results below include {egp(spanCash.estimated)} of payments whose real dates were never recorded ({spanCash.estimatedPackages.count} older package payment{spanCash.estimatedPackages.count === 1 ? "" : "s"}, {spanCash.estimatedSessions.count} session charge{spanCash.estimatedSessions.count === 1 ? "" : "s"} without a paid date), placed in a month by a stand-in date. Month-by-month results are approximate where that applies.
         </div></div>
       )}
+      <Card title={`Month tracker — last ${tracked.length} full months`} wide
+        help="Each month counts toward the consecutive-months criteria once every active expense category has an entry for it (type 0 for categories you didn't pay). Sessions come from completed appointments.">
+        <div className="ba-track">
+          {tracked.map((x) => {
+            const cov = x.exp.coverage[0];
+            const atTarget = x.result === null || settings.targetMonthlyResult === null ? null : x.result >= settings.targetMonthlyResult;
+            return (
+              <div key={x.ym} className={`ba-track-m ${x.expGap ? "gap" : atTarget === false ? "bad" : "ok"}`}>
+                <div className="ba-track-ym">{fmtMonth(x.ym)}</div>
+                <div className={`ba-track-exp ${x.expGap ? (cov?.entered ? "part" : "none") : "done"}`}>
+                  {x.expGap ? (cov?.entered ? `${cov.entered}/${cov.required} expenses` : "No expenses") : "✓ Expenses"}
+                </div>
+                <div className="ba-track-row"><span>Result</span><b>{x.result === null ? "—" : egp(x.result)}</b></div>
+                <div className="ba-track-row"><span>Sessions</span><b>{num(x.appt.completed)}{be.ok ? ` / ${be.sessionsPerMonth}` : ""}</b></div>
+                {x.expGap && <button className="ba-link" onClick={() => onOpenExpenses(x.ym)}>Complete expenses</button>}
+                {!x.expGap && atTarget !== null && <div className={`ba-track-flag ${atTarget ? "ok" : "bad"}`}>{atTarget ? "At target" : "Below target"}</div>}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
       <Card title="Criteria" wide help="Thresholds come from Assumptions and are your targets. Measured values come from recorded data over full calendar months.">
         <div className="ba-crit">
           {criteria.map((c) => (
@@ -993,6 +1017,15 @@ const CSS = `
 .ba-inline select { flex: 1; }
 .ba-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .ba-crit { display: flex; flex-direction: column; gap: 8px; }
+.ba-track { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.ba-track-m { border: 1.5px solid #e5e0d8; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 6px; background: #fff; }
+.ba-track-m.ok { border-color: #86efac; background: #f6fef8; } .ba-track-m.bad { border-color: #fecaca; background: #fef8f8; } .ba-track-m.gap { border-style: dashed; border-color: #fcd34d; background: #fffdf5; }
+.ba-track-ym { font-size: 14px; font-weight: 700; color: #0C3C60; }
+.ba-track-exp { align-self: flex-start; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 100px; }
+.ba-track-exp.done { background: #dcfce7; color: #166534; } .ba-track-exp.part { background: #fef3c7; color: #92400e; } .ba-track-exp.none { background: #f3f4f6; color: #6b7280; }
+.ba-track-row { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; color: #9a9590; } .ba-track-row b { color: #1a1a1a; }
+.ba-track-flag { font-size: 11.5px; font-weight: 700; } .ba-track-flag.ok { color: #16a34a; } .ba-track-flag.bad { color: #dc2626; }
+.ba-track .ba-link { align-self: flex-start; padding: 0; font-size: 12px; }
 .ba-crit-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 10px; background: #fafaf8; border: 1px solid #f0ede8; }
 .ba-crit-label { font-size: 13px; font-weight: 600; }
 .ba-crit-badge { flex-shrink: 0; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 8px; border-radius: 100px; min-width: 86px; text-align: center; }

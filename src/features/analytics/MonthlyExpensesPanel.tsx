@@ -38,14 +38,15 @@ interface Props {
   legacy: LegacyExpense[];
   settings: BusinessSettings;
   today: string;
+  initialMonth?: string;   // open on this month (e.g. from the Expansion month tracker)
 }
 
-export default function MonthlyExpensesPanel({ entries, legacy, settings, today }: Props) {
+export default function MonthlyExpensesPanel({ entries, legacy, settings, today, initialMonth }: Props) {
   const { user } = useAuth();
   const uid = user?.uid ?? "";
   const currentMonth = today.slice(0, 7);
   const cats = settings.expenseCategories;
-  const [month, setMonth] = useState(currentMonth);
+  const [month, setMonth] = useState(initialMonth ?? currentMonth);
   const [formVersion, setFormVersion] = useState(0);
   const [showCats, setShowCats] = useState(false);
   const [importRows, setImportRows] = useState<ImportRow[] | null>(null);
@@ -208,6 +209,16 @@ function MonthForm({ month, entries, cats, uid, onSaved }: {
       {err && <div className="ba-err">{err}</div>}
       <div className="me-savebar">
         <span className="ba-muted">{changes.length ? `${changes.length} unsaved change${changes.length === 1 ? "" : "s"}` : "No unsaved changes"}</span>
+        {(() => {
+          const blank = rows.filter((c) => (draft[c.id]?.amount ?? "").trim() === "");
+          return blank.length > 0 && blank.length < rows.length ? (
+            <button className="ba-btn ghost" title="Categories you didn't pay this month count as 0 — the month then counts as complete"
+              onClick={() => setEdits({ ...edits, ...Object.fromEntries(blank.map((c) => [c.id, { ...edits[c.id], amount: "0" }])) })}>
+              Fill {blank.length} empty with 0
+            </button>
+          ) : null;
+        })()}
+
         <button className="ba-btn" onClick={onSave} disabled={busy || !changes.length}>{busy ? "Saving…" : `Save ${fmtMonthShort(month)}`}</button>
       </div>
 
@@ -432,7 +443,7 @@ const CSS = `
 .me-tag { margin-left: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 100px; background: #ede9fe; color: #5b21b6; }
 .me-tag.off { background: #f3f4f6; color: #6b7280; }
 .me-up { color: #b91c1c; } .me-down { color: #15803d; }
-.me-savebar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 12px; }
+.me-savebar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
 .me-grid th.sel { background: #EAF5FC; border-radius: 6px; }
 .me-missing { color: #b45309; background: #fffbeb; } .me-ok { color: #15803d; font-weight: 600; }
 .me-cat-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }

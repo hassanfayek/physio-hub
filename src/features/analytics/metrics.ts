@@ -594,8 +594,13 @@ export function runway(cashBalance: number | null, monthlyResults: number[]): { 
 export type CriterionState = "met" | "not_met" | "missing";
 export interface Criterion { key: string; label: string; state: CriterionState; evidence: string; }
 
+export interface ExpansionMonth {
+  ym: string; result: number | null; completed: number; capacity: number; newPatients: number;
+  expensesRecorded: boolean;
+  expEntered?: number; expRequired?: number;   // categories entered / required that month
+}
 export interface ExpansionInput {
-  fullMonths: { ym: string; result: number | null; completed: number; capacity: number; newPatients: number; expensesRecorded: boolean }[];
+  fullMonths: ExpansionMonth[];
   monthsAtTarget: number;
   targetMonthlyResult: number | null;
   breakEvenSessionsPerMonth: number | null;
@@ -604,23 +609,41 @@ export interface ExpansionInput {
   ownerShare: number | null; maxOwnerShare: number | null;  // 0–1
 }
 
-/** Each criterion reports met / not met / missing data with its evidence. The
- *  scorecard never turns this into a "ready" verdict on its own. */
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const ymLabel = (ym: string) => `${MONTHS_SHORT[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
+const expStatus = (m: ExpansionMonth) =>
+  m.expensesRecorded ? "complete" : !m.expEntered ? "not entered" : `${m.expEntered} of ${m.expRequired} categories`;
+
+/** Each criterion reports met / not met / missing data with its evidence, month by
+ *  month. The scorecard never turns this into a "ready" verdict on its own. */
 export function expansionCriteria(i: ExpansionInput): Criterion[] {
   const n = Math.max(1, i.monthsAtTarget);
   const last = i.fullMonths.slice(-n);
   const enough = last.length >= n;
   const out: Criterion[] = [];
-  const allExp = enough && last.every((m) => m.expensesRecorded);
+
+  const recorded = last.filter((m) => m.expensesRecorded);
+  const gaps = last.filter((m) => !m.expensesRecorded);
+  const allExp = enough && gaps.length === 0;
   out.push({ key: "expenses", label: `Expenses recorded for the last ${n} full months`,
     state: allExp ? "met" : "missing",
-    evidence: enough ? `${last.filter((m) => m.expensesRecorded).length} of ${n} months have every expense category entered` : `Only ${last.length} full month(s) of history in view` });
+    evidence: !enough ? `Only ${last.length} full month(s) of history in view`
+      : `${recorded.length} of ${n} months complete${gaps.length ? `. Still missing: ${gaps.map((m) => `${ymLabel(m.ym)} (${expStatus(m)})`).join(", ")}` : ""}` });
+
+  // A month counts once its expenses are complete. One complete month below target
+  // already breaks "consecutive", so that's "not met" even while others are missing.
+  const judged = last.filter((m) => m.result !== null);
+  const below = judged.filter((m) => m.result! < (i.targetMonthlyResult ?? -Infinity));
   out.push({ key: "result", label: `Operating result ≥ target for ${n} consecutive months`,
-    state: i.targetMonthlyResult === null || !allExp ? "missing" : last.every((m) => (m.result ?? -Infinity) >= i.targetMonthlyResult!) ? "met" : "not_met",
-    evidence: i.targetMonthlyResult === null ? "Target not set" : !allExp ? "Needs complete expense records" : `Results: ${last.map((m) => m.result === null ? "—" : Math.round(m.result)).join(", ")} vs target ${Math.round(i.targetMonthlyResult)}` });
+    state: i.targetMonthlyResult === null ? "missing" : below.length ? "not_met" : judged.length === n && enough ? "met" : "missing",
+    evidence: i.targetMonthlyResult === null ? "Target not set"
+      : `${last.map((m) => `${ymLabel(m.ym)}: ${m.result === null ? "needs expenses" : Math.round(m.result).toLocaleString("en-US")}`).join(" · ")} — target ${Math.round(i.targetMonthlyResult).toLocaleString("en-US")}`
+        + (below.length === 0 && judged.length < n ? ` (${judged.length} of ${n} months at target so far)` : "") });
+
   out.push({ key: "breakeven", label: `Break-even sessions reached for ${n} consecutive months`,
     state: i.breakEvenSessionsPerMonth === null || !enough ? "missing" : last.every((m) => m.completed >= i.breakEvenSessionsPerMonth!) ? "met" : "not_met",
-    evidence: i.breakEvenSessionsPerMonth === null ? "Break-even not computable (see Financial)" : `Sessions: ${last.map((m) => m.completed).join(", ")} vs ${i.breakEvenSessionsPerMonth}` });
+    evidence: i.breakEvenSessionsPerMonth === null ? "Break-even not computable (see Financial)"
+      : `${last.map((m) => `${ymLabel(m.ym)}: ${m.completed}`).join(" · ")} — break-even ${i.breakEvenSessionsPerMonth}` });
   const lastM = i.fullMonths[i.fullMonths.length - 1];
   const util = lastM ? ratio(lastM.completed, lastM.capacity) : null;
   out.push({ key: "utilization", label: "Schedule utilisation at target (demand near current capacity)",

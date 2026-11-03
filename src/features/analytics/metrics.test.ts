@@ -214,8 +214,24 @@ describe("expansion", () => {
     expect(c.find((x) => x.key === "owner")!.state).toBe("missing");
   });
   it("result criterion requires complete expense records", () => {
-    const c = expansionCriteria({ ...base, fullMonths: months.map((m, i) => ({ ...m, expensesRecorded: i !== 1 })) });
+    const c = expansionCriteria({ ...base, fullMonths: months.map((m, i) => (i === 1 ? { ...m, expensesRecorded: false, result: null } : m)) });
     expect(c.find((x) => x.key === "result")!.state).toBe("missing");
+  });
+  it("tracks each month: 3 of 5 complete is reported, with what's missing", () => {
+    const five = ["2026-06", "2026-07", "2026-08", "2026-09", "2026-10"].map((ym, i) => ({
+      ym, completed: 200, capacity: 250, newPatients: 10,
+      expensesRecorded: i >= 2, result: i >= 2 ? 10000 : null, expEntered: i === 0 ? 0 : i === 1 ? 6 : 9, expRequired: 9 }));
+    const c = expansionCriteria({ ...base, monthsAtTarget: 5, fullMonths: five });
+    const exp = c.find((x) => x.key === "expenses")!;
+    expect(exp.state).toBe("missing");
+    expect(exp.evidence).toBe("3 of 5 months complete. Still missing: Jun 2026 (not entered), Jul 2026 (6 of 9 categories)");
+    const res = c.find((x) => x.key === "result")!;
+    expect(res.state).toBe("missing");
+    expect(res.evidence).toContain("Aug 2026: 10,000");
+    expect(res.evidence).toContain("(3 of 5 months at target so far)");
+    // a complete month below target already fails it
+    const bad = expansionCriteria({ ...base, monthsAtTarget: 5, fullMonths: five.map((m, i) => (i === 3 ? { ...m, result: 100 } : m)) });
+    expect(bad.find((x) => x.key === "result")!.state).toBe("not_met");
   });
   it("one bad month fails a consecutive-months criterion", () => {
     const c = expansionCriteria({ ...base, fullMonths: months.map((m, i) => ({ ...m, result: i === 2 ? 1000 : m.result })) });
