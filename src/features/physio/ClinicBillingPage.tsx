@@ -13,6 +13,7 @@ import { toDateStr, getWeekStart } from "../../services/appointmentService";
 import { setSessionPrice, deleteSessionPrice, deleteSessionPackage } from "../../services/priceService";
 import { subscribeToAllPatients } from "../../services/patientService";
 import { billingCsv } from "./billingCsv";
+import { packagesForPeriod, packagesWithBalance, type BPayment } from "./billingPackages";
 
 // ─── Local types (raw Firestore shapes) ──────────────────────────────────────
 
@@ -62,6 +63,7 @@ export default function ClinicBillingPage() {
   // ── Source data ─────────────────────────────────────────────────────────
   const [sessionPrices,   setSessionPrices]   = useState<RawSessionPrice[]>([]);
   const [packages,        setPackages]        = useState<RawPackage[]>([]);
+  const [pkgPayments,     setPkgPayments]     = useState<BPayment[]>([]);
   const [loading,         setLoading]         = useState(true);
   const [patientMap,      setPatientMap]      = useState<Map<string, string>>(new Map());
 
@@ -123,19 +125,27 @@ export default function ClinicBillingPage() {
 
   useEffect(() => {
     let done = 0;
-    const check = () => { done++; if (done === 2) setLoading(false); };
+    const check = () => { done++; if (done === 3) setLoading(false); };
 
     const u1 = onSnapshot(
       query(collection(db, "patientSessionPrices"), orderBy("date", "desc")),
       (s) => { setSessionPrices(s.docs.map((d) => ({ id: d.id, ...d.data() } as RawSessionPrice))); check(); },
       () => check()
     );
+    // No orderBy here: Firestore silently drops documents missing the ordered
+    // field, which would hide any package saved without a createdAt.
     const u2 = onSnapshot(
-      query(collection(db, "patientPackages"), orderBy("createdAt", "desc")),
+      collection(db, "patientPackages"),
       (s) => { setPackages(s.docs.map((d) => ({ id: d.id, ...d.data() } as RawPackage))); check(); },
       () => check()
     );
-    return () => { u1(); u2(); };
+    // Dated log of every package payment — tells us WHEN package money came in.
+    const u3 = onSnapshot(
+      collection(db, "packagePayments"),
+      (s) => { setPkgPayments(s.docs.map((d) => { const x = d.data(); return { packageId: (x.packageId as string) ?? "", amount: Number(x.amount) || 0, date: (x.date as string) ?? "" }; })); check(); },
+      () => check()
+    );
+    return () => { u1(); u2(); u3(); };
   }, []);
 
   useEffect(() => {
@@ -156,9 +166,7 @@ export default function ClinicBillingPage() {
   };
 
   const filteredSessions = useMemo(() => sessionPrices.filter((s) => inPeriod(s.date)),   [sessionPrices,  period, selectedDay, selectedWeek, selectedMonth, customFrom, customTo]);
-  const filteredPackages = useMemo(() => packages.filter((p) => inPeriod(p.startDate)),   [packages,       period, selectedDay, selectedWeek, selectedMonth, customFrom, customTo]);
 
-  // ── Export: exactly the records shown for the selected period ─────────────
   const periodRange = (): [string, string] => {
     if (period === "day")    return [selectedDay, selectedDay];
     if (period === "week")   return selectedWeek;
@@ -166,9 +174,22 @@ export default function ClinicBillingPage() {
     const [y, m] = selectedMonth.split("-").map(Number);
     return [`${selectedMonth}-01`, `${selectedMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`];
   };
+  const [rangeFrom, rangeTo] = periodRange();
+
+  // Packages with any activity in the period: started, paid into, or sessions used.
+  const pkgActivity = useMemo(
+    () => packagesForPeriod(packages, pkgPayments, sessionPrices, rangeFrom, rangeTo),
+    [packages, pkgPayments, sessionPrices, rangeFrom, rangeTo]
+  );
+  const filteredPackages = useMemo(() => pkgActivity.map((a) => a.pkg), [pkgActivity]);
+  const startedPackages  = useMemo(() => pkgActivity.filter((a) => a.startedIn).map((a) => a.pkg), [pkgActivity]);
+  const owedPackages     = useMemo(() => packagesWithBalance(packages), [packages]);
+
+  // ── Export: exactly the records shown for the selected period ─────────────
   const handleExport = () => {
-    const [from, to] = periodRange();
-    const csv = billingCsv(filteredSessions, filteredPackages, (id) => patientMap.get(id) ?? "");
+    const [from, to] = [rangeFrom, rangeTo];
+    const received = new Map(pkgActivity.map((a) => [a.pkg.id, a.receivedIn] as const));
+    const csv = billingCsv(filteredSessions, filteredPackages, (id) => patientMap.get(id) ?? "", (id) => received.get(id) ?? 0);
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     a.download = from === to ? `billing_${from}.csv` : `billing_${from}_to_${to}.csv`;
@@ -183,11 +204,17 @@ export default function ClinicBillingPage() {
   const nonPkgSessions = filteredSessions.filter((s) => !s.packageId);
   const sessionTotal   = nonPkgSessions.reduce((s, e) => s + e.amount, 0);
   const sessionPaid    = nonPkgSessions.filter((e) => e.paid).reduce((s, e) => s + e.amount, 0);
-  const pkgTotal       = filteredPackages.reduce((s, p) => s + p.totalAmount, 0);
-  const pkgPaid        = filteredPackages.reduce((s, p) => s + p.paidAmount, 0);
+  // Packages: "sold" = value of packages started in the period; "received" =
+  // package money that actually came in during the period (any package);
+  // "owed" = what is still unpaid on the packages active in this period.
+  const pkgTotal       = startedPackages.reduce((s, p) => s + p.totalAmount, 0);
+  const pkgPaid        = pkgActivity.reduce((s, a) => s + a.receivedIn, 0);
+  const pkgOwed        = pkgActivity.reduce((s, a) => s + a.balance, 0);
+  const pkgOwedCount   = pkgActivity.filter((a) => a.balance > 0).length;
+  const sessionOwed    = sessionTotal - sessionPaid;
   const grandTotal     = sessionTotal + pkgTotal;
   const grandPaid      = sessionPaid  + pkgPaid;
-  const grandBalance   = grandTotal - grandPaid;
+  const grandBalance   = sessionOwed + pkgOwed;
 
   // ── Weekly/Monthly trend for chart-like rows ──────────────────────────────
   // Group all-time session prices by month for a mini trend
@@ -345,6 +372,13 @@ export default function ClinicBillingPage() {
         .cb-paid-pill { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 100px; white-space: nowrap; }
         .cb-paid-pill.paid   { background: #d8f3dc; color: #1b4332; }
         .cb-paid-pill.unpaid { background: #fee2e2; color: #991b1b; }
+        .cb-paid-pill.partial { background: #fef3c7; color: #92400e; }
+        .cb-paid-pill.pkg     { background: #ede9fe; color: #4c1d95; }
+        .cb-pkg-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+        .cb-pkg-tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 100px; }
+        .cb-pkg-tag.new  { background: #EAF5FC; color: #0C3C60; }
+        .cb-pkg-tag.paid { background: #d8f3dc; color: #1b4332; }
+        .cb-pkg-tag.used { background: #ede9fe; color: #4c1d95; }
         .cb-empty { text-align: center; padding: 48px 20px; color: #c0bbb4; font-size: 14px; }
         .cb-edit-btn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 8px; border: 1.5px solid #e8e3dc; background: #fff; font-size: 12px; font-weight: 500; color: #5a5550; cursor: pointer; font-family: inherit; white-space: nowrap; }
         .cb-edit-btn:hover { border-color: #1a3a2a; color: #1a3a2a; background: #f5f3ef; }
@@ -453,19 +487,17 @@ export default function ClinicBillingPage() {
               <div className="cb-kpi total">
                 <div className="cb-kpi-label">Total Billed</div>
                 <div className="cb-kpi-value">{fmt(grandTotal)}</div>
-                <div className="cb-kpi-sub">{filteredSessions.length} charges · {filteredPackages.length} pkg{filteredPackages.length !== 1 ? "s" : ""}</div>
+                <div className="cb-kpi-sub">{nonPkgSessions.length} charges · {startedPackages.length} new pkg{startedPackages.length !== 1 ? "s" : ""}</div>
               </div>
               <div className="cb-kpi paid">
                 <div className="cb-kpi-label">Collected</div>
                 <div className="cb-kpi-value" style={{ color: "#1b4332" }}>{fmt(grandPaid)}</div>
-                <div className="cb-kpi-sub">
-                  {grandTotal > 0 ? `${Math.round((grandPaid / grandTotal) * 100)}% collection rate` : "No charges"}
-                </div>
+                <div className="cb-kpi-sub">Sessions {fmt(sessionPaid)} · Packages {fmt(pkgPaid)}</div>
               </div>
               <div className="cb-kpi balance">
                 <div className="cb-kpi-label">Outstanding</div>
                 <div className="cb-kpi-value" style={{ color: grandBalance > 0 ? "#b91c1c" : "#1b4332" }}>{fmt(grandBalance)}</div>
-                <div className="cb-kpi-sub">{nonPkgSessions.filter((s) => !s.paid).length} unpaid session{nonPkgSessions.filter((s) => !s.paid).length !== 1 ? "s" : ""}</div>
+                <div className="cb-kpi-sub">{nonPkgSessions.filter((s) => !s.paid).length} unpaid session{nonPkgSessions.filter((s) => !s.paid).length !== 1 ? "s" : ""} · {pkgOwedCount} package{pkgOwedCount !== 1 ? "s" : ""} with balance</div>
               </div>
               <div className="cb-kpi sessions">
                 <div className="cb-kpi-label">Sessions Done</div>
@@ -484,9 +516,9 @@ export default function ClinicBillingPage() {
               </div>
               <div className="cb-breakdown-card">
                 <div className="cb-breakdown-label">Packages</div>
-                <div className="cb-breakdown-row"><span>Total Value</span><strong>{fmt(pkgTotal)}</strong></div>
-                <div className="cb-breakdown-row"><span>Collected</span><strong style={{ color: "#1b4332" }}>{fmt(pkgPaid)}</strong></div>
-                <div className="cb-breakdown-row"><span>Remaining</span><strong style={{ color: pkgTotal - pkgPaid > 0 ? "#b91c1c" : "#1b4332" }}>{fmt(pkgTotal - pkgPaid)}</strong></div>
+                <div className="cb-breakdown-row"><span>Sold this period</span><strong>{fmt(pkgTotal)}</strong></div>
+                <div className="cb-breakdown-row"><span>Received this period</span><strong style={{ color: "#1b4332" }}>{fmt(pkgPaid)}</strong></div>
+                <div className="cb-breakdown-row"><span>Still owed (packages in this period)</span><strong style={{ color: pkgOwed > 0 ? "#b91c1c" : "#1b4332" }}>{fmt(pkgOwed)}</strong></div>
               </div>
             </div>
 
@@ -570,7 +602,44 @@ export default function ClinicBillingPage() {
                         <tfoot>
                           <tr>
                             <td colSpan={4}>Total Outstanding</td>
-                            <td><span className="cb-amount" style={{ color: "#b91c1c" }}>{fmt(grandBalance)}</span></td>
+                            <td><span className="cb-amount" style={{ color: "#b91c1c" }}>{fmt(sessionOwed)}</span></td>
+                            <td />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Package balances — a debt carries over, so this list ignores the period */}
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#9a9590", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Package Balances Still Owed</div>
+                  <div style={{ fontSize: 12, color: "#9a9590", marginBottom: 10 }}>Every package not fully paid, whatever month it started.</div>
+                  {owedPackages.length === 0 ? (
+                    <div className="cb-empty" style={{ padding: "24px 20px" }}>✓ Every package is fully paid</div>
+                  ) : (
+                    <div className="cb-table-wrap">
+                      <table className="cb-table">
+                        <thead>
+                          <tr><th>Started</th><th>Patient</th><th>Package</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th></tr>
+                        </thead>
+                        <tbody>
+                          {owedPackages.map((p) => (
+                            <tr key={p.id}>
+                              <td style={{ color: "#5a5550", whiteSpace: "nowrap" }}>{p.startDate || "—"}</td>
+                              <td style={{ fontWeight: 500 }}>{patientMap.get(p.patientId) ?? "—"}</td>
+                              <td>{p.packageSize} sessions · {p.sessionsUsed} used</td>
+                              <td><span className="cb-amount">{fmt(p.totalAmount)}</span></td>
+                              <td><span className="cb-amount" style={{ color: "#1b4332" }}>{fmt(p.paidAmount)}</span></td>
+                              <td><span className="cb-amount" style={{ color: "#b91c1c" }}>{fmt(p.totalAmount - p.paidAmount)}</span></td>
+                              <td><span className={`cb-paid-pill ${p.paidAmount > 0 ? "partial" : "unpaid"}`}>{p.paidAmount > 0 ? "Partly paid" : "Unpaid"}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr>
+                            <td colSpan={5}>Total owed on packages</td>
+                            <td><span className="cb-amount" style={{ color: "#b91c1c" }}>{fmt(owedPackages.reduce((t, p) => t + p.totalAmount - p.paidAmount, 0))}</span></td>
                             <td />
                           </tr>
                         </tfoot>
@@ -599,7 +668,9 @@ export default function ClinicBillingPage() {
                           <td style={{ fontWeight: 500 }}>{s.sessionType || "Session"}</td>
                           <td style={{ color: "#5a5550" }}>{s.physioName || "—"}</td>
                           <td><span className="cb-amount">{fmt(s.amount)}</span></td>
-                          <td><span className={`cb-paid-pill ${s.paid ? "paid" : "unpaid"}`}>{s.paid ? "✓ Paid" : "Unpaid"}</span></td>
+                          <td>{s.packageId
+                            ? <span className="cb-paid-pill pkg" title="Paid through the package — see the package's balance">Via package</span>
+                            : <span className={`cb-paid-pill ${s.paid ? "paid" : "unpaid"}`}>{s.paid ? "✓ Paid" : "Unpaid"}</span>}</td>
                           <td>{s.packageId ? <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 100, background: "#ede9fe", color: "#4c1d95" }}>Pkg</span> : <span style={{ color: "#c0bbb4" }}>—</span>}</td>
                           <td style={{ color: "#9a9590", fontSize: 12 }}>{s.notes || "—"}</td>
                           <td>
@@ -635,15 +706,20 @@ export default function ClinicBillingPage() {
             {/* ── Packages section ── */}
             {activeSection === "packages" && (
               filteredPackages.length === 0 ? (
-                <div className="cb-empty">No packages started in this period.</div>
+                <div className="cb-empty">No package started, paid or used in this period.</div>
               ) : (
                 <div className="cb-pkg-grid">
-                  {filteredPackages.map((p) => {
+                  {pkgActivity.map(({ pkg: p, startedIn, receivedIn, sessionsIn }) => {
                     const remaining = p.packageSize - p.sessionsUsed;
                     const balance   = p.totalAmount - p.paidAmount;
                     return (
                       <div key={p.id} className="cb-pkg-card">
                         <div style={{ fontWeight: 700, fontSize: 15, color: "#1a1a1a", marginBottom: 6 }}>{patientMap.get(p.patientId) ?? "—"}</div>
+                        <div className="cb-pkg-tags">
+                          {startedIn && <span className="cb-pkg-tag new">Started this period</span>}
+                          {receivedIn !== 0 && <span className="cb-pkg-tag paid">Received {fmt(receivedIn)}</span>}
+                          {sessionsIn > 0 && <span className="cb-pkg-tag used">{sessionsIn} session{sessionsIn !== 1 ? "s" : ""} used</span>}
+                        </div>
                         <div className="cb-pkg-size">{p.packageSize} <span>sessions</span></div>
                         <div className="cb-pkg-row"><span>Per session</span><strong>{fmt(p.pricePerSession)}</strong></div>
                         <div className="cb-pkg-row"><span>Total value</span><strong>{fmt(p.totalAmount)}</strong></div>

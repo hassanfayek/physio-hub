@@ -18,25 +18,33 @@ export interface CsvPackage {
 export const BILLING_CSV_HEADER = [
   "Type", "Record ID", "Date", "Patient", "Session / package", "Physiotherapist",
   "Amount (EGP)", "Paid", "Paid date", "Paid amount (EGP)", "Balance (EGP)",
-  "Covered by package", "Package sessions", "Sessions used", "Package status", "Notes",
+  "Covered by package", "Package sessions", "Sessions used", "Package status",
+  "Received in period (EGP)", "Notes",
 ];
 
 const n = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
 
-export function billingCsv(sessions: CsvSession[], packages: CsvPackage[], patientName: (id: string) => string): string {
+// receivedInPeriod: package money that came in during the exported period
+// (a package is listed when it started, was paid into, or was used in it).
+export function billingCsv(
+  sessions: CsvSession[], packages: CsvPackage[], patientName: (id: string) => string,
+  receivedInPeriod: (pkgId: string) => number = () => 0,
+): string {
   const rows: (string | number)[][] = [
     ...sessions.map((s) => [
       "Session charge", s.id, s.date, patientName(s.patientId), s.sessionType || "Session", s.physioName || "",
       n(s.amount), s.paid ? "Yes" : "No", s.paid ? s.paidDate || "" : "",
       // Package-covered sessions are paid through the package, so they carry no balance of their own.
       s.packageId ? "" : s.paid ? n(s.amount) : 0, s.packageId ? "" : s.paid ? 0 : n(s.amount),
-      s.packageId ? "Yes" : "No", "", "", "", s.notes || "",
+      s.packageId ? "Yes" : "No", "", "", "",
+      s.packageId ? "" : s.paid ? n(s.amount) : 0, s.notes || "",
     ]),
     ...packages.map((p) => [
       "Package", p.id, p.startDate, patientName(p.patientId), `${p.packageSize}-session package`, "",
       n(p.totalAmount), p.paidAmount >= p.totalAmount ? "Yes" : p.paidAmount > 0 ? "Partly" : "No", "",
       n(p.paidAmount), n(Math.max(0, p.totalAmount - p.paidAmount)),
-      "", p.packageSize, p.sessionsUsed, p.active ? "Active" : "Completed", p.notes || "",
+      "", p.packageSize, p.sessionsUsed, p.active ? "Active" : "Completed",
+      n(receivedInPeriod(p.id)), p.notes || "",
     ]),
   ].sort((a, b) => String(a[2]).localeCompare(String(b[2])) || String(a[0]).localeCompare(String(b[0])) || String(a[3]).localeCompare(String(b[3])));
   return toCsv([BILLING_CSV_HEADER, ...rows]);
