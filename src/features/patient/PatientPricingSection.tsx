@@ -94,7 +94,7 @@ export default function PatientPricingSection({
   const [deletingSp,         setDeletingSp]         = useState(false);
 
   // ── Package form ────────────────────────────────────────────────────────────
-  const EMPTY_PKG = { packageSize: 6, priceMode: "per" as "per" | "total", pricePerSession: "", totalPrice: "", discountType: "none" as "none" | "pct" | "fixed", discountValue: "", startDate: clinicToday(), paidAmount: "", paymentMethod: "", notes: "", active: true, sessionsUsed: "0" };
+  const EMPTY_PKG = { packageSize: 6, priceMode: "per" as "per" | "total", pricePerSession: "", totalPrice: "", discountType: "none" as "none" | "pct" | "fixed", discountValue: "", startDate: clinicToday(), paidAmount: "", paymentMethod: "", paymentDate: clinicToday(), notes: "", active: true, sessionsUsed: "0" };
   const [showPkgForm,   setShowPkgForm]   = useState(false);
   const [editPkg,       setEditPkg]       = useState<SessionPackage | null>(null);
   const [pkgForm,       setPkgForm]       = useState({ ...EMPTY_PKG, packageSize: 6 as number });
@@ -305,7 +305,7 @@ export default function PatientPricingSection({
 
   const openEditPkg = (pkg: SessionPackage) => {
     resetPkgVoucher();
-    setPkgForm({ packageSize: pkg.packageSize, priceMode: "per", pricePerSession: String(pkg.pricePerSession), totalPrice: String(pkg.totalAmount), discountType: "none", discountValue: "", startDate: pkg.startDate, paidAmount: String(pkg.paidAmount), paymentMethod: "", notes: pkg.notes, active: pkg.active, sessionsUsed: String(pkg.sessionsUsed) });
+    setPkgForm({ packageSize: pkg.packageSize, priceMode: "per", pricePerSession: String(pkg.pricePerSession), totalPrice: String(pkg.totalAmount), discountType: "none", discountValue: "", startDate: pkg.startDate, paidAmount: String(pkg.paidAmount), paymentMethod: "", paymentDate: clinicToday(), notes: pkg.notes, active: pkg.active, sessionsUsed: String(pkg.sessionsUsed) });
     setEditPkg(pkg); setPkgError(null); setShowPkgForm(true);
   };
 
@@ -331,7 +331,7 @@ export default function PatientPricingSection({
       notes:           `${pkgForm.notes.trim()}${pkgForm.discountType !== "none" ? ` [Discount: ${pkgForm.discountType === "pct" ? pkgForm.discountValue + "%" : fmt(parseFloat(pkgForm.discountValue) || 0) + " off"}]` : ""}${voucherAmount > 0 && pkgVoucher ? ` [Voucher ${pkgVoucher.code}: -${fmt(voucherAmount)}]` : ""}`.trim(),
     };
     if (editPkg) {
-      const { error } = await updateSessionPackage(editPkg.id, payload);
+      const { error } = await updateSessionPackage(editPkg.id, payload, { paymentDate: pkgForm.paymentDate || undefined });
       if (error) { setPkgError(error); setPkgSaving(false); return; }
       showToast("Package updated");
     } else {
@@ -341,7 +341,7 @@ export default function PatientPricingSection({
         const claim = await claimVoucher(claimId, voucherAmount);
         if (claim.error) { setPkgError(claim.error); setPkgVoucher(null); setPkgSaving(false); return; }
       }
-      const result = await addSessionPackage(payload);
+      const result = await addSessionPackage(payload, { paymentDate: pkgForm.paymentDate || undefined });
       if ("error" in result && result.error) {
         if (claimId) await releaseVoucher(claimId).catch(() => {});
         setPkgError(result.error); setPkgSaving(false); return;
@@ -1178,12 +1178,18 @@ export default function PatientPricingSection({
                 <input className="pps-input" type="date" value={pkgForm.startDate} onChange={(e) => setPkgForm({ ...pkgForm, startDate: e.target.value })} />
               </div>
             </div>
-            <div className="pps-field">
-              <label className="pps-label">{editPkg ? "Payment Method (for any new amount paid)" : "Payment Method"}</label>
-              <select className="pps-input" value={pkgForm.paymentMethod} onChange={(e) => setPkgForm({ ...pkgForm, paymentMethod: e.target.value })}>
-                <option value="">— Not recorded —</option>
-                {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
+            <div className="pps-field-row">
+              <div className="pps-field">
+                <label className="pps-label">{editPkg ? "Payment Method (new amount)" : "Payment Method"}</label>
+                <select className="pps-input" value={pkgForm.paymentMethod} onChange={(e) => setPkgForm({ ...pkgForm, paymentMethod: e.target.value })}>
+                  <option value="">— Not recorded —</option>
+                  {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </div>
+              <div className="pps-field">
+                <label className="pps-label">{editPkg ? "Paid On (new amount)" : "Paid On"}</label>
+                <input className="pps-input" type="date" max={clinicToday()} value={pkgForm.paymentDate} onChange={(e) => setPkgForm({ ...pkgForm, paymentDate: e.target.value })} />
+              </div>
             </div>
             <div className="pps-field">
               <label className="pps-label">Notes (optional)</label>

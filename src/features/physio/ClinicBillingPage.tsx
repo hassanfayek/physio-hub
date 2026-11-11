@@ -7,13 +7,14 @@ import {
   collection, query, orderBy, onSnapshot, type Timestamp,
 } from "firebase/firestore";
 import { createPortal } from "react-dom";
-import { Pencil, Trash2, Download } from "lucide-react";
+import { Pencil, Trash2, Download, Check, X } from "lucide-react";
 import { db } from "../../firebase";
 import { toDateStr, getWeekStart } from "../../services/appointmentService";
 import { setSessionPrice, deleteSessionPrice, deleteSessionPackage } from "../../services/priceService";
 import { subscribeToAllPatients } from "../../services/patientService";
 import { billingCsv } from "./billingCsv";
-import { packagesForPeriod, packagesWithBalance, type BPayment } from "./billingPackages";
+import { packagesForPeriod, packagesWithBalance, paymentsOfPackage, type BPayment } from "./billingPackages";
+import { setPackagePaymentDate, logPackagePayment, clinicToday } from "../../services/businessService";
 
 // ─── Local types (raw Firestore shapes) ──────────────────────────────────────
 
@@ -86,6 +87,25 @@ export default function ClinicBillingPage() {
     setDeletingSessionId(null);
   };
 
+  // ── Package payment date correction ──────────────────────────────────────
+  // key = payment doc id, or "legacy:<pkgId>" for money paid before the log existed
+  const [payEdit,   setPayEdit]   = useState<{ key: string; date: string } | null>(null);
+  const [paySaving, setPaySaving] = useState(false);
+  const [payError,  setPayError]  = useState<string | null>(null);
+  const savePaymentDate = async (pay: BPayment, patientId: string) => {
+    if (!payEdit?.date) return;
+    setPaySaving(true); setPayError(null);
+    try {
+      if (pay.id) await setPackagePaymentDate(pay.id, payEdit.date);
+      // A legacy amount has no log entry yet — recording it with its real date replaces the stand-in.
+      else await logPackagePayment({ packageId: pay.packageId, patientId, amount: pay.amount, method: "", date: payEdit.date });
+      setPayEdit(null);
+    } catch (e) {
+      setPayError(e instanceof Error ? e.message : "Could not save the date.");
+    }
+    setPaySaving(false);
+  };
+
   const [deletingPkgId, setDeletingPkgId] = useState<string | null>(null);
   const [deletingPkg,   setDeletingPkg]   = useState(false);
 
@@ -142,7 +162,7 @@ export default function ClinicBillingPage() {
     // Dated log of every package payment — tells us WHEN package money came in.
     const u3 = onSnapshot(
       collection(db, "packagePayments"),
-      (s) => { setPkgPayments(s.docs.map((d) => { const x = d.data(); return { packageId: (x.packageId as string) ?? "", amount: Number(x.amount) || 0, date: (x.date as string) ?? "" }; })); check(); },
+      (s) => { setPkgPayments(s.docs.map((d) => { const x = d.data(); return { id: d.id, packageId: (x.packageId as string) ?? "", amount: Number(x.amount) || 0, date: (x.date as string) ?? "" }; })); check(); },
       () => check()
     );
     return () => { u1(); u2(); u3(); };
@@ -379,6 +399,19 @@ export default function ClinicBillingPage() {
         .cb-pkg-tag.new  { background: #EAF5FC; color: #0C3C60; }
         .cb-pkg-tag.paid { background: #d8f3dc; color: #1b4332; }
         .cb-pkg-tag.used { background: #ede9fe; color: #4c1d95; }
+        .cb-pay-list { border-top: 1px solid #f0ede8; margin-top: 8px; padding-top: 8px; display: grid; gap: 5px; }
+        .cb-pay-title { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: #c0bbb4; font-weight: 700; }
+        .cb-pay-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; min-height: 30px; }
+        .cb-pay-amt { font-weight: 700; color: #1b4332; }
+        .cb-pay-date { display: inline-flex; align-items: center; gap: 5px; border: 1.5px solid #e5e0d8; background: #fff; border-radius: 8px; padding: 4px 8px; font-family: inherit; font-size: 12px; color: #1a1a1a; cursor: pointer; }
+        .cb-pay-date:hover { border-color: #2E8BC0; color: #2E8BC0; }
+        .cb-pay-date.guess { border-style: dashed; border-color: #f59e0b; color: #92400e; background: #fffbeb; }
+        .cb-pay-edit { display: inline-flex; align-items: center; gap: 4px; }
+        .cb-pay-edit .cb-date-input { padding: 3px 6px; font-size: 12px; }
+        .cb-pay-ok, .cb-pay-no { width: 26px; height: 26px; border-radius: 7px; border: none; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        .cb-pay-ok { background: #1b4332; color: #fff; } .cb-pay-no { background: #f0ede8; color: #5a5550; }
+        .cb-pay-ok:disabled, .cb-pay-no:disabled { opacity: .5; cursor: not-allowed; }
+        .cb-pay-err { font-size: 11.5px; color: #b91c1c; }
         .cb-empty { text-align: center; padding: 48px 20px; color: #c0bbb4; font-size: 14px; }
         .cb-edit-btn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 8px; border: 1.5px solid #e8e3dc; background: #fff; font-size: 12px; font-weight: 500; color: #5a5550; cursor: pointer; font-family: inherit; white-space: nowrap; }
         .cb-edit-btn:hover { border-color: #1a3a2a; color: #1a3a2a; background: #f5f3ef; }
@@ -734,6 +767,39 @@ export default function ClinicBillingPage() {
                           </div>
                         </div>
                         {p.notes && <div style={{ fontSize: 12, color: "#9a9590", marginTop: 8 }}>{p.notes}</div>}
+                        {(() => {
+                          const pays = paymentsOfPackage(p, pkgPayments, sessionPrices);
+                          if (!pays.length) return null;
+                          return (
+                            <div className="cb-pay-list">
+                              <div className="cb-pay-title">Payments</div>
+                              {pays.map((pay) => {
+                                const key = pay.id ?? `legacy:${p.id}`;
+                                const editing = payEdit?.key === key;
+                                return (
+                                  <div key={key} className="cb-pay-row">
+                                    <span className="cb-pay-amt">{fmt(pay.amount)}</span>
+                                    {editing ? (
+                                      <span className="cb-pay-edit">
+                                        <input type="date" className="cb-date-input" max={clinicToday()} value={payEdit.date} autoFocus
+                                          onChange={(e) => setPayEdit({ key, date: e.target.value })} />
+                                        <button className="cb-pay-ok" disabled={paySaving || !payEdit.date} onClick={() => savePaymentDate(pay, p.patientId)} aria-label="Save date"><Check size={13} /></button>
+                                        <button className="cb-pay-no" disabled={paySaving} onClick={() => { setPayEdit(null); setPayError(null); }} aria-label="Cancel"><X size={13} /></button>
+                                      </span>
+                                    ) : (
+                                      <button className={`cb-pay-date ${pay.legacy ? "guess" : ""}`}
+                                        title={pay.legacy ? "Paid before payment dates were recorded — this date is a guess. Click to set the real date." : "Click to correct the payment date"}
+                                        onClick={() => { setPayEdit({ key, date: pay.date }); setPayError(null); }}>
+                                        {pay.legacy ? `Date unknown (~${pay.date})` : pay.date} <Pencil size={11} />
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                              {payError && payEdit && pays.some((x) => (x.id ?? `legacy:${p.id}`) === payEdit.key) && <div className="cb-pay-err">{payError}</div>}
+                            </div>
+                          );
+                        })()}
                         <div style={{ borderTop: "1px solid #f0ede8", marginTop: 10, paddingTop: 10 }}>
                           {deletingPkgId === p.id ? (
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

@@ -13,7 +13,11 @@ export interface BPackage {
   id: string; patientId: string; packageSize: number; totalAmount: number; paidAmount: number;
   startDate: string; sessionsUsed: number; active: boolean;
 }
-export interface BPayment { packageId: string; amount: number; date: string; }
+export interface BPayment {
+  packageId: string; amount: number; date: string;
+  id?:     string;    // packagePayments doc id (absent for legacy stand-ins)
+  legacy?: true;      // paid before the log existed — the date is a stand-in, not recorded
+}
 export interface BSession { packageId: string; date: string; }
 
 export interface PackageActivity<P extends BPackage = BPackage> {
@@ -32,13 +36,19 @@ export function packagePaymentDates(pkgs: BPackage[], payments: BPayment[], sess
   for (const s of sessions) if (s.packageId && s.date && (!firstSession[s.packageId] || s.date < firstSession[s.packageId])) firstSession[s.packageId] = s.date;
   const logged: Record<string, number> = {};
   for (const p of payments) logged[p.packageId] = (logged[p.packageId] ?? 0) + (Number(p.amount) || 0);
-  const out = payments.filter((p) => p.packageId && p.date).map((p) => ({ packageId: p.packageId, amount: Number(p.amount) || 0, date: p.date }));
+  const out: BPayment[] = payments.filter((p) => p.packageId && p.date).map((p) => ({ ...(p.id ? { id: p.id } : {}), packageId: p.packageId, amount: Number(p.amount) || 0, date: p.date }));
   for (const k of pkgs) {
     const legacy = (Number(k.paidAmount) || 0) - (logged[k.id] ?? 0);
     const date = firstSession[k.id] || k.startDate;
-    if (legacy > 0.0001 && date) out.push({ packageId: k.id, amount: legacy, date });
+    if (legacy > 0.0001 && date) out.push({ packageId: k.id, amount: r2(legacy), date, legacy: true });
   }
   return out;
+}
+
+/** One package's payments, oldest first — what the Billing card lists and lets the manager re-date. */
+export function paymentsOfPackage(pkg: BPackage, payments: BPayment[], sessions: BSession[]): BPayment[] {
+  return packagePaymentDates([pkg], payments.filter((p) => p.packageId === pkg.id), sessions.filter((s) => s.packageId === pkg.id))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export function packagesForPeriod<P extends BPackage>(

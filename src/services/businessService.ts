@@ -214,6 +214,11 @@ export async function logPackagePayment(p: Omit<PackagePayment, "id" | "createdA
   });
 }
 
+/** Correct the date a logged package payment counts on (manager only, per rules). */
+export async function setPackagePaymentDate(paymentId: string, date: string): Promise<void> {
+  await updateDoc(doc(db, "packagePayments", paymentId), { date, dateEditedAt: serverTimestamp() });
+}
+
 export function subscribeToPackagePayments(
   from: string, to: string,
   onData: (rows: PackagePayment[]) => void,

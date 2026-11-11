@@ -271,7 +271,8 @@ export function subscribeToPatientPackages(
 }
 
 export async function addSessionPackage(
-  pkg: Omit<SessionPackage, "id" | "createdAt">
+  pkg: Omit<SessionPackage, "id" | "createdAt">,
+  opts: { paymentDate?: string } = {}   // when the money was actually paid (default: today)
 ): Promise<{ id: string; error?: never } | { id?: never; error: string }> {
   try {
     const pointsAwarded = Math.max(0, Math.floor(pkg.paidAmount || 0));
@@ -282,7 +283,7 @@ export async function addSessionPackage(
     });
     if (pkg.paidAmount) {
       try {
-        await logPackagePayment({ packageId: ref.id, patientId: pkg.patientId, amount: pkg.paidAmount, method: pkg.paymentMethod ?? "" });
+        await logPackagePayment({ packageId: ref.id, patientId: pkg.patientId, amount: pkg.paidAmount, method: pkg.paymentMethod ?? "", ...(opts.paymentDate ? { date: opts.paymentDate } : {}) });
       } catch (logErr) {
         console.error("logPackagePayment failed for package", ref.id, logErr);
       }
@@ -306,7 +307,8 @@ export async function addSessionPackage(
 
 export async function updateSessionPackage(
   pkgId:   string,
-  updates: Partial<Omit<SessionPackage, "id" | "createdAt">>
+  updates: Partial<Omit<SessionPackage, "id" | "createdAt">>,
+  opts: { paymentDate?: string } = {}   // date of any new amount paid (default: today)
 ): Promise<{ error?: string }> {
   try {
     const payload: Record<string, unknown> = { ...updates, updatedAt: serverTimestamp() };
@@ -320,7 +322,7 @@ export async function updateSessionPackage(
       const paidDelta = pkg ? updates.paidAmount - pkg.paidAmount : 0;
       if (pkg && paidDelta) {
         try {
-          await logPackagePayment({ packageId: pkgId, patientId: pkg.patientId, amount: paidDelta, method: updates.paymentMethod ?? "" });
+          await logPackagePayment({ packageId: pkgId, patientId: pkg.patientId, amount: paidDelta, method: updates.paymentMethod ?? "", ...(opts.paymentDate ? { date: opts.paymentDate } : {}) });
         } catch (logErr) {
           console.error("logPackagePayment failed for package", pkgId, logErr);
         }
