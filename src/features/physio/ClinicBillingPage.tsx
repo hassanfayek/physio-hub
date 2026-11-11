@@ -7,11 +7,12 @@ import {
   collection, query, orderBy, onSnapshot, type Timestamp,
 } from "firebase/firestore";
 import { createPortal } from "react-dom";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Download } from "lucide-react";
 import { db } from "../../firebase";
 import { toDateStr, getWeekStart } from "../../services/appointmentService";
 import { setSessionPrice, deleteSessionPrice, deleteSessionPackage } from "../../services/priceService";
 import { subscribeToAllPatients } from "../../services/patientService";
+import { billingCsv } from "./billingCsv";
 
 // ─── Local types (raw Firestore shapes) ──────────────────────────────────────
 
@@ -157,6 +158,24 @@ export default function ClinicBillingPage() {
   const filteredSessions = useMemo(() => sessionPrices.filter((s) => inPeriod(s.date)),   [sessionPrices,  period, selectedDay, selectedWeek, selectedMonth, customFrom, customTo]);
   const filteredPackages = useMemo(() => packages.filter((p) => inPeriod(p.startDate)),   [packages,       period, selectedDay, selectedWeek, selectedMonth, customFrom, customTo]);
 
+  // ── Export: exactly the records shown for the selected period ─────────────
+  const periodRange = (): [string, string] => {
+    if (period === "day")    return [selectedDay, selectedDay];
+    if (period === "week")   return selectedWeek;
+    if (period === "custom") return [customFrom, customTo];
+    const [y, m] = selectedMonth.split("-").map(Number);
+    return [`${selectedMonth}-01`, `${selectedMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`];
+  };
+  const handleExport = () => {
+    const [from, to] = periodRange();
+    const csv = billingCsv(filteredSessions, filteredPackages, (id) => patientMap.get(id) ?? "");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a.download = from === to ? `billing_${from}.csv` : `billing_${from}_to_${to}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+
   // ── Aggregates ────────────────────────────────────────────────────────────
   // Sessions linked to a package already have their cost baked into the
   // package's totalAmount, so exclude them from session revenue to avoid
@@ -249,6 +268,9 @@ export default function ClinicBillingPage() {
         }
         .cb-nav-btn:hover { border-color: #2E8BC0; color: #2E8BC0; }
         .cb-period-label { font-size: 13px; font-weight: 600; color: #1a1a1a; min-width: 220px; text-align: center; }
+.cb-export-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 10px; border: 1.5px solid #2E8BC0; background: #2E8BC0; color: #fff; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .cb-export-btn:hover:not(:disabled) { background: #0C3C60; border-color: #0C3C60; }
+        .cb-export-btn:disabled { opacity: .45; cursor: not-allowed; }
         .cb-today-btn {
           padding: 6px 14px; border-radius: 8px; border: 1.5px solid #B3DEF0; background: #EAF5FC;
           font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 600; color: #2E8BC0;
@@ -383,6 +405,10 @@ export default function ClinicBillingPage() {
           {period === "month" && selectedMonth !== thisMonth && (
             <button className="cb-today-btn" onClick={() => setSelectedMonth(thisMonth)}>This Month</button>
           )}
+          <button className="cb-export-btn" onClick={handleExport} disabled={loading || (filteredSessions.length === 0 && filteredPackages.length === 0)}
+            title="Download every session charge and package in this period as a CSV (opens in Excel / Google Sheets)">
+            <Download size={14} /> Export CSV
+          </button>
         </div>
         {period === "custom" && (
           <div className="cb-custom-row" style={{ marginBottom: 20 }}>
