@@ -16,12 +16,13 @@ export const isAssessment = (t: string) => /assessment/i.test(t);
 export type Stage =
   | "new" | "contacted" | "replied" | "follow_up"
   | "booked" | "no_show" | "attended" | "converted"
-  | "lost" | "unresponsive" | "invalid";
+  | "lost" | "not_interested" | "cancelled" | "unresponsive" | "invalid";
 
 export const STAGE_LABEL: Record<Stage, string> = {
   new: "New", contacted: "Contacted — awaiting patient", replied: "Patient replied", follow_up: "Follow-up due",
   booked: "Appointment booked", no_show: "Booked — did not attend", attended: "Attended",
-  converted: "Converted to patient", lost: "Lost", unresponsive: "Unresponsive", invalid: "Duplicate / invalid",
+  converted: "Converted to patient", lost: "Lost", not_interested: "Not interested", cancelled: "Cancelled",
+  unresponsive: "Unresponsive", invalid: "Duplicate / invalid",
 };
 
 export type FollowUpState = "overdue" | "today" | "later" | "none";
@@ -29,7 +30,7 @@ export type FollowUpState = "overdue" | "today" | "later" | "none";
 export interface LeadView {
   lead: Lead;
   stage: Stage;
-  closed: boolean;               // lost / unresponsive / invalid (and not overridden by a booking/conversion)
+  closed: boolean;               // lost / not interested / cancelled / unresponsive / invalid (and not overridden by a booking/conversion)
   registered: boolean;           // linked to a patient record
   reactivation: boolean;         // the patient already existed before this inquiry
   booked: boolean;               // has any (non-rescheduled) appointment on/after the inquiry date
@@ -70,7 +71,7 @@ export function deriveLead(lead: Lead, appts: AAppt[], patientCreatedDate: strin
   else if (attended) stage = "attended";
   else if (noShow) stage = "no_show";
   else stage = (["new", "contacted", "replied", "follow_up"].includes(lead.status) ? lead.status : "new") as Stage;
-  const closed = stage === "lost" || stage === "unresponsive" || stage === "invalid";
+  const closed = CLOSED_LEAD_STATUSES.includes(stage);
 
   const open = !closed && stage !== "converted";
   const fu = lead.nextFollowUpAt;

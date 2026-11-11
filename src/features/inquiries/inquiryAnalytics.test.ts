@@ -70,3 +70,11 @@ describe("follow-up completion and response time", () => {
     expect([s.bookingRate, s.attendanceRate, s.conversionRate, s.followUpCompletion]).toEqual([null, null, null, null]);
   });
 });
+
+describe("closed reasons", () => {
+  it("not interested / cancelled count as lost, with a default reason when none was picked", () => {
+    const vs = [lead({ status: "not_interested" }), lead({ status: "cancelled" }), lead({ status: "cancelled", closeReason: "price" })]
+      .map((l) => deriveLead(l, [], null, NOW));
+    expect(inquiryStats(vs, OCT, TODAY, NOW).byReason).toEqual({ not_interested: 1, cancelled: 1, price: 1 });
+  });
+});

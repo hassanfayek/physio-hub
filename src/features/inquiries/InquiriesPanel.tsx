@@ -11,7 +11,7 @@ import { docToAppointment } from "../../services/appointmentService";
 import { subscribeToPhysiotherapists, type Patient, type Physiotherapist } from "../../services/patientService";
 import { subscribeToSecretaries, type Secretary } from "../../services/secretaryService";
 import {
-  subscribeToLeads, clinicNow, labelFor, LEAD_SOURCES, LEAD_CHANNELS, LEAD_SERVICES, LEAD_LOSS_REASONS, LEAD_INVALID_REASONS, type Lead,
+  subscribeToLeads, clinicNow, labelFor, LEAD_SOURCES, LEAD_CHANNELS, LEAD_SERVICES, LEAD_LOSS_REASONS, LEAD_INVALID_REASONS, LOST_LIKE_STATUSES, type Lead,
 } from "../../services/businessService";
 import { presetRanges, inRange, type PresetKey, type AAppt, type Range } from "../analytics/metrics";
 import { deriveLead, inQueue, byQueue, fmtShort, STAGE_LABEL, type LeadView, type QueueFilter, type Stage } from "./leadLogic";
@@ -218,7 +218,7 @@ function Dashboard({ views, range, matches, onPickQueue }: { views: LeadView[]; 
         {k("Attended", cohort.filter((v) => v.attended).length, `${cohort.filter((v) => v.attendedAssessment).length} attended an assessment`)}
         {k("Registered as patients", cohort.filter((v) => v.registered && !v.reactivation).length, `${cohort.filter((v) => v.reactivation).length} repeat inquiries from existing patients`)}
         {k("Converted", cohort.filter((v) => v.converted).length, "Had a completed treatment session")}
-        {k("Lost or unresponsive", cohort.filter((v) => v.stage === "lost" || v.stage === "unresponsive").length)}
+        {k("Lost, cancelled or unresponsive", cohort.filter((v) => LOST_LIKE_STATUSES.includes(v.stage)).length, "Includes not interested")}
       </div>
     </div>
   );
@@ -226,7 +226,7 @@ function Dashboard({ views, range, matches, onPickQueue }: { views: LeadView[]; 
 
 // ─── Records ──────────────────────────────────────────────────────────────────
 
-// Why a closed inquiry was closed (lost / unresponsive / invalid); "" while open.
+// Why a closed inquiry was closed (lost / not interested / cancelled / unresponsive / invalid); "" while open.
 const closeReasonOf = (v: LeadView) => !v.closed || !v.lead.closeReason ? ""
   : labelFor(v.lead.status === "invalid" ? LEAD_INVALID_REASONS : LEAD_LOSS_REASONS, v.lead.closeReason, v.lead.closeReason);
 
@@ -332,7 +332,7 @@ const CSS = `
 .iq-stage.s-replied, .iq-stage.s-follow_up { background: #EAF5FC; color: #0C3C60; }
 .iq-stage.s-booked { background: #ede9fe; color: #5b21b6; } .iq-stage.s-no_show { background: #ffedd5; color: #9a3412; }
 .iq-stage.s-attended { background: #ccfbf1; color: #115e59; } .iq-stage.s-converted { background: #dcfce7; color: #166534; }
-.iq-stage.s-lost, .iq-stage.s-unresponsive { background: #fee2e2; color: #991b1b; } .iq-stage.s-invalid { background: #e5e7eb; color: #4b5563; }
+.iq-stage.s-lost, .iq-stage.s-unresponsive, .iq-stage.s-not_interested, .iq-stage.s-cancelled { background: #fee2e2; color: #991b1b; } .iq-stage.s-invalid { background: #e5e7eb; color: #4b5563; }
 .iq-badge { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 100px; background: #f3e8ff; color: #6b21a8; margin-left: 6px; }
 .iq-filters { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .iq-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

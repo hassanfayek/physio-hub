@@ -10,7 +10,7 @@ import { X, AlertTriangle } from "lucide-react";
 import type { Patient } from "../../services/patientService";
 import {
   addLead, updateLead, clinicNow,
-  LEAD_SOURCES, LEAD_CHANNELS, LEAD_SERVICES, LEAD_STATUSES, LEAD_LOSS_REASONS, LEAD_INVALID_REASONS,
+  LEAD_SOURCES, LEAD_CHANNELS, LEAD_SERVICES, LEAD_STATUSES, LEAD_LOSS_REASONS, LEAD_INVALID_REASONS, CLOSED_LEAD_STATUSES,
   type Lead,
 } from "../../services/businessService";
 import { phoneMatches, fmtShort } from "./leadLogic";
@@ -48,10 +48,10 @@ export default function InquiryForm({ existing, leads, patients, staff, me, camp
   const [err, setErr] = useState<string | null>(null);
   const set = (k: keyof typeof f, v: string) => setF({ ...f, [k]: v });
 
-  const closed = f.status === "lost" || f.status === "unresponsive" || f.status === "invalid";
+  const closed = CLOSED_LEAD_STATUSES.includes(f.status);
   const reasons = f.status === "invalid" ? LEAD_INVALID_REASONS : LEAD_LOSS_REASONS;
   const dup = phoneMatches(f.phone, leads, patients, existing?.id ?? "");
-  const openDup = dup.leads.filter((l) => !["lost", "unresponsive", "invalid"].includes(l.status));
+  const openDup = dup.leads.filter((l) => !CLOSED_LEAD_STATUSES.includes(l.status));
 
   const save = async () => {
     const phone = f.phone.trim();

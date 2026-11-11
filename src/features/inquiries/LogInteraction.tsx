@@ -6,7 +6,7 @@ import DateTimeInput12 from "../../components/DateTimeInput12";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Phone, MessageCircle, User } from "lucide-react";
-import { logLeadInteraction, clinicNow, LEAD_LOSS_REASONS, type LeadInteraction } from "../../services/businessService";
+import { logLeadInteraction, clinicNow, LEAD_LOSS_REASONS, DEFAULT_CLOSE_REASON, type LeadInteraction } from "../../services/businessService";
 import type { LeadView } from "./leadLogic";
 import { addDaysTo, type Staff } from "./shared";
 
@@ -17,7 +17,7 @@ export default function LogInteraction({ view, me, onClose }: { view: LeadView; 
   const [outcome, setOutcome] = useState<LeadInteraction["outcome"]>("no_answer");
   const [note, setNote] = useState("");
   const [next, setNext] = useState(addDaysTo(now, outcome === "no_answer" ? 1 : 3));
-  const [close, setClose] = useState<"" | "lost" | "unresponsive">("");
+  const [close, setClose] = useState<"" | "lost" | "not_interested" | "cancelled" | "unresponsive">("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -29,7 +29,7 @@ export default function LogInteraction({ view, me, onClose }: { view: LeadView; 
     setBusy(true); setErr(null);
     const r = await logLeadInteraction(lead.id,
       { at: now, type, outcome, note, by: me?.uid ?? "", byName: me?.name ?? "" },
-      close ? { status: close, closeReason: close === "unresponsive" ? "no_response" : reason } : { nextFollowUpAt: next });
+      close ? { status: close, closeReason: close === "unresponsive" ? "no_response" : reason || DEFAULT_CLOSE_REASON[close] || "" } : { nextFollowUpAt: next });
     setBusy(false);
     if (r.error) setErr(r.error); else onClose();
   };
@@ -69,13 +69,14 @@ export default function LogInteraction({ view, me, onClose }: { view: LeadView; 
         )}
         <div className="iq-close-row">
           <span>Close this inquiry:</span>
-          <button type="button" className={`iq-chip ${close === "lost" ? "on" : ""}`} onClick={() => setClose(close === "lost" ? "" : "lost")}>Lost</button>
-          <button type="button" className={`iq-chip ${close === "unresponsive" ? "on" : ""}`} onClick={() => setClose(close === "unresponsive" ? "" : "unresponsive")}>Unresponsive</button>
+          {([["lost", "Lost"], ["not_interested", "Not interested"], ["cancelled", "Cancelled"], ["unresponsive", "Unresponsive"]] as const).map(([v, l]) => (
+            <button key={v} type="button" className={`iq-chip ${close === v ? "on" : ""}`} onClick={() => { setClose(close === v ? "" : v); setReason(""); }}>{l}</button>
+          ))}
         </div>
-        {close === "lost" && (
-          <label className="iq-field"><span>Reason</span>
+        {(close === "lost" || close === "not_interested" || close === "cancelled") && (
+          <label className="iq-field"><span>Reason{close !== "lost" ? " (optional)" : ""}</span>
             <select value={reason} onChange={(e) => setReason(e.target.value)}>
-              <option value="">Choose…</option>
+              <option value="">{close === "lost" ? "Choose…" : "—"}</option>
               {LEAD_LOSS_REASONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select></label>
         )}

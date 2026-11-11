@@ -303,14 +303,20 @@ export const LEAD_STATUSES = [
   { value: "contacted",    label: "Contacted — awaiting patient" },
   { value: "replied",      label: "Patient replied" },
   { value: "follow_up",    label: "Follow-up due" },
-  { value: "lost",         label: "Lost" },
-  { value: "unresponsive", label: "Unresponsive" },
-  { value: "invalid",      label: "Duplicate / invalid" },
+  { value: "lost",           label: "Lost" },
+  { value: "not_interested", label: "Not interested" },
+  { value: "cancelled",      label: "Cancelled" },
+  { value: "unresponsive",   label: "Unresponsive" },
+  { value: "invalid",        label: "Duplicate / invalid" },
 ] as const;
-export const CLOSED_LEAD_STATUSES = ["lost", "unresponsive", "invalid"];
+export const CLOSED_LEAD_STATUSES = ["lost", "not_interested", "cancelled", "unresponsive", "invalid"];
+/** Closed because the patient decided not to come (counted with lost in analytics). */
+export const LOST_LIKE_STATUSES = ["lost", "not_interested", "cancelled", "unresponsive"];
+/** Default reason when a status is closed without one being picked. */
+export const DEFAULT_CLOSE_REASON: Record<string, string> = { unresponsive: "no_response", not_interested: "not_interested", cancelled: "cancelled" };
 
 /** Older inquiries used a 4-value status; translate on read (no data rewrite). */
-const LEGACY_LEAD_STATUS: Record<string, string> = { assessment_booked: "replied", converted: "replied", not_interested: "lost" };
+const LEGACY_LEAD_STATUS: Record<string, string> = { assessment_booked: "replied", converted: "replied" };
 
 export const LEAD_SOURCES = [
   { value: "meta_ads",           label: "Meta Ads" },
@@ -344,6 +350,7 @@ export const LEAD_LOSS_REASONS = [
   { value: "insurance",      label: "Insurance not accepted / insurance issue" },
   { value: "location",       label: "Location too far" },
   { value: "not_interested", label: "No longer interested" },
+  { value: "cancelled",      label: "Cancelled by the patient" },
   { value: "no_response",    label: "No response after follow-up attempts" },
   { value: "schedule",       label: "Schedule unavailable" },
   { value: "other_provider", label: "Chose another provider" },

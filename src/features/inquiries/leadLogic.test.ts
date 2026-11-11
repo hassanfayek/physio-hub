@@ -40,6 +40,13 @@ describe("derived stage (from real appointments)", () => {
     expect(deriveLead(lead({ patientId: "pt", status: "lost" }), [appt({})], "2026-10-21", NOW).stage).toBe("lost");
     expect(deriveLead(lead({ patientId: "pt", status: "lost" }), [appt({ date: "2026-11-01", status: "scheduled" })], "2026-10-21", NOW).stage).toBe("booked");
   });
+  it("'not interested' and 'cancelled' are closed statuses (a new booking still wins)", () => {
+    for (const status of ["not_interested", "cancelled"]) {
+      const v = deriveLead(lead({ patientId: "pt", status }), [], "2026-10-21", NOW);
+      expect([v.stage, v.closed, v.followUp]).toEqual([status, true, "none"]);
+      expect(deriveLead(lead({ patientId: "pt", status }), [appt({ date: "2026-11-01", status: "scheduled" })], "2026-10-21", NOW).stage).toBe("booked");
+    }
+  });
   it("a patient who existed before the inquiry is a reactivation", () => {
     expect(deriveLead(lead({ patientId: "pt" }), [], "2025-05-01", NOW).reactivation).toBe(true);
     expect(deriveLead(lead({ patientId: "pt" }), [], "2026-10-21", NOW).reactivation).toBe(false);

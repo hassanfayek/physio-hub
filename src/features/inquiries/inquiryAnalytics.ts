@@ -6,6 +6,7 @@
 
 import type { LeadView } from "./leadLogic";
 import type { Range } from "../analytics/metrics";
+import { LOST_LIKE_STATUSES, DEFAULT_CLOSE_REASON } from "../../services/businessService";
 
 const inR = (d: string, r: Range) => !!d && d >= r.from && d <= r.to;
 const rate = (n: number, d: number) => (d > 0 ? n / d : null);
@@ -58,14 +59,14 @@ export function inquiryStats(views: LeadView[], r: Range, today: string, now: st
     : null;
 
   const attendedAssessment = eligible.filter((v) => v.attendedAssessment);
-  const closed = cohort.filter((v) => v.stage === "lost" || v.stage === "unresponsive");
+  const closed = cohort.filter((v) => LOST_LIKE_STATUSES.includes(v.stage));
   return {
     total: cohort.length, eligible: eligible.length, invalid: cohort.length - eligible.length,
     bySource: count(cohort, (v) => (!v.lead.source || v.lead.source === "unknown" ? "unknown" : v.lead.source)),
     byChannel: count(cohort, (v) => v.lead.channel || ""),
     byService: count(cohort, (v) => v.lead.service || ""),
     byStage: count(cohort, (v) => v.stage),
-    byReason: count(closed, (v) => v.lead.closeReason || (v.stage === "unresponsive" ? "no_response" : "unknown")),
+    byReason: count(closed, (v) => v.lead.closeReason || DEFAULT_CLOSE_REASON[v.stage] || "unknown"),
     byAssignee: count(cohort, (v) => v.lead.assignedName || "Unassigned"),
     booked: eligible.filter((v) => v.booked).length,
     bookingRate: rate(eligible.filter((v) => v.booked).length, eligible.length),
