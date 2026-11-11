@@ -11,7 +11,7 @@ import { docToAppointment } from "../../services/appointmentService";
 import { subscribeToPhysiotherapists, type Patient, type Physiotherapist } from "../../services/patientService";
 import { subscribeToSecretaries, type Secretary } from "../../services/secretaryService";
 import {
-  subscribeToLeads, clinicNow, labelFor, LEAD_SOURCES, LEAD_CHANNELS, LEAD_SERVICES, type Lead,
+  subscribeToLeads, clinicNow, labelFor, LEAD_SOURCES, LEAD_CHANNELS, LEAD_SERVICES, LEAD_LOSS_REASONS, LEAD_INVALID_REASONS, type Lead,
 } from "../../services/businessService";
 import { presetRanges, inRange, type PresetKey, type AAppt, type Range } from "../analytics/metrics";
 import { deriveLead, inQueue, byQueue, fmtShort, STAGE_LABEL, type LeadView, type QueueFilter, type Stage } from "./leadLogic";
@@ -226,6 +226,10 @@ function Dashboard({ views, range, matches, onPickQueue }: { views: LeadView[]; 
 
 // ─── Records ──────────────────────────────────────────────────────────────────
 
+// Why a closed inquiry was closed (lost / unresponsive / invalid); "" while open.
+const closeReasonOf = (v: LeadView) => !v.closed || !v.lead.closeReason ? ""
+  : labelFor(v.lead.status === "invalid" ? LEAD_INVALID_REASONS : LEAD_LOSS_REASONS, v.lead.closeReason, v.lead.closeReason);
+
 function Records({ views, onOpen, onLog }: { views: LeadView[]; onOpen: (id: string) => void; onLog: (id: string) => void }) {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
@@ -243,7 +247,7 @@ function Records({ views, onOpen, onLog }: { views: LeadView[]; onOpen: (id: str
       {list.length === 0 ? <div className="iq-empty">No inquiries match.</div> : (<>
         <div className="iq-table-wrap iq-desktop">
           <table className="iq-table">
-            <thead><tr><th>Contacted</th><th>Name</th><th>Phone</th><th>Source</th><th>Channel</th><th>Service</th><th>Status</th><th>Last contact</th><th>Attempts</th><th>Next follow-up</th><th>Appointment</th><th>Assigned</th><th /></tr></thead>
+            <thead><tr><th>Contacted</th><th>Name</th><th>Phone</th><th>Source</th><th>Channel</th><th>Service</th><th>Status</th><th>Reason</th><th>Last contact</th><th>Attempts</th><th>Next follow-up</th><th>Appointment</th><th>Assigned</th><th /></tr></thead>
             <tbody>{rows.map((v) => (
               <tr key={v.lead.id} onClick={() => onOpen(v.lead.id)}>
                 <td>{fmtShort(`${v.lead.date}${v.lead.time ? `T${v.lead.time}` : ""}`)}</td>
@@ -253,6 +257,7 @@ function Records({ views, onOpen, onLog }: { views: LeadView[]; onOpen: (id: str
                 <td>{labelFor(LEAD_CHANNELS, v.lead.channel, "—")}</td>
                 <td>{v.lead.service || "—"}</td>
                 <td><span className={`iq-stage s-${v.stage}`}>{STAGE_LABEL[v.stage]}</span></td>
+                <td className="iq-reason">{closeReasonOf(v) || <span className="iq-muted">—</span>}</td>
                 <td>{v.lastContactAt ? fmtShort(v.lastContactAt) : "—"}</td>
                 <td>{v.attempts}</td>
                 <td className={`iq-next ${v.followUp}`}>{v.lead.nextFollowUpAt && v.followUp !== "none" ? fmtShort(v.lead.nextFollowUpAt) : "—"}</td>
@@ -267,6 +272,7 @@ function Records({ views, onOpen, onLog }: { views: LeadView[]; onOpen: (id: str
           <div key={v.lead.id} className="iq-card" onClick={() => onOpen(v.lead.id)}>
             <div className="iq-qname">{v.lead.name || "Unnamed"} <span className={`iq-stage s-${v.stage}`}>{STAGE_LABEL[v.stage]}</span></div>
             <div className="iq-qmeta">{v.lead.phone} · {fmtShort(v.lead.date)} · {labelFor(LEAD_SOURCES, v.lead.source, "Unknown")} via {labelFor(LEAD_CHANNELS, v.lead.channel, "?")}</div>
+            {closeReasonOf(v) && <div className="iq-qmeta iq-reason">Reason: {closeReasonOf(v)}</div>}
             <div className="iq-qmeta">{v.attempts} attempt{v.attempts === 1 ? "" : "s"}{v.lastContactAt && <> · last {fmtShort(v.lastContactAt)}</>}{v.lead.assignedName && <> · {v.lead.assignedName}</>}</div>
             <div className="iq-card-foot">
               <div className={`iq-next ${v.followUp}`}>{v.nextAction}</div>
@@ -347,6 +353,7 @@ const CSS = `
 .iq-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .iq-table th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #9a9590; padding: 9px 8px; border-bottom: 1px solid #f0ede8; white-space: nowrap; }
 .iq-table td { padding: 9px 8px; border-bottom: 1px solid #f7f5f2; vertical-align: top; }
+.iq-reason { color: #92400e; font-weight: 600; }
 .iq-table tbody tr { cursor: pointer; } .iq-table tbody tr:hover td { background: #fafaf8; }
 .iq-cards { display: none; flex-direction: column; gap: 8px; }
 .iq-card { background: #fff; border: 1px solid #e5e0d8; border-radius: 12px; padding: 10px 12px; cursor: pointer; }
