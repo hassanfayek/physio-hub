@@ -44,8 +44,9 @@ exports.bookAppointment = onCall(async (request) => {
 
   const userDoc = await admin.firestore().collection("users").doc(request.auth.uid).get();
   const role = userDoc.exists ? userDoc.data().role : null;
-  const isStaff = STAFF_ROLES.has(role);
-  const isPatient = role === "patient";
+  const active = !userDoc.exists || userDoc.data().active !== false;  // deactivated accounts can't book
+  const isStaff = active && STAFF_ROLES.has(role);
+  const isPatient = active && role === "patient";
 
   const data = request.data || {};
 
@@ -86,7 +87,7 @@ exports.deleteAuthUser = onCall(async (request) => {
     .doc(request.auth.uid)
     .get();
 
-  if (!callerDoc.exists || callerDoc.data().role !== "clinic_manager") {
+  if (!callerDoc.exists || callerDoc.data().role !== "clinic_manager" || callerDoc.data().active === false) {
     throw new HttpsError("permission-denied", "Only clinic managers can delete accounts.");
   }
 
@@ -256,7 +257,7 @@ exports.generateTreatmentPlan = onCall(
       throw new HttpsError("permission-denied", "User not found.");
     }
 
-    const role = callerDoc.data().role;
+    const role = callerDoc.data().active === false ? null : callerDoc.data().role;  // deactivated → no access
     if (role !== "clinic_manager" && role !== "physiotherapist") {
       throw new HttpsError("permission-denied", "Only physiotherapists and managers can generate treatment plans.");
     }
@@ -484,7 +485,7 @@ exports.generateExerciseProgram = onCall(
       throw new HttpsError("permission-denied", "User not found.");
     }
 
-    const role = callerDoc.data().role;
+    const role = callerDoc.data().active === false ? null : callerDoc.data().role;  // deactivated → no access
     if (role !== "clinic_manager" && role !== "physiotherapist") {
       throw new HttpsError("permission-denied", "Only physiotherapists and managers can generate exercise programs.");
     }
@@ -686,7 +687,7 @@ exports.generateNutritionQuantities = onCall(
     const callerDoc = await admin.firestore()
       .collection("users").doc(request.auth.uid).get();
     if (!callerDoc.exists) throw new HttpsError("permission-denied", "User not found.");
-    const role = callerDoc.data().role;
+    const role = callerDoc.data().active === false ? null : callerDoc.data().role;  // deactivated → no access
     if (role !== "clinic_manager" && role !== "physiotherapist") {
       throw new HttpsError("permission-denied", "Only physiotherapists and managers can use AI nutrition.");
     }

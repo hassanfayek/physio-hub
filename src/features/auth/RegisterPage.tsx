@@ -5,7 +5,6 @@ import { AlertCircle, User, Stethoscope, Eye, EyeOff, Check, X, ArrowRight, Arro
 import { useLang } from "../../contexts/LanguageContext";
 import {
   registerPatient,
-  registerPhysio,
   parseFirebaseError,
   type RegisterPatientData,
   type RegisterPhysioData,
@@ -70,7 +69,10 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const { lang, toggleLang, t } = useLang();
 
-  const [role,    setRole]    = useState<RoleTab>("patient");
+  // Public sign-up is for patients only. Staff accounts (physios, secretaries…)
+  // are created by the clinic manager from the dashboard — the database refuses
+  // any other self-assigned role.
+  const [role] = useState<RoleTab>("patient");
   const [step,    setStep]    = useState<Step>(1);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
@@ -129,8 +131,7 @@ export default function RegisterPage() {
         await registerPatient(pat);
         navigate("/patient");
       } else {
-        await registerPhysio(phy);
-        navigate("/physio");
+        throw new Error("Staff accounts are created by the clinic manager.");
       }
     } catch (err) {
       setError(parseFirebaseError(err).message);
@@ -515,23 +516,7 @@ export default function RegisterPage() {
                 <div className="rp-card-title">{t("reg.step1Title")}</div>
                 <div className="rp-card-sub">{t("reg.step1Sub")}</div>
 
-                {/* Role selector */}
-                <div className="rp-role-tabs">
-                  {(["patient", "physiotherapist"] as RoleTab[]).map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      className={`rp-role-tab ${role === r ? "active" : ""}`}
-                      onClick={() => { setRole(r); setError(null); }}
-                    >
-                      {r === "patient"
-                        ? <User size={15} strokeWidth={2} />
-                        : <Stethoscope size={15} strokeWidth={2} />
-                      }
-                      {r === "patient" ? t("auth.patient") : t("auth.physio")}
-                    </button>
-                  ))}
-                </div>
+
 
                 <form onSubmit={handleSubmit} noValidate>
                   <div className="rp-grid-2">

@@ -32,7 +32,7 @@ exports.redeemLoyaltyPoints = onCall(async (request) => {
   }
 
   const callerDoc = await admin.firestore().collection("users").doc(request.auth.uid).get();
-  if (!callerDoc.exists || callerDoc.data().role !== "patient") {
+  if (!callerDoc.exists || callerDoc.data().role !== "patient" || callerDoc.data().active === false) {
     throw new HttpsError("permission-denied", "Only patients can redeem their own points.");
   }
 

@@ -294,65 +294,7 @@ export async function registerPatient(
   };
 }
 
-// ─── Register physiotherapist ─────────────────────────────────────────────────
 
-export async function registerPhysio(
-  data: RegisterPhysioData
-): Promise<PhysioProfile> {
-  const credential: UserCredential = await createUserWithEmailAndPassword(
-    secondaryAuth,
-    data.email,
-    data.password
-  );
-
-  const { user } = credential;
-  const displayName = `Dr. ${data.firstName} ${data.lastName}`;
-
-  await updateProfile(user, { displayName });
-
-  const secondaryApp2 = secondaryAuth.app;
-  const secondaryDb2  = getFirestore(secondaryApp2);
-  const now = serverTimestamp();
-
-  await setDoc(doc(secondaryDb2, "users", user.uid), {
-    email:       data.email,
-    role:        "physiotherapist" as UserRole,
-    displayName,
-    createdAt:   now,
-    updatedAt:   now,
-  });
-
-  await setDoc(doc(secondaryDb2, "physiotherapists", user.uid), {
-    firstName:       data.firstName,
-    lastName:        data.lastName,
-    licenseNumber:   data.licenseNumber,
-    specializations: data.specializations,
-    clinicName:      data.clinicName,
-    phone:           data.phone,
-    createdAt:       now,
-  });
-
-  await secondaryAuth.signOut();
-
-  await signInWithEmailAndPassword(auth, data.email, data.password);
-
-  return {
-    uid:             user.uid,
-    email:           data.email,
-    role:            "physiotherapist",
-    displayName,
-    firstName:       data.firstName,
-    lastName:        data.lastName,
-    licenseNumber:   data.licenseNumber,
-    specializations: data.specializations,
-    clinicName:      data.clinicName,
-    phone:           data.phone,
-    createdAt:       null,
-    updatedAt:       null,
-  };
-}
-
-// ─── Login ────────────────────────────────────────────────────────────────────
 
 export async function login(
   email: string,
